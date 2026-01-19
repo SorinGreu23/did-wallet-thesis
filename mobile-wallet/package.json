@@ -1,0 +1,38 @@
+{
+  "name": "did-wallet",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@ethersproject/shims": "^5.8.0",
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@veramo/core": "^6.0.2",
+    "@veramo/core-types": "^6.0.2",
+    "@veramo/data-store": "^6.0.2",
+    "@veramo/did-manager": "^6.0.2",
+    "@veramo/did-provider-key": "^6.0.2",
+    "@veramo/did-resolver": "^6.0.2",
+    "@veramo/key-manager": "^6.0.2",
+    "@veramo/kms-local": "^6.0.2",
+    "did-resolver": "^4.1.0",
+    "expo": "~54.0.31",
+    "expo-clipboard": "~8.0.8",
+    "expo-sqlite": "^16.0.10",
+    "expo-status-bar": "~3.0.9",
+    "key-did-resolver": "^4.0.0",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-get-random-values": "^2.0.0",
+    "typeorm": "^0.3.28"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.0",
+    "typescript": "~5.9.2"
+  },
+  "private": true
+}
