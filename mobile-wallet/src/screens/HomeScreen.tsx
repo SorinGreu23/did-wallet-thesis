@@ -10,12 +10,14 @@ import {
 import didService, { DIDInfo } from '../services/didService';
 import { COLORS } from '../constants/config';
 import DIDDetailScreen from './DIDDetailScreen';
+import CredentialsScreen from './CredentialsScreen';
 
 export default function HomeScreen() {
   const [dids, setDids] = useState<DIDInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [selectedDID, setSelectedDID] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'dids' | 'credentials'>('dids');
 
   useEffect(() => {
     loadDIDs();
@@ -59,46 +61,73 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>DID Wallet</Text>
-      <Text style={styles.subtitle}>Your Decentralized Identifiers</Text>
+      <Text style={styles.subtitle}>Your Decentralized Identity</Text>
 
-      <TouchableOpacity
-        style={styles.createButton}
-        onPress={createNewDID}
-        disabled={creating}
-      >
-        {creating ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Create New DID</Text>
-        )}
-      </TouchableOpacity>
+      {/* Tabs */}
+      <View style={styles.tabs}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'dids' && styles.activeTab]}
+          onPress={() => setActiveTab('dids')}
+        >
+          <Text style={[styles.tabText, activeTab === 'dids' && styles.activeTabText]}>
+            DIDs
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'credentials' && styles.activeTab]}
+          onPress={() => setActiveTab('credentials')}
+        >
+          <Text style={[styles.tabText, activeTab === 'credentials' && styles.activeTabText]}>
+            Credentials
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-      {loading ? (
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      ) : (
-        <ScrollView style={styles.didList}>
-          {dids.length === 0 ? (
-            <Text style={styles.emptyText}>
-              No DIDs yet. Create your first one!
-            </Text>
+      {/* Content based on active tab */}
+      {activeTab === 'dids' ? (
+        <>
+          <TouchableOpacity
+            style={styles.createButton}
+            onPress={createNewDID}
+            disabled={creating}
+          >
+            {creating ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Create New DID</Text>
+            )}
+          </TouchableOpacity>
+
+          {loading ? (
+            <ActivityIndicator size="large" color={COLORS.primary} />
           ) : (
-            dids.map((did, index) => (
-              <TouchableOpacity
-                key={did.did}
-                style={styles.didCard}
-                onPress={() => setSelectedDID(did.did)}
-              >
-                <Text style={styles.didLabel}>DID #{index + 1}</Text>
-                <Text style={styles.didText} numberOfLines={1}>
-                  {did.did}
+            <ScrollView style={styles.didList}>
+              {dids.length === 0 ? (
+                <Text style={styles.emptyText}>
+                  No DIDs yet. Create your first one!
                 </Text>
-                <Text style={styles.didAlias}>Alias: {did.alias}</Text>
-                <Text style={styles.didKeys}>Keys: {did.keys.length}</Text>
-                <Text style={styles.tapHint}>Tap for details →</Text>
-              </TouchableOpacity>
-            ))
+              ) : (
+                dids.map((did, index) => (
+                  <TouchableOpacity
+                    key={did.did}
+                    style={styles.didCard}
+                    onPress={() => setSelectedDID(did.did)}
+                  >
+                    <Text style={styles.didLabel}>DID #{index + 1}</Text>
+                    <Text style={styles.didText} numberOfLines={1}>
+                      {did.did}
+                    </Text>
+                    <Text style={styles.didAlias}>Alias: {did.alias}</Text>
+                    <Text style={styles.didKeys}>Keys: {did.keys.length}</Text>
+                    <Text style={styles.tapHint}>Tap for details →</Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
           )}
-        </ScrollView>
+        </>
+      ) : (
+        <CredentialsScreen />
       )}
     </View>
   );
@@ -121,6 +150,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b7280',
     marginBottom: 24,
+  },
+  tabs: {
+    flexDirection: 'row',
+    marginBottom: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  activeTab: {
+    borderBottomWidth: 2,
+    borderBottomColor: COLORS.primary,
+  },
+  tabText: {
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  activeTabText: {
+    color: COLORS.primary,
+    fontWeight: '600',
   },
   createButton: {
     backgroundColor: COLORS.primary,

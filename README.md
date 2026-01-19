@@ -34,4 +34,4 @@ Focus: Digital Wallets and Decentralized Identity Systems using cheqd/Credo tech
 
 ## Author
 
-Sorin - Software Developer @ Codefy
+Sorin Greu - Faculty of Computer Science, UAIC

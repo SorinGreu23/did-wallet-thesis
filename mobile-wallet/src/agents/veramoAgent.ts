@@ -5,7 +5,9 @@ import {
   IDIDManager,
   IDataStore,
   TAgent,
+  ICredentialPlugin,
 } from "@veramo/core";
+import { CredentialPlugin } from "@veramo/credential-w3c";
 import { DIDManager } from "@veramo/did-manager";
 import { KeyManager } from "@veramo/key-manager";
 import { KeyManagementSystem, SecretBox } from "@veramo/kms-local";
@@ -49,7 +51,7 @@ export const initializeAgent = async (): Promise<VeramoAgent> => {
   }).initialize();
 
   agentInstance = createAgent<
-    IDIDManager & IKeyManager & IResolver & IDataStore
+    IDIDManager & IKeyManager & IResolver & IDataStore & ICredentialPlugin
   >({
     plugins: [
       new KeyManager({
@@ -76,6 +78,7 @@ export const initializeAgent = async (): Promise<VeramoAgent> => {
       }),
       new DataStore(dbConnection),
       new DataStoreORM(dbConnection),
+      new CredentialPlugin()
     ],
   });
 
