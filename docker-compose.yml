@@ -1,34 +1,38 @@
-version: '3.8'
+version: '3.9'
 
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
     container_name: did-postgres
     environment:
-      POSTGRES_USER: did_admin
-      POSTGRES_PASSWORD: dev_password
-      POSTGRES_DB: did_platform
+      POSTGRES_USER: did_user
+      POSTGRES_PASSWORD: did_password
+      POSTGRES_DB: did_wallet
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - did-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U did_admin"]
+      test: ["CMD-SHELL", "pg_isready -U did_user -d did_wallet"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   rabbitmq:
-    image: rabbitmq:3.12-management
+    image: rabbitmq:3.12-management-alpine
     container_name: did-rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: did_admin
-      RABBITMQ_DEFAULT_PASS: dev_password
+      RABBITMQ_DEFAULT_USER: did_user
+      RABBITMQ_DEFAULT_PASS: did_password
     ports:
       - "5672:5672"
       - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - did-network
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
@@ -36,10 +40,14 @@ services:
       retries: 5
 
   hardhat:
-    build: ./blockchain
+    build:
+      context: ./blockchain
+      dockerfile: Dockerfile
     container_name: did-hardhat
     ports:
       - "8545:8545"
+    networks:
+      - did-network
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8545 || exit 1"]
       interval: 15s
@@ -50,3 +58,7 @@ services:
 volumes:
   postgres_data:
   rabbitmq_data:
+
+networks:
+  did-network:
+    driver: bridge
