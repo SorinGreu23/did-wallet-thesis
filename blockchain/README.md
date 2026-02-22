@@ -57,12 +57,20 @@ All tests should pass with >90% coverage. Tests validate:
 
 ### Local Development (Hardhat Network)
 
+Run a one-shot local deployment without starting a node:
+
+```bash
+npm run deploy:local
+```
+
+### Localhost Node Deployment (Persistent Chain)
+
 ```bash
 # Terminal 1: Start local blockchain
 npm run node
 
 # Terminal 2: Deploy contracts
-npm run deploy:local
+npm run deploy:localhost
 ```
 
 ### Sepolia Testnet
@@ -161,10 +169,9 @@ For testing, the deployment script simulates a simplified ceremony:
 
 1. Deploy EURootAuthority
 2. Bootstrap initial member states
-3. Add deployment witness (in production: 18+ signatures)
-4. Deploy AccreditationRegistry
-5. Deploy CredentialRegistry
-6. Export ABIs and deployment info
+3. Deploy AccreditationRegistry
+4. Deploy CredentialRegistry
+5. Export ABIs and deployment info
 
 In production, the full deployment ceremony would involve:
 - 18+ EU member state witness signatures

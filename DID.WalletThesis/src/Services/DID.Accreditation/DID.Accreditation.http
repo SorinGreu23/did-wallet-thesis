@@ -1,0 +1,6 @@
+@DID.Accreditation_HostAddress = http://localhost:5211
+
+GET {{DID.Accreditation_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

@@ -1,7 +1,35 @@
+# Dependencies
 node_modules
-.expo
+**/node_modules/
+
+# Build outputs
+**/dist/
+**/bin/
+**/obj/
+
+# .NET
+*.user
+*.suo
+.vs/
+**/TestResults/
+
+# Environment / secrets
 .env
+.env.local
+**/.env
+
+# React Native / Expo
+.expo
+
+# Logs
 *.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
 .claude
 .copilot
 CLAUDE.md

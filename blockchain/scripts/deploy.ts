@@ -46,20 +46,10 @@ async function main() {
   }
   console.log();
 
-  // ============ 3. Add Deployment Witnesses ============
-  console.log("👁️  Adding deployment witnesses...");
-
-  // In production, this would be 18+ different member state signatures
-  // For testing, we'll use the deployer account
-  const witnessTx = await rootAuthority.addDeploymentWitness(deployer.address);
-  await witnessTx.wait();
-
-  console.log("✅ Added deployment witness:", deployer.address);
-  console.log("   Witness count:", await rootAuthority.witnessCount());
-  console.log("   Ceremony completed:", await rootAuthority.deploymentCeremonyCompleted());
+  console.log("✅ Ceremony completed:", await rootAuthority.deploymentCeremonyCompleted());
   console.log();
 
-  // ============ 4. Deploy AccreditationRegistry ============
+  // ============ 3. Deploy AccreditationRegistry ============
   console.log("📜 Deploying AccreditationRegistry...");
 
   const AccreditationRegistry = await ethers.getContractFactory("AccreditationRegistry");
@@ -70,7 +60,7 @@ async function main() {
   console.log("✅ AccreditationRegistry deployed to:", accreditationRegistryAddress);
   console.log("   Connected to EURootAuthority:", rootAuthorityAddress, "\n");
 
-  // ============ 5. Deploy CredentialRegistry ============
+  // ============ 4. Deploy CredentialRegistry ============
   console.log("📜 Deploying CredentialRegistry...");
 
   const CredentialRegistry = await ethers.getContractFactory("CredentialRegistry");
@@ -81,7 +71,7 @@ async function main() {
   console.log("✅ CredentialRegistry deployed to:", credentialRegistryAddress);
   console.log("   Connected to AccreditationRegistry:", accreditationRegistryAddress, "\n");
 
-  // ============ 6. Save Deployment Artifacts ============
+  // ============ 5. Save Deployment Artifacts ============
   console.log("💾 Saving deployment artifacts...");
 
   const deploymentInfo = {
@@ -119,7 +109,7 @@ async function main() {
   console.log("✅ Deployment info saved to:", deploymentPath);
   console.log("✅ Latest deployment:", latestPath, "\n");
 
-  // ============ 7. Export ABIs ============
+  // ============ 6. Export ABIs ============
   console.log("📋 Exporting ABIs...");
 
   const abisDir = path.join(__dirname, "..", "abis");
@@ -152,8 +142,7 @@ async function main() {
 }
 
 main()
-  .then(() => process.exit(0))
   .catch((error) => {
     console.error(error);
-    process.exit(1);
+    process.exitCode = 1;
   });

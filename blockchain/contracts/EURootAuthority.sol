@@ -16,7 +16,7 @@ contract EURootAuthority {
     uint256 public immutable DEPLOYMENT_BLOCK;
 
     /// @notice Official EU DID document identifier (did:web:europa.eu)
-    string public immutable OFFICIAL_DID_DOCUMENT;
+    string public OFFICIAL_DID_DOCUMENT;
 
     // ============ Deployment Ceremony ============
 
@@ -279,7 +279,6 @@ contract EURootAuthority {
 
         if (proposal.executed) revert ProposalAlreadyExecuted();
 
-        uint256 totalVotes = proposal.votesFor + proposal.votesAgainst;
         uint256 approvalPercentage = (proposal.votesFor * 100) / memberStateList.length;
 
         if (approvalPercentage < APPROVAL_THRESHOLD) revert ProposalNotApproved();
@@ -416,5 +415,7 @@ contract EURootAuthority {
 
             emit MemberStateAdded(stateAddress, countryCodes[i], didDocuments[i]);
         }
+
+        deploymentCeremonyCompleted = true;
     }
 }

@@ -89,7 +89,7 @@ contract CredentialRegistry {
     error InvalidAccreditation();
     error CredentialNotFound();
     error CredentialAlreadyExists();
-    error CredentialRevoked();
+    error CredentialAlreadyRevoked();
     error CredentialExpired();
     error InvalidStatus();
     error Unauthorized();
@@ -173,7 +173,7 @@ contract CredentialRegistry {
         Credential storage cred = credentials[credentialId];
 
         if (!cred.exists) revert CredentialNotFound();
-        if (cred.status == CredentialStatus.Revoked) revert CredentialRevoked();
+        if (cred.status == CredentialStatus.Revoked) revert CredentialAlreadyRevoked();
 
         // Only issuer can revoke
         if (msg.sender != cred.issuer) revert Unauthorized();
@@ -181,7 +181,7 @@ contract CredentialRegistry {
         CredentialStatus oldStatus = cred.status;
         cred.status = CredentialStatus.Revoked;
 
-        emit CredentialRevoked(credentialId, msg.sender, block.timestamp, reason);
+        emit CredentialRevoked(credentialId, msg.sender, block.number, reason);
         emit CredentialStatusUpdated(credentialId, oldStatus, CredentialStatus.Revoked);
     }
 
@@ -194,7 +194,7 @@ contract CredentialRegistry {
         Credential storage cred = credentials[credentialId];
 
         if (!cred.exists) revert CredentialNotFound();
-        if (cred.status == CredentialStatus.Revoked) revert CredentialRevoked();
+        if (cred.status == CredentialStatus.Revoked) revert CredentialAlreadyRevoked();
 
         // Only issuer can suspend
         if (msg.sender != cred.issuer) revert Unauthorized();

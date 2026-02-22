@@ -75,7 +75,7 @@ contract AccreditationRegistry {
     error InvalidScope();
     error AccreditationNotFound();
     error AccreditationExpired();
-    error AccreditationRevoked();
+    error AccreditationAlreadyRevoked();
     error AccreditationAlreadyExists();
     error InvalidTrustChain();
     error NotMemberState();
@@ -159,7 +159,7 @@ contract AccreditationRegistry {
         Accreditation storage accred = accreditations[accreditationId];
 
         if (!accred.exists) revert AccreditationNotFound();
-        if (accred.revoked) revert AccreditationRevoked();
+        if (accred.revoked) revert AccreditationAlreadyRevoked();
 
         // Only issuer or root authority can revoke
         require(
@@ -170,7 +170,7 @@ contract AccreditationRegistry {
         accred.revoked = true;
         validAccreditations[accreditationId][accred.subject] = false;
 
-        emit AccreditationRevoked(accreditationId, msg.sender, block.timestamp);
+        emit AccreditationRevoked(accreditationId, msg.sender, block.number);
     }
 
     /**
@@ -190,11 +190,8 @@ contract AccreditationRegistry {
             // Member state must be validated by root authority
             return rootAuthority.isMemberState(accred.subject);
         } else if (accred.scope == AccreditationScope.Ministry) {
-            // Ministry must have valid parent (member state)
-            if (accred.parentAccreditationId == bytes32(0)) return false;
-            Accreditation memory parent = accreditations[accred.parentAccreditationId];
-            if (parent.scope != AccreditationScope.MemberState) return false;
-            return validateTrustChain(accred.parentAccreditationId);
+            // Ministry's trust chain is valid if its issuer is a member state
+            return rootAuthority.isMemberState(accred.issuer);
         } else if (accred.scope == AccreditationScope.Institution) {
             // Institution must have valid parent (ministry)
             if (accred.parentAccreditationId == bytes32(0)) return false;
