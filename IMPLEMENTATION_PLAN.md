@@ -6,26 +6,30 @@
 
 **Current State:**
 - ✅ Mobile wallet (React Native/Expo) fully implemented with DID and credential management
-- ✅ Smart contracts implemented (EURootAuthority, AccreditationRegistry, CredentialRegistry)
-- ⏳ Backend infrastructure: 9 microservices to implement
-- ⏳ Blockchain integration layer
-- ⏳ Event infrastructure (RabbitMQ + MassTransit)
+- ✅ Smart contracts implemented, compiled, tested, deployed (Hardhat local + Sepolia)
+- ✅ Docker Compose infrastructure (PostgreSQL, RabbitMQ, Hardhat node)
+- ✅ DID.Contracts thin library (event DTOs for all services)
+- ✅ All 8 .NET microservice projects scaffolded (Clean Architecture structure)
+- ✅ ZKP Service (Node.js) implemented — circuits compiled, keys generated
+- ⏳ Microservice business logic: 8 services to implement
+- ⏳ Blockchain integration layer (Nethereum per service)
+- ⏳ Event infrastructure (RabbitMQ + MassTransit per service)
 
 **Core Architectural Principle:**
 > **Blockchain is the source of truth — NOT microservices.**
 >
 > Smart contracts always validate authorization on-chain. Microservices are convenience wrappers only (off-chain storage, event listeners, UI helpers). Microservices NEVER make authorization decisions, validate trust chains, or act as gatekeepers.
 
-**9 Microservices to Implement:**
-1. Identity Service - DID document generation, key pair storage
-2. Accreditation Service - UI wrapper for AccreditationRegistry.sol
-3. Credential Service - W3C VC generation, calls CredentialRegistry.sol
-4. Verification Service - Orchestrates 5-step verification reading from blockchain
-5. Blockchain Sync Service - Event listener, mirrors blockchain to PostgreSQL
-6. Presentation Service - QR codes, SignalR for holder-verifier communication
-7. ZKP Service (Node.js) - Zero-knowledge proof generation/verification
-8. Notification Service - Email (SendGrid), push (FCM)
-9. Audit Service - Event sourcing, immutable audit logs
+**9 Microservices — Implementation Status:**
+1. ⏳ Identity Service - DID document generation, key pair storage
+2. ⏳ Accreditation Service - UI wrapper for AccreditationRegistry.sol
+3. ⏳ Credential Service - W3C VC generation, calls CredentialRegistry.sol
+4. ⏳ Verification Service - Orchestrates 5-step verification reading from blockchain
+5. ⏳ Blockchain Sync Service - Event listener, mirrors blockchain to PostgreSQL
+6. ⏳ Presentation Service - QR codes, SignalR for holder-verifier communication
+7. ✅ ZKP Service (Node.js) - Zero-knowledge proof generation/verification
+8. ⏳ Notification Service - Email (SendGrid), push (FCM)
+9. ⏳ Audit Service - Event sourcing, immutable audit logs
 
 **Timeline:** 14 weeks across 6 phases
 
@@ -93,9 +97,24 @@ var isAuthorized = issuer.IsAuthorized; // ❌ CENTRALIZED!
 
 ### Clean Architecture
 
-Each .NET service follows: `Domain/ → Application/ → Infrastructure/ → API/`
+Each .NET service is **fully self-contained** with its own `Domain/ → Application/ → Infrastructure/ → API/` layers. There are no shared Domain or Infrastructure libraries — each service independently implements its own blockchain interaction (Nethereum) and persistence (EF Core).
 
-All blockchain interaction goes through `IBlockchainService` interface.
+**The only shared project is `DID.Contracts`** — a thin class library containing only RabbitMQ message DTOs (C# records, zero logic, zero dependencies). This is the sole coupling point between services.
+
+```
+DID.WalletThesis/src/
+├── Contracts/
+│   └── DID.Contracts/          ← event DTOs only (records)
+└── Services/
+    ├── DID.BlockchainSync/     ← self-contained CA
+    ├── DID.Identity/           ← self-contained CA
+    ├── DID.Accreditation/      ← self-contained CA
+    ├── DID.Credential/         ← self-contained CA
+    ├── DID.Verification/       ← self-contained CA
+    ├── DID.Presentation/       ← self-contained CA
+    ├── DID.Notification/       ← self-contained CA
+    └── DID.Audit/              ← self-contained CA
+```
 
 ### Event-Driven Architecture
 
@@ -105,7 +124,7 @@ RabbitMQ + MassTransit for asynchronous communication. Blockchain Sync Service i
 
 ## PHASE 0: Foundation & Prerequisites (Week 1-2)
 
-**Status:** ✅ Partially Complete (Smart contracts done)
+**Status:** ✅ Complete
 
 ### 0.1 Smart Contracts ✅ COMPLETED
 
@@ -148,139 +167,59 @@ blockchain/
 - `verifyCredential()` - Complete verification (status + trust chain)
 - `batchVerifyCredentials()` - Batch verification
 
-**Next Steps:**
-1. Run `npm install` in blockchain/ directory
-2. Run `npm test` to verify all tests pass
-3. Deploy to Hardhat local network
-4. Deploy to Sepolia testnet
-5. Export ABIs for microservice consumption
+**Completed:**
+- ✅ `npm install` run, all tests passing
+- ✅ Deployed to local Hardhat network — addresses in `blockchain/deployments/latest.json`
+- ✅ ABIs exported to `blockchain/abis/`
+- ✅ TypeScript bindings (typechain-types) generated
 
 ---
 
-### 0.2 Shared Infrastructure Projects
+### 0.2 Shared Contracts Project ✅ COMPLETED
 
-**Create in:** `/Users/sorin.greu/Desktop/Stuff/did-wallet-thesis/DID.WalletThesis/src/Shared/`
+**Architecture decision:** No shared Domain/Infrastructure libraries. Each service is fully self-contained. The only shared project is a thin contracts library for RabbitMQ message DTOs.
+
+**Location:** `DID.WalletThesis/src/Contracts/DID.Contracts/`
 
 ```
-Shared/
-├── DID.Shared.Domain/
-│   ├── Common/
-│   │   ├── Entity.cs
-│   │   ├── ValueObject.cs
-│   │   └── AggregateRoot.cs
-│   └── Enums/
-│       ├── AccreditationScope.cs
-│       └── CredentialStatus.cs
-│
-├── DID.Shared.Application/
-│   ├── Interfaces/
-│   │   ├── IBlockchainService.cs      # Core interface for ALL blockchain operations
-│   │   ├── IEventBus.cs
-│   │   └── IRepository.cs
-│   └── DTOs/
-│       ├── AccreditationDto.cs
-│       └── CredentialDto.cs
-│
-├── DID.Shared.Infrastructure/
-│   ├── Blockchain/
-│   │   ├── BlockchainService.cs       # Nethereum implementation
-│   │   ├── TransactionData.cs
-│   │   └── ContractLoader.cs
-│   ├── EventBus/
-│   │   ├── RabbitMQEventBus.cs
-│   │   └── EventBusConfiguration.cs
-│   └── Persistence/
-│       └── BaseRepository.cs
-│
-└── DID.Shared.Events/
-    ├── Identity/
-    │   ├── DIDCreatedEvent.cs
-    │   └── DIDResolvedEvent.cs
-    ├── Accreditation/
-    │   ├── AccreditationIssuedEvent.cs
-    │   └── AccreditationRevokedEvent.cs
-    ├── Credential/
-    │   ├── CredentialIssuedEvent.cs
-    │   └── CredentialRevokedEvent.cs
-    └── Blockchain/
-        └── BlockchainSyncEvent.cs
+DID.Contracts/
+├── Identity/
+│   └── DIDCreatedEvent.cs
+├── Accreditation/
+│   ├── AccreditationIssuedEvent.cs
+│   └── AccreditationRevokedEvent.cs
+├── Credential/
+│   ├── CredentialIssuedEvent.cs
+│   ├── CredentialRevokedEvent.cs
+│   └── CredentialSuspendedEvent.cs
+└── Verification/
+    └── VerificationCompletedEvent.cs
 ```
 
-**Critical IBlockchainService Interface:**
-```csharp
-public interface IBlockchainService
-{
-    /// <summary>
-    /// Call a read-only contract function
-    /// </summary>
-    Task<T> CallContractAsync<T>(string contractName, string functionName, params object[] args);
-
-    /// <summary>
-    /// Submit a transaction to the blockchain
-    /// </summary>
-    Task<string> SubmitTransactionAsync(TransactionData transaction);
-
-    /// <summary>
-    /// Wait for transaction confirmation
-    /// </summary>
-    Task<TransactionReceipt> WaitForConfirmationAsync(string txHash, CancellationToken ct = default);
-
-    /// <summary>
-    /// Subscribe to contract events
-    /// </summary>
-    Task SubscribeToEventAsync<TEventDTO>(
-        string contractName,
-        string eventName,
-        Func<TEventDTO, Task> handler
-    ) where TEventDTO : class, new();
-}
-```
-
-**NuGet Packages:**
+**Per-service NuGet packages (added to each service individually):**
 - Nethereum.Web3
 - MassTransit
 - MassTransit.RabbitMQ
 - Npgsql.EntityFrameworkCore.PostgreSQL
 - Serilog.AspNetCore
 
-**BlockchainService Implementation Pattern:**
+**IBlockchainService pattern (defined and implemented within each service):**
 ```csharp
-public class BlockchainService : IBlockchainService
+public interface IBlockchainService
 {
-    private readonly Web3 _web3;
-    private readonly Dictionary<string, Contract> _contracts;
-    private readonly IConfiguration _config;
-
-    public async Task<T> CallContractAsync<T>(
-        string contractName,
-        string functionName,
-        params object[] args)
-    {
-        var contract = _contracts[contractName];
-        var function = contract.GetFunction(functionName);
-        return await function.CallAsync<T>(args);
-    }
-
-    public async Task<string> SubmitTransactionAsync(TransactionData transaction)
-    {
-        var contract = _contracts[transaction.ContractName];
-        var function = contract.GetFunction(transaction.FunctionName);
-        var receipt = await function.SendTransactionAndWaitForReceiptAsync(
-            _account.Address,
-            transaction.Parameters
-        );
-        return receipt.TransactionHash;
-    }
-
-    // ... additional implementation
+    Task<T> CallContractAsync<T>(string contractName, string functionName, params object[] args);
+    Task<string> SubmitTransactionAsync(TransactionData transaction);
+    Task<TransactionReceipt> WaitForConfirmationAsync(string txHash, CancellationToken ct = default);
+    Task SubscribeToEventAsync<TEventDTO>(string contractName, string eventName,
+        Func<TEventDTO, Task> handler) where TEventDTO : class, new();
 }
 ```
 
 ---
 
-### 0.3 Docker Compose Infrastructure
+### 0.3 Docker Compose Infrastructure ✅ COMPLETED
 
-**Create:** `docker-compose.yml` in project root
+**Location:** `docker-compose.yml` in project root
 
 ```yaml
 version: '3.8'
@@ -914,7 +853,7 @@ public class VerificationOrchestrator
 
 ---
 
-### 3.2 ZKP Service (Node.js)
+### 3.2 ZKP Service (Node.js) ✅ COMPLETED
 
 **Location:** `zkp-service/` (project root)
 
@@ -923,20 +862,30 @@ public class VerificationOrchestrator
 zkp-service/
 ├── src/
 │   ├── circuits/
-│   │   ├── ageVerification.circom
-│   │   └── graduationYearRange.circom
+│   │   ├── ageVerification.circom       ✅ private: birthYear | public: currentYear, threshold
+│   │   └── graduationYearRange.circom   ✅ private: graduationYear | public: minYear, maxYear
 │   ├── controllers/
-│   │   └── zkpController.ts
+│   │   └── zkpController.ts             ✅
 │   ├── services/
-│   │   ├── proofGenerator.ts
-│   │   └── proofVerifier.ts
-│   └── index.ts
-├── circuits_compiled/
-├── keys/
+│   │   ├── proofGenerator.ts            ✅ snarkjs.groth16.fullProve
+│   │   └── proofVerifier.ts             ✅ snarkjs.groth16.verify
+│   ├── types/
+│   │   └── zkp.types.ts                 ✅
+│   └── index.ts                         ✅
+├── circuits_compiled/                   ✅ .wasm files committed
+├── keys/                                ✅ _final.zkey + verification_key.json committed
+├── scripts/
+│   ├── setup-circuits.mjs               ✅ cross-platform (Windows/macOS/Linux)
+│   └── setup-circuits.ps1               ✅ Windows fallback
 ├── package.json
 ├── tsconfig.json
 └── Dockerfile
 ```
+
+**ZKP privacy model:**
+- ZKP protects **attribute-level data** (birth date, graduation year) — not the credential as a whole
+- The credential hash and issuer-holder relationship remain on-chain for auditability
+- Trust chain traversal is done via blockchain reads (not ZKP)
 
 **Age Verification Circuit:**
 ```circom
@@ -1324,9 +1273,14 @@ catch (RpcClientTimeoutException)
 ## Success Criteria
 
 ### Phase 0
-- [x] All 3 smart contracts deployed to Hardhat and Sepolia
-- [ ] Shared infrastructure projects compiling
-- [ ] Docker Compose running all services
+- [x] All 3 smart contracts deployed to Hardhat local network
+- [x] ABIs exported, typechain-types generated
+- [x] DID.Contracts thin library compiling
+- [x] All 8 .NET service projects scaffolded
+- [x] Docker Compose configured (PostgreSQL, RabbitMQ, Hardhat)
+- [x] ZKP Service implemented and circuits compiled
+- [ ] Docker Compose services verified healthy
+- [ ] Contracts redeployed after fresh Hardhat container start
 
 ### Phase 1
 - [ ] Blockchain Sync Service syncing events in real-time
@@ -1378,32 +1332,35 @@ catch (RpcClientTimeoutException)
 
 ## Next Immediate Steps
 
-1. ✅ **Smart contracts deployed** - COMPLETE
+1. ✅ **Smart contracts** — compiled, tested, deployed, ABIs exported
+2. ✅ **DID.Contracts** — thin event DTO library created
+3. ✅ **All 8 .NET service scaffolds** — Clean Architecture structure in place
+4. ✅ **Docker Compose** — configured with PostgreSQL, RabbitMQ, Hardhat
+5. ✅ **ZKP Service** — circuits compiled, keys generated, cross-platform setup
 
-2. **Install blockchain dependencies:**
+6. **Start Docker and redeploy contracts:**
    ```bash
+   docker-compose up -d --build
+   docker-compose ps                          # wait for healthy
    cd blockchain
-   npm install
-   npm test  # Verify all tests pass
-   npm run node &  # Start local Hardhat network
-   npm run deploy:local  # Deploy contracts
+   npx hardhat run scripts/deploy.ts --network localhost
+   # copy new addresses to each service appsettings.json
    ```
 
-3. **Create shared infrastructure:**
-   - Create DID.Shared.* projects
-   - Implement IBlockchainService with Nethereum
-   - Implement RabbitMQ event bus
-   - Add NuGet packages
+7. **Copy ABIs into solution:**
+   ```bash
+   mkdir DID.WalletThesis/src/ABIs
+   cp blockchain/abis/*.json DID.WalletThesis/src/ABIs/
+   ```
 
-4. **Set up Docker Compose:**
-   - Create docker-compose.yml
-   - Start services: `docker-compose up -d`
-   - Verify all healthy
+8. **Begin Phase 1 — implement Blockchain Sync Service business logic:**
+   - Add NuGet packages (Nethereum, MassTransit, EF Core)
+   - Implement `IBlockchainService` + `BlockchainService` (Nethereum)
+   - Implement `BlockchainSyncWorker` (subscribe to contract events)
+   - Implement `SyncDbContext` + migrations
+   - Wire up RabbitMQ publishers
 
-5. **Begin Phase 1:**
-   - Implement Blockchain Sync Service
-   - Implement Identity Service
-   - Test event flow
+9. **Implement Identity Service in parallel with Blockchain Sync**
 
 ---
 
@@ -1431,11 +1388,13 @@ catch (RpcClientTimeoutException)
 ## Final Notes
 
 - All microservices use **.NET 10** with C# 13
-- Follow existing patterns from `.claude/CLAUDE_INSTRUCTIONS.md`
-- Blockchain-first principle is **non-negotiable** - this is the thesis innovation
+- **Self-contained services** — no shared Domain/Infrastructure libraries; each service owns its stack
+- **DID.Contracts** is the only shared project — pure event DTO records, no logic
+- Blockchain-first principle is **non-negotiable** — this is the thesis innovation
 - Each service has its own PostgreSQL database/schema
-- RabbitMQ for all async communication
+- RabbitMQ + MassTransit for all async communication between services
 - Smart contracts are the source of truth, always
+- ZKP protects attribute-level privacy (age, dates) — not credential existence
 - Mobile wallet must be able to verify credentials independently without backend services
 
 **Remember:** The innovation of this thesis is proving that blockchain can be the authoritative source of truth for a decentralized identity system, with microservices as optional convenience layers only.
