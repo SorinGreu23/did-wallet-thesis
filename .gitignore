@@ -6,12 +6,18 @@ node_modules
 **/dist/
 **/bin/
 **/obj/
+**/*.dll
+**/*.pdb
+**/*.exe
+**/*.nupkg
 
 # .NET
 *.user
 *.suo
 .vs/
 **/TestResults/
+bin
+obj
 
 # Environment / secrets
 .env
@@ -33,3 +39,11 @@ Thumbs.db
 .claude
 .copilot
 CLAUDE.md
+.idea/
+**/.idea/
+
+# EF Core — keep Migrations/ committed (source code)
+# Secrets — never commit
+**/appsettings.*.json
+!**/appsettings.json
+!**/appsettings.Development.json

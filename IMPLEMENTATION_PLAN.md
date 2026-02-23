@@ -6,14 +6,15 @@
 
 **Current State:**
 - ✅ Mobile wallet (React Native/Expo) fully implemented with DID and credential management
-- ✅ Smart contracts implemented, compiled, tested, deployed (Hardhat local + Sepolia)
-- ✅ Docker Compose infrastructure (PostgreSQL, RabbitMQ, Hardhat node)
-- ✅ DID.Contracts thin library (event DTOs for all services)
-- ✅ All 8 .NET microservice projects scaffolded (Clean Architecture structure)
+- ✅ Smart contracts implemented, compiled, tested, deployed (Hardhat via Docker, chainId 31337)
+- ✅ Docker Compose infrastructure (PostgreSQL 16, RabbitMQ 3.12, Hardhat node)
+- ✅ DID.Contracts — RabbitMQ event DTOs for all services
+- ✅ DID.Shared.Domain / Application / Infrastructure — shared base classes + Nethereum/MassTransit/EF Core implementations
+- ✅ All 9 .NET microservice projects scaffolded in solution
+- ✅ BlockchainSync Service — fully implemented (event listener → PostgreSQL + RabbitMQ)
 - ✅ ZKP Service (Node.js) implemented — circuits compiled, keys generated
-- ⏳ Microservice business logic: 8 services to implement
-- ⏳ Blockchain integration layer (Nethereum per service)
-- ⏳ Event infrastructure (RabbitMQ + MassTransit per service)
+- ⏳ Identity Service — next priority
+- ⏳ Remaining 7 microservices
 
 **Core Architectural Principle:**
 > **Blockchain is the source of truth — NOT microservices.**
@@ -25,7 +26,7 @@
 2. ⏳ Accreditation Service - UI wrapper for AccreditationRegistry.sol
 3. ⏳ Credential Service - W3C VC generation, calls CredentialRegistry.sol
 4. ⏳ Verification Service - Orchestrates 5-step verification reading from blockchain
-5. ⏳ Blockchain Sync Service - Event listener, mirrors blockchain to PostgreSQL
+5. ✅ Blockchain Sync Service - Event listener, mirrors blockchain to PostgreSQL, publishes to RabbitMQ
 6. ⏳ Presentation Service - QR codes, SignalR for holder-verifier communication
 7. ✅ ZKP Service (Node.js) - Zero-knowledge proof generation/verification
 8. ⏳ Notification Service - Email (SendGrid), push (FCM)
@@ -97,23 +98,31 @@ var isAuthorized = issuer.IsAuthorized; // ❌ CENTRALIZED!
 
 ### Clean Architecture
 
-Each .NET service is **fully self-contained** with its own `Domain/ → Application/ → Infrastructure/ → API/` layers. There are no shared Domain or Infrastructure libraries — each service independently implements its own blockchain interaction (Nethereum) and persistence (EF Core).
+Each .NET service has its own `Domain/ → Application/ → Infrastructure/ → Workers or Controllers/` layers. Shared infrastructure (Nethereum, MassTransit, EF Core base classes) lives in `DID.Shared.*` projects to avoid duplication.
 
-**The only shared project is `DID.Contracts`** — a thin class library containing only RabbitMQ message DTOs (C# records, zero logic, zero dependencies). This is the sole coupling point between services.
+**Shared projects:**
+- `DID.Contracts` — RabbitMQ event DTOs (records only, no logic)
+- `DID.Shared.Domain` — `Entity`, `ValueObject`, `AggregateRoot` base classes
+- `DID.Shared.Application` — `IBlockchainService`, `IEventBus`, `IRepository<T>` interfaces
+- `DID.Shared.Infrastructure` — `BlockchainService` (Nethereum), `RabbitMQEventBus`, `BaseRepository<T,TContext>`
 
 ```
 DID.WalletThesis/src/
 ├── Contracts/
-│   └── DID.Contracts/          ← event DTOs only (records)
+│   └── DID.Contracts/              ← event DTOs (records)
+├── Shared/
+│   ├── DID.Shared.Domain/          ← base entities/value objects
+│   ├── DID.Shared.Application/     ← interfaces
+│   └── DID.Shared.Infrastructure/  ← Nethereum, MassTransit, EF Core impls
 └── Services/
-    ├── DID.BlockchainSync/     ← self-contained CA
-    ├── DID.Identity/           ← self-contained CA
-    ├── DID.Accreditation/      ← self-contained CA
-    ├── DID.Credential/         ← self-contained CA
-    ├── DID.Verification/       ← self-contained CA
-    ├── DID.Presentation/       ← self-contained CA
-    ├── DID.Notification/       ← self-contained CA
-    └── DID.Audit/              ← self-contained CA
+    ├── DID.BlockchainSync/     ← ✅ implemented
+    ├── DID.Identity/           ← ⏳ next
+    ├── DID.Accreditation/      ← ⏳
+    ├── DID.Credential/         ← ⏳
+    ├── DID.Verification/       ← ⏳
+    ├── DID.Presentation/       ← ⏳
+    ├── DID.Notification/       ← ⏳
+    └── DID.Audit/              ← ⏳
 ```
 
 ### Event-Driven Architecture
@@ -1273,19 +1282,19 @@ catch (RpcClientTimeoutException)
 ## Success Criteria
 
 ### Phase 0
-- [x] All 3 smart contracts deployed to Hardhat local network
-- [x] ABIs exported, typechain-types generated
-- [x] DID.Contracts thin library compiling
-- [x] All 8 .NET service projects scaffolded
-- [x] Docker Compose configured (PostgreSQL, RabbitMQ, Hardhat)
+- [x] All 3 smart contracts deployed to Hardhat local network (via Docker)
+- [x] ABIs exported to `blockchain/abis/`, typechain-types generated
+- [x] DID.Contracts event DTO library compiling
+- [x] DID.Shared.Domain / Application / Infrastructure created
+- [x] All 9 .NET service projects scaffolded in solution
+- [x] Docker Compose running (PostgreSQL 16, RabbitMQ 3.12, Hardhat)
 - [x] ZKP Service implemented and circuits compiled
-- [ ] Docker Compose services verified healthy
-- [ ] Contracts redeployed after fresh Hardhat container start
 
 ### Phase 1
-- [ ] Blockchain Sync Service syncing events in real-time
+- [x] Blockchain Sync Service fully implemented — polls events, saves to PostgreSQL, publishes to RabbitMQ
+- [x] DB migration applied (`did_blockchainsync`)
 - [ ] Identity Service creating DIDs
-- [ ] Events flowing through RabbitMQ
+- [ ] Events flowing end-to-end through RabbitMQ (requires Identity + at least one consumer)
 
 ### Phase 2
 - [ ] Accreditation issuance calling smart contract

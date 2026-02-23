@@ -31,95 +31,59 @@
 
 ---
 
-### ⏳ Task #2: Create Shared Infrastructure Projects
-**Status:** Pending
+### ✅ Task #2: Create Shared Infrastructure Projects
+**Status:** Completed
 
 **Location:** `DID.WalletThesis/src/Shared/`
 
-**Components to Create:**
-- **DID.Shared.Domain/** - Entity, ValueObject, AggregateRoot, Enums
-- **DID.Shared.Application/** - Interfaces (IBlockchainService, IEventBus, IRepository), DTOs
-- **DID.Shared.Infrastructure/** - BlockchainService (Nethereum), RabbitMQEventBus, BaseRepository
-- **DID.Shared.Events/** - Event DTOs for identity, accreditation, credential, blockchain
+**Implemented:**
+- **DID.Shared.Domain/** - `Entity`, `ValueObject`, `AggregateRoot`
+- **DID.Shared.Application/** - `IBlockchainService`, `IEventBus`, `IRepository<T>`
+- **DID.Shared.Infrastructure/** - `BlockchainService` (Nethereum + polling), `RabbitMQEventBus` (MassTransit), `BaseRepository<T,TContext>` (EF Core), `BlockchainOptions`
+- **DID.Contracts/** (pre-existing) - event DTOs for all services
 
-**Critical Interface:**
-```csharp
-public interface IBlockchainService
-{
-    Task<T> CallContractAsync<T>(string contractName, string functionName, params object[] args);
-    Task<string> SubmitTransactionAsync(TransactionData transaction);
-    Task<TransactionReceipt> WaitForConfirmationAsync(string txHash, CancellationToken ct = default);
-    Task SubscribeToEventAsync<TEventDTO>(string contractName, string eventName,
-        Func<TEventDTO, Task> handler) where TEventDTO : class, new();
-}
-```
-
-**NuGet Packages:**
-- Nethereum.Web3
-- MassTransit
-- MassTransit.RabbitMQ
-- Npgsql.EntityFrameworkCore.PostgreSQL
-- Serilog.AspNetCore
-
-**Dependencies:** Task #1 (need contract ABIs)
+**Dependencies:** Task #1 ✅
 
 ---
 
-### ⏳ Task #3: Set Up Docker Compose Infrastructure
-**Status:** Pending
+### ✅ Task #3: Set Up Docker Compose Infrastructure
+**Status:** Completed
 
 **Location:** Project root `docker-compose.yml`
 
-**Services:**
-- **PostgreSQL 16** (port 5432)
-- **RabbitMQ 3.12** with management UI (ports 5672, 15672)
-- **Hardhat Node** (port 8545)
+**Running services:**
+- **PostgreSQL 16-alpine** — port 5432, user `did_user`, healthcheck configured
+- **RabbitMQ 3.12-management-alpine** — ports 5672 / 15672, management UI at localhost:15672
+- **Hardhat Node** — port 8545, built from `blockchain/Dockerfile`, contracts deployed
 
-**Configuration:**
-- Persistent volumes for data
-- Environment variables for credentials
-- Network configuration for service communication
-
-**Verification:**
+**Note:** Each service database must be created manually:
 ```bash
-docker-compose up -d
-docker-compose ps  # All services healthy
-curl http://localhost:15672  # RabbitMQ management
+docker exec did-postgres psql -U did_user -d postgres -c "CREATE DATABASE did_<service>;"
 ```
 
-**Dependencies:** None (can be done in parallel with Task #2)
+**Dependencies:** None ✅
 
 ---
 
 ## Phase 1: Core Infrastructure Services
 
-### ⏳ Task #4: Implement Blockchain Sync Service
-**Status:** Pending
-
-**Priority:** HIGHEST - All other services depend on blockchain state being synced
+### ✅ Task #4: Implement Blockchain Sync Service
+**Status:** Completed
 
 **Location:** `DID.WalletThesis/src/Services/DID.BlockchainSync/`
 
-**Architecture:** Clean Architecture (Domain → Application → Infrastructure → API)
+**Implemented (Clean Architecture):**
+- `Domain/` — `SyncedBlock`, `SyncedEvent` entities, `ISyncRepository`
+- `Infrastructure/Persistence/` — `SyncDbContext` (EF Core + Npgsql), `SyncRepository`
+- `Infrastructure/Blockchain/EventDTOs/` — 5 Nethereum event DTOs (AccreditationIssued/Revoked, CredentialIssued/Revoked/Suspended)
+- `Infrastructure/Blockchain/EventListener.cs` — subscribes via `IBlockchainService`, routes to handlers
+- `Application/Handlers/` — `AccreditationEventHandler`, `CredentialEventHandler` (save to DB + publish to RabbitMQ)
+- `Application/Services/EventProcessingService.cs` — starts all listeners
+- `Workers/BlockchainSyncWorker.cs` — `BackgroundService`, creates scope, runs `EventProcessingService`
+- `Program.cs` — full DI wiring (Serilog, EF Core, MassTransit, Blockchain, handlers)
+- DB: `did_blockchainsync` — migrations applied ✅
 
-**Key Responsibilities:**
-- Subscribe to smart contract events in real-time (Nethereum filters)
-- Store event data in PostgreSQL (synced_blocks, synced_events tables)
-- Publish events to RabbitMQ for consumption by other services
-- Handle blockchain reorganizations (orphaned blocks)
-- Provide sync status endpoint
-
-**Database Schema:**
-- `synced_blocks` (block_number, block_hash, timestamp)
-- `synced_events` (event_type, contract_address, block_number, transaction_hash, event_data JSONB)
-
-**Events to Subscribe:**
-- AccreditationIssued, AccreditationRevoked
-- CredentialIssued, CredentialRevoked, CredentialSuspended
-
-**API Endpoint:** `GET /sync/status`
-
-**Dependencies:** Tasks #1, #2, #3
+**Dependencies:** Tasks #1, #2, #3 ✅
 
 ---
 
@@ -395,13 +359,13 @@ zkp-service/
 ## Development Order (Critical Path)
 
 ```
-1. Smart Contracts (COMPLETED) ✅
+1. Smart Contracts ✅ COMPLETED
    ↓
-2. Shared Infrastructure + Docker Compose (Parallel)
+2. Shared Infrastructure + Docker Compose ✅ COMPLETED
    ↓
-3. Blockchain Sync Service (Critical - all depend on it)
+3. Blockchain Sync Service ✅ COMPLETED
    ↓
-4. Identity Service (Can be parallel with Blockchain Sync)
+4. Identity Service ⏳ NEXT
    ↓
 5. Accreditation Service
    ↓
@@ -420,42 +384,30 @@ zkp-service/
 
 ## Next Immediate Steps
 
-1. **Install blockchain dependencies:**
-   ```bash
-   cd blockchain
-   npm install
-   ```
+1. **Implement Identity Service (Task #5):**
+   - Add NuGet packages + shared project references
+   - Domain: `DecentralizedIdentifier`, `KeyPair` entities
+   - Application: `DIDService`, `CreateDIDCommand`, `ResolveDIDQuery`
+   - Infrastructure: `IdentityDbContext`, `DIDRepository`, `KeyGenerator`
+   - API: `DIDController` with POST /api/dids, GET /api/dids/{did}
+   - Create DB: `docker exec did-postgres psql -U did_user -d postgres -c "CREATE DATABASE did_identity;"`
 
-2. **Run smart contract tests:**
-   ```bash
-   npm test
-   ```
+2. **Implement Accreditation Service (Task #6)**
 
-3. **Deploy to local Hardhat network:**
-   ```bash
-   npm run node  # Terminal 1
-   npm run deploy:local  # Terminal 2
-   ```
-
-4. **Start Phase 0 remaining tasks:**
-   - Create shared infrastructure projects (Task #2)
-   - Set up Docker Compose (Task #3)
-
-5. **Begin Phase 1:**
-   - Implement Blockchain Sync Service (Task #4)
-   - Implement Identity Service (Task #5)
+3. **Implement Credential Service (Task #7)**
 
 ---
 
 ## Progress Tracking
 
 - **Total Tasks:** 13
-- **Completed:** 1 (Smart Contracts)
+- **Completed:** 4 (Smart Contracts, Shared Infrastructure, Docker Compose, BlockchainSync)
 - **In Progress:** 0
-- **Pending:** 12
-- **Overall Progress:** 7.7%
+- **Pending:** 9
+- **Overall Progress:** 30.8%
 
-**Phase 0 Progress:** 33.3% (1/3 completed)
+**Phase 0 Progress:** 100% (3/3 completed)
+**Phase 1 Progress:** 50% (1/2 completed — Identity Service pending)
 
 ---
 

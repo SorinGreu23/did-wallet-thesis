@@ -23,5 +23,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Contracts\DID.Contracts\DID.Contracts.csproj" />
+    <ProjectReference Include="..\..\Shared\DID.Shared.Domain\DID.Shared.Domain.csproj" />
+    <ProjectReference Include="..\..\Shared\DID.Shared.Application\DID.Shared.Application.csproj" />
+    <ProjectReference Include="..\..\Shared\DID.Shared.Infrastructure\DID.Shared.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Infrastructure/Blockchain/EventDTOs/" />
   </ItemGroup>
 </Project>

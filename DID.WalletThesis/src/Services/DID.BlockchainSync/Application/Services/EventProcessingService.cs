@@ -1,12 +1,15 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using DID.BlockchainSync.Infrastructure.Blockchain;
+using Microsoft.Extensions.Logging;
 
-namespace DID.BlockchainSync.Application.Services
+namespace DID.BlockchainSync.Application.Services;
+
+public class EventProcessingService(
+    EventListener eventListener,
+    ILogger<EventProcessingService> logger)
 {
-    public class EventProcessingService
+    public async Task StartAsync(CancellationToken ct)
     {
-        
+        logger.LogInformation("EventProcessingService starting");
+        await eventListener.StartAsync(ct);
     }
 }
