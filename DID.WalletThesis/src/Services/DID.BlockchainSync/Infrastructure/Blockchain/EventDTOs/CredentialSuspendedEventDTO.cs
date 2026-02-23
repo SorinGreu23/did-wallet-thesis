@@ -4,7 +4,7 @@ using System.Numerics;
 namespace DID.BlockchainSync.Infrastructure.Blockchain.EventDTOs;
 
 [Event("CredentialSuspended")]
-public class CredentialSuspendedEventDTO
+public class CredentialSuspendedEventDTO : IEventDTO
 {
     [Parameter("bytes32", "id", 1, true)]
     public byte[] Id { get; set; } = [];

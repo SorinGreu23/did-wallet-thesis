@@ -4,7 +4,7 @@ using System.Numerics;
 namespace DID.BlockchainSync.Infrastructure.Blockchain.EventDTOs;
 
 [Event("CredentialRevoked")]
-public class CredentialRevokedEventDTO
+public class CredentialRevokedEventDTO : IEventDTO
 {
     [Parameter("bytes32", "id", 1, true)]
     public byte[] Id { get; set; } = [];

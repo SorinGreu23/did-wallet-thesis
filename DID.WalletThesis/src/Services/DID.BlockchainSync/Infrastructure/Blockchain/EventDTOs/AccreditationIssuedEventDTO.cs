@@ -3,7 +3,7 @@ using Nethereum.ABI.FunctionEncoding.Attributes;
 namespace DID.BlockchainSync.Infrastructure.Blockchain.EventDTOs;
 
 [Event("AccreditationIssued")]
-public class AccreditationIssuedEventDTO
+public class AccreditationIssuedEventDTO : IEventDTO
 {
     [Parameter("bytes32", "id", 1, true)]
     public byte[] Id { get; set; } = [];
