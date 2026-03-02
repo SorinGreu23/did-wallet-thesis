@@ -1,41 +1,63 @@
+using DID.Accreditation.Application.Services;
+using DID.Accreditation.Domain.Interfaces;
+using DID.Accreditation.Infrastructure.Consumers;
+using DID.Accreditation.Infrastructure.Persistence;
+using FastEndpoints;
+using FastEndpoints.Swagger;
+using MassTransit;
+using Microsoft.EntityFrameworkCore;
+using Serilog;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddSerilog((_, lc) => lc
+    .ReadFrom.Configuration(builder.Configuration)
+    .WriteTo.Console());
+
+builder.Services.AddDbContext<AccreditationDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<IAccreditationRepository, AccreditationRepository>();
+builder.Services.AddScoped<AccreditationService>();
+
+builder.Services.AddMassTransit(x =>
+{
+    x.AddConsumer<AccreditationIssuedConsumer>();
+    x.AddConsumer<AccreditationRevokedConsumer>();
+
+    x.UsingRabbitMq((ctx, cfg) =>
+    {
+        cfg.Host(builder.Configuration["RabbitMQ:Host"], h =>
+        {
+            h.Username(builder.Configuration["RabbitMQ:Username"]!);
+            h.Password(builder.Configuration["RabbitMQ:Password"]!);
+        });
+
+        cfg.ConfigureEndpoints(ctx);
+    });
+});
+
+builder.Services.AddFastEndpoints();
+builder.Services.SwaggerDocument(o =>
+{
+    o.DocumentSettings = s =>
+    {
+        s.Title = "DID Accreditation Service";
+        s.Version = "v1";
+        s.Description = "Accreditation lifecycle management and verification";
+    };
+});
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+app.UseSwaggerGen();
+
+using (var scope = app.Services.CreateScope())
 {
-    app.MapOpenApi();
+    var db = scope.ServiceProvider.GetRequiredService<AccreditationDbContext>();
+    await db.Database.MigrateAsync();
 }
 
 app.UseHttpsRedirection();
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
-
-app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
+app.UseFastEndpoints();
+await app.RunAsync();

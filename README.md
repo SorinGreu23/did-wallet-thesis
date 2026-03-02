@@ -1,200 +1,271 @@
-# DID Wallet - Mobile Application
+# EU Decentralized Digital Identity System
 
-A Decentralized Identity (DID) wallet built with React Native, Expo, and Veramo Framework for managing DIDs and Verifiable Credentials.
-
-**Bachelor's Thesis Project**  
-Computer Science, Alexandru Ioan Cuza University, Iași  
+**Bachelor's Thesis — Computer Science, Alexandru Ioan Cuza University, Iași**
 Expected Graduation: July 2026
 
----
-
-## 📱 Features
-
-### ✅ Current Features (v0.2)
-
-**DID Management:**
-- Create decentralized identifiers using `did:key` method
-- Ed25519 cryptographic key generation and storage
-- DID Document resolution (W3C DID Core compliant)
-- Persistent storage in SQLite
-- View complete DID details including keys and metadata
-- Copy-to-clipboard functionality for DIDs and keys
-
-**Verifiable Credentials:**
-- Issue W3C Verifiable Credentials (VC-JWT format)
-- Self-issued credentials for demo/testing
-- Store credentials persistently
-- Cryptographic signature verification
-- Display credential details with type tags
-- Verify credential integrity
-
-**User Interface:**
-- Tab navigation (DIDs / Credentials)
-- Professional, clean UI design
-- Detail views for DIDs
-- Credential cards with verification buttons
-- Loading states and error handling
-- Native iOS experience
+A hierarchical trust-chain DID system aligned with EU eIDAS 2.0, built on Ethereum smart contracts, .NET 10 microservices, and a React Native mobile wallet.
 
 ---
 
-## 🏗️ Architecture
+## System Overview
+
+The blockchain is the **single source of truth**. Microservices are convenience wrappers — they cache events and expose REST APIs, but they never make authorization decisions. Smart contracts enforce all trust-chain rules on-chain.
 
 ```
-mobile-wallet/
-├── src/
-│   ├── agents/
-│   │   └── veramoAgent.ts          # Veramo agent configuration
-│   ├── services/
-│   │   ├── didService.ts           # DID operations (CRUD)
-│   │   └── credentialService.ts    # Credential operations
-│   ├── screens/
-│   │   ├── HomeScreen.tsx          # Main screen with tabs
-│   │   ├── DIDDetailScreen.tsx     # DID details view
-│   │   └── CredentialsScreen.tsx   # Credentials list & management
-│   ├── constants/
-│   │   └── config.ts               # App configuration
-│   └── types/
-│       └── index.ts                # TypeScript interfaces
-├── App.tsx
-└── package.json
+EU Root Authority (EURootAuthority.sol)
+    └── Member State (e.g. RO)
+            └── Ministry of Education
+                    └── University of Bucharest
+                            └── Issues diploma → CredentialRegistry.sol
 ```
 
-### Technology Stack
-
-**Core:**
-- React Native (via Expo)
-- TypeScript
-- SQLite (expo-sqlite)
-
-**Identity & Credentials:**
-- Veramo Framework
-  - `@veramo/core` - Core agent functionality
-  - `@veramo/did-manager` - DID management
-  - `@veramo/did-provider-key` - did:key method
-  - `@veramo/key-manager` - Cryptographic key management
-  - `@veramo/kms-local` - Local key management system
-  - `@veramo/credential-w3c` - W3C VC support
-  - `@veramo/data-store` - Persistent storage
-  - `@veramo/did-resolver` - DID resolution
-
-**Utilities:**
-- expo-clipboard - Copy to clipboard
-- react-native-get-random-values - Crypto polyfill
-- @ethersproject/shims - Ethereum shims for React Native
+A German employer scans a QR code, the Romanian student submits their diploma with a ZKP (age > 21), and the Verification Service validates the full trust chain directly from the blockchain — all without trusting any individual microservice.
 
 ---
 
-## 🚀 Getting Started
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Mobile Wallet (React Native / Expo / Veramo)                   │
+│  • DID management  • VC storage  • QR code scanning            │
+└────────────────────────────┬────────────────────────────────────┘
+                             │ REST / SignalR
+┌────────────────────────────▼────────────────────────────────────┐
+│                     .NET 10 Microservices                       │
+│                                                                 │
+│  Identity ──── Accreditation ──── Credential ──── Verification  │
+│  :5259         :5211               :5214           :5216        │
+│                                                                 │
+│  Presentation ── ZKP (Node.js) ── Notification ── Audit        │
+│  :5217           :3001             :5218            :5219       │
+│                                                                 │
+│  BlockchainSync (background worker — no HTTP)                   │
+└──────┬───────────────────────────────┬───────────────────────────┘
+       │ EF Core / Npgsql              │ MassTransit / RabbitMQ
+┌──────▼──────┐              ┌─────────▼──────────────────────────┐
+│ PostgreSQL  │              │  RabbitMQ (event bus)              │
+│ (per-svc DB)│              │  DIDCreated · AccreditationIssued  │
+└─────────────┘              │  CredentialIssued · Revoked …      │
+                             └──────────────────────────────────┬─┘
+                                                                │ Nethereum
+                             ┌──────────────────────────────────▼─┐
+                             │  Hardhat / Ethereum Node           │
+                             │  EURootAuthority.sol               │
+                             │  AccreditationRegistry.sol         │
+                             │  CredentialRegistry.sol            │
+                             └────────────────────────────────────┘
+```
+
+---
+
+## Implementation Status
+
+### Phase 0 — Foundation
+| # | Component | Status |
+|---|-----------|--------|
+| 1 | Smart Contracts (Solidity + Hardhat) | ✅ Complete |
+| 2 | Shared Libraries (`DID.Shared.*`, `DID.Contracts`) | ✅ Complete |
+| 3 | Docker Compose (PostgreSQL, RabbitMQ, Hardhat) | ✅ Complete |
+
+### Phase 1 — Core Services
+| # | Service | Status |
+|---|---------|--------|
+| 4 | BlockchainSync — listens to on-chain events, publishes to RabbitMQ | ✅ Complete |
+| 5 | Identity Service — DID generation, key storage, resolution | ✅ Complete |
+
+### Phase 2 — Accreditation & Credentials
+| # | Service | Status |
+|---|---------|--------|
+| 6 | Accreditation Service — off-chain cache of AccreditationRegistry.sol | ✅ Complete |
+| 7 | Credential Service — W3C VC issuance against CredentialRegistry.sol | ⏳ Pending |
+
+### Phase 3 — Verification
+| # | Service | Status |
+|---|---------|--------|
+| 8 | Verification Service — 5-step blockchain-first verification | ⏳ Pending |
+| 9 | ZKP Service (Node.js) — snarkjs age/graduation proofs | ⏳ Pending |
+
+### Phase 4 — Presentation
+| # | Service | Status |
+|---|---------|--------|
+| 10 | Presentation Service — QR codes, SignalR, session management | ⏳ Pending |
+
+### Phase 5 — Support
+| # | Service | Status |
+|---|---------|--------|
+| 11 | Notification Service — email + push (SendGrid / FCM) | ⏳ Pending |
+| 12 | Audit Service — immutable append-only event log | ⏳ Pending |
+
+### Phase 6
+| # | Task | Status |
+|---|------|--------|
+| 13 | Integration & end-to-end testing | ⏳ Pending |
+
+**Overall progress: 6 / 13 tasks (46%)**
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Mobile | React Native, Expo, Veramo Framework, TypeScript |
+| Blockchain | Solidity 0.8, Hardhat, Nethereum 5.8 |
+| Microservices | .NET 10, ASP.NET Core, FastEndpoints v8 |
+| Persistence | PostgreSQL 16, EF Core, Npgsql |
+| Messaging | RabbitMQ 3.12, MassTransit |
+| ZKP | snarkjs, circom |
+| Infrastructure | Docker Compose |
+
+---
+
+## Repository Layout
+
+```
+did-wallet-thesis/
+├── blockchain/                    # Hardhat project — Solidity contracts + tests
+│   ├── contracts/
+│   │   ├── EURootAuthority.sol
+│   │   ├── AccreditationRegistry.sol
+│   │   └── CredentialRegistry.sol
+│   ├── scripts/deploy.ts
+│   └── test/
+│
+├── DID.WalletThesis/              # .NET solution
+│   └── src/
+│       ├── Shared/
+│       │   ├── DID.Contracts/             # RabbitMQ event DTOs
+│       │   ├── DID.Shared.Domain/         # Entity, ValueObject, AggregateRoot
+│       │   ├── DID.Shared.Application/    # IBlockchainService, IEventBus, IRepository
+│       │   └── DID.Shared.Infrastructure/ # Nethereum, MassTransit, EF Core impls
+│       └── Services/
+│           ├── DID.BlockchainSync/        # ✅ Background worker
+│           ├── DID.Identity/              # ✅ port 5259
+│           ├── DID.Accreditation/         # ✅ port 5211
+│           ├── DID.Credential/            # ⏳ port 5214
+│           ├── DID.Verification/          # ⏳ port 5216
+│           ├── DID.Presentation/          # ⏳ port 5217
+│           ├── DID.Notification/          # ⏳ port 5218
+│           └── DID.Audit/                 # ⏳ port 5219
+│
+├── mobile-wallet/                 # React Native / Expo app
+├── zkp-service/                   # ⏳ Node.js snarkjs service (port 3001)
+├── docker-compose.yml
+├── TASKS.md                       # Detailed task breakdown
+├── IMPLEMENTATION_PLAN.md         # Architecture decisions
+└── DID.WalletThesis/DEMO.md       # End-to-end demo walkthrough
+```
+
+---
+
+## Quick Start
 
 ### Prerequisites
 
-- Node.js 18+ 
-- npm or yarn
-- iOS device or simulator (Android support TBD)
-- Expo Go app installed on device
+- Docker Desktop
+- .NET 10 SDK
+- Node.js 20+
 
-### Installation
+### 1. Start infrastructure
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd did-wallet-thesis/mobile-wallet
+docker-compose up postgres rabbitmq hardhat -d
+```
 
-# Install dependencies
+Create service databases (one-time):
+
+```bash
+docker exec -it did-postgres psql -U did_user -d did_wallet -c "
+  CREATE DATABASE did_identity;
+  CREATE DATABASE did_accreditation;
+  CREATE DATABASE did_blockchainsync;
+"
+```
+
+### 2. Deploy smart contracts
+
+```bash
+cd blockchain
 npm install
-
-# Start the development server
-npx expo start
+npx hardhat run scripts/deploy.ts --network localhost
 ```
 
-### Running on Device
+Contract addresses are deterministic and already configured in `appsettings.json`.
 
-1. Install **Expo Go** from the App Store
-2. Scan the QR code from terminal with your iPhone
-3. App will load automatically
-
-### Development
+### 3. Run services
 
 ```bash
-# Start with cache clearing
-npx expo start -c
+cd DID.WalletThesis
 
-# iOS simulator (requires Xcode)
-npx expo start --ios
+# Terminal 1
+dotnet run --project src/Services/DID.BlockchainSync
 
-# Web version (limited functionality)
-npx expo start --web
+# Terminal 2
+dotnet run --project src/Services/DID.Accreditation
+
+# Terminal 3
+dotnet run --project src/Services/DID.Identity
 ```
 
----
+Migrations apply automatically on startup.
 
-## 📖 Usage Guide
+| Service | URL | Swagger |
+|---------|-----|---------|
+| Identity | http://localhost:5259 | http://localhost:5259/swagger |
+| Accreditation | http://localhost:5211 | http://localhost:5211/swagger |
 
-### Creating Your First DID
-
-1. Open the app
-2. Navigate to "DIDs" tab
-3. Tap "Create New DID"
-4. Your DID will be generated with cryptographic keys
-5. Tap on the DID card to view full details
-
-### Issuing a Credential
-
-1. Navigate to "Credentials" tab
-2. Ensure you have at least one DID created
-3. Tap "Issue Sample Credential"
-4. View your credential with personal information
-5. Tap "Verify ✓" to cryptographically verify the signature
-
-### Viewing DID Details
-
-- Tap any DID card to see:
-  - Full DID string
-  - Provider information
-  - Cryptographic keys (public keys in hex)
-  - W3C DID Document (JSON format)
-- Tap any field to copy to clipboard
+See [DID.WalletThesis/DEMO.md](DID.WalletThesis/DEMO.md) for a full blockchain-to-API walkthrough.
 
 ---
 
-## 📚 Standards & Compliance
+## API Reference (Implemented Services)
 
-### Implemented Standards
-- **W3C DID Core 1.0** - Decentralized Identifiers
-- **W3C Verifiable Credentials Data Model 1.1** - Credential format
-- **did:key Method Specification** - DID method
+### Identity Service — `POST /api/dids`
 
-### Planned Standards (EU ARF Compliance)
-- **OpenID4VP** - Verifiable Presentation protocol
-- **OpenID4VCI** - Credential issuance protocol
-- **SD-JWT** - Selective Disclosure for JWT
-- **ISO/IEC 18013-5** - Mobile driving license (mdoc)
-- **eIDAS 2.0** - EU Digital Identity Regulation
+```json
+{ "controllerAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" }
+```
 
----
+Returns a W3C DID Document with `did:ethr:sepolia:{address}` format and secp256k1 keys.
 
----
+Other endpoints: `GET /api/dids/{did}`, `GET /api/dids/{did}/keys`
 
-## 📄 License
+### Accreditation Service
 
-This project is part of academic research for educational purposes.
-
----
-
-## 👨‍💻 Author
-
-**Academic Project**  
-Alexandru Ioan Cuza University, Iași  
-Faculty of Computer Science  
-Expected Graduation: July 2026
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/accreditations` | Issue (demo shortcut; primary path is via blockchain event) |
+| GET | `/api/accreditations` | List (filter by `issuerDid` / `subjectDid`) |
+| GET | `/api/accreditations/{id}` | Resolve |
+| GET | `/api/accreditations/{id}/verify` | Verify active/revoked status |
+| DELETE | `/api/accreditations/{id}` | Revoke |
 
 ---
 
-## 📞 Resources
+## Standards & Compliance
 
-- **Veramo Documentation:** https://veramo.io/docs/
-- **W3C DID Spec:** https://www.w3.org/TR/did-core/
-- **W3C VC Spec:** https://www.w3.org/TR/vc-data-model/
-- **EU ARF:** https://github.com/eu-digital-identity-wallet/eudi-doc-architecture-and-reference-framework
+| Standard | Status |
+|----------|--------|
+| W3C DID Core 1.0 | Implemented |
+| W3C Verifiable Credentials 1.1 | Implemented (mobile wallet) |
+| eIDAS 2.0 trust hierarchy | Implemented (smart contracts) |
+| OpenID4VP / OpenID4VCI | Planned (Presentation Service) |
+| SD-JWT | Planned |
 
+---
+
+## Key Design Decisions
+
+- **Blockchain is the source of truth.** Smart contracts always validate authorization on-chain; microservices never act as gatekeepers.
+- **Clean Architecture per service.** Domain → Application → Infrastructure → Endpoints, no cross-layer shortcuts.
+- **Event-driven sync.** BlockchainSync polls the chain, writes to PostgreSQL, and publishes to RabbitMQ. Other services consume events to maintain off-chain caches.
+- **FastEndpoints** over MVC controllers — minimal overhead, request/response classes, vertical slice per endpoint.
+
+---
+
+## License
+
+Academic research project — for educational purposes.
+
+**Alexandru Ioan Cuza University, Iași — Faculty of Computer Science**

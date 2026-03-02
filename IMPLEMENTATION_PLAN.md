@@ -12,9 +12,10 @@
 - ✅ DID.Shared.Domain / Application / Infrastructure — shared base classes + Nethereum/MassTransit/EF Core implementations
 - ✅ All 9 .NET microservice projects scaffolded in solution
 - ✅ BlockchainSync Service — fully implemented (event listener → PostgreSQL + RabbitMQ)
-- ✅ ZKP Service (Node.js) implemented — circuits compiled, keys generated
-- ⏳ Identity Service — next priority
-- ⏳ Remaining 7 microservices
+- ✅ Identity Service — fully implemented (DID generation, key pairs, resolution, Swagger, README)
+- ✅ Accreditation Service — fully implemented (event consumers, REST API, verify/revoke, Swagger, README)
+- ⏳ Credential Service — next priority
+- ⏳ Remaining 5 microservices
 
 **Core Architectural Principle:**
 > **Blockchain is the source of truth — NOT microservices.**
@@ -22,13 +23,13 @@
 > Smart contracts always validate authorization on-chain. Microservices are convenience wrappers only (off-chain storage, event listeners, UI helpers). Microservices NEVER make authorization decisions, validate trust chains, or act as gatekeepers.
 
 **9 Microservices — Implementation Status:**
-1. ⏳ Identity Service - DID document generation, key pair storage
-2. ⏳ Accreditation Service - UI wrapper for AccreditationRegistry.sol
+1. ✅ Identity Service - DID document generation, key pair storage (port 5259)
+2. ✅ Accreditation Service - off-chain cache of AccreditationRegistry.sol events (port 5211)
 3. ⏳ Credential Service - W3C VC generation, calls CredentialRegistry.sol
 4. ⏳ Verification Service - Orchestrates 5-step verification reading from blockchain
 5. ✅ Blockchain Sync Service - Event listener, mirrors blockchain to PostgreSQL, publishes to RabbitMQ
 6. ⏳ Presentation Service - QR codes, SignalR for holder-verifier communication
-7. ✅ ZKP Service (Node.js) - Zero-knowledge proof generation/verification
+7. ⏳ ZKP Service (Node.js) - Zero-knowledge proof generation/verification
 8. ⏳ Notification Service - Email (SendGrid), push (FCM)
 9. ⏳ Audit Service - Event sourcing, immutable audit logs
 
@@ -116,9 +117,9 @@ DID.WalletThesis/src/
 │   └── DID.Shared.Infrastructure/  ← Nethereum, MassTransit, EF Core impls
 └── Services/
     ├── DID.BlockchainSync/     ← ✅ implemented
-    ├── DID.Identity/           ← ⏳ next
-    ├── DID.Accreditation/      ← ⏳
-    ├── DID.Credential/         ← ⏳
+    ├── DID.Identity/           ← ✅ implemented
+    ├── DID.Accreditation/      ← ✅ implemented
+    ├── DID.Credential/         ← ⏳ next
     ├── DID.Verification/       ← ⏳
     ├── DID.Presentation/       ← ⏳
     ├── DID.Notification/       ← ⏳

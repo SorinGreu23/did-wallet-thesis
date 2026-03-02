@@ -1,41 +1,63 @@
+using DID.Identity.Application.Services;
+using DID.Identity.Domain.Interfaces;
+using DID.Identity.Infrastructure.Cryptography;
+using DID.Identity.Infrastructure.Persistence;
+using DID.Shared.Application.Interfaces;
+using DID.Shared.Infrastructure.EventBus;
+using FastEndpoints;
+using FastEndpoints.Swagger;
+using MassTransit;
+using Microsoft.EntityFrameworkCore;
+using Serilog;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddSerilog((_, lc) => lc
+    .ReadFrom.Configuration(builder.Configuration)
+    .WriteTo.Console());
+
+builder.Services.AddDbContext<IdentityDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<IDIDRepository, DIDRepository>();
+builder.Services.AddSingleton<IKeyGenerator, KeyGenerator>();
+
+builder.Services.AddMassTransit(x =>
+{
+    x.UsingRabbitMq((_, cfg) =>
+    {
+        cfg.Host(builder.Configuration["RabbitMQ:Host"], h =>
+        {
+            h.Username(builder.Configuration["RabbitMQ:Username"]!);
+            h.Password(builder.Configuration["RabbitMQ:Password"]!);
+        });
+    });
+});
+
+builder.Services.AddScoped<DID.Shared.Application.Interfaces.IEventBus>(sp =>
+    new RabbitMQEventBus(sp.GetRequiredService<IPublishEndpoint>()));
+builder.Services.AddScoped<DIDService>();
+builder.Services.AddFastEndpoints();
+builder.Services.SwaggerDocument(o =>
+{
+    o.DocumentSettings = s =>
+    {
+        s.Title = "DID Identity Service";
+        s.Version = "v1";
+        s.Description = "DID document generation and key pair management";
+    };
+});
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+app.UseSwaggerGen();
+
+using (var scope = app.Services.CreateScope())
 {
-    app.MapOpenApi();
+    var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+    await db.Database.MigrateAsync();
 }
 
 app.UseHttpsRedirection();
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
-
-app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
+app.UseFastEndpoints();
+await app.RunAsync();

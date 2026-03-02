@@ -87,62 +87,58 @@ docker exec did-postgres psql -U did_user -d postgres -c "CREATE DATABASE did_<s
 
 ---
 
-### ⏳ Task #5: Implement Identity Service
-**Status:** Pending
+### ✅ Task #5: Implement Identity Service
+**Status:** Completed
 
 **Location:** `DID.WalletThesis/src/Services/DID.Identity/`
 
-**Key Responsibilities:**
-- Generate `did:ethr:sepolia` DIDs
-- Store DID documents and key pairs
-- Provide DID resolution
-
-**Database Schema:**
-- `dids` (id, did, controller_address, created_at)
-- `key_pairs` (id, did_id, key_type, public_key, encrypted_private_key, purpose)
-- `did_documents` (id, did_id, document JSONB, cached_at)
+**Implemented (Clean Architecture):**
+- `Domain/` — `DecentralizedIdentifier`, `KeyPair` entities, `IDIDRepository`
+- `Application/DTOs/` — `DIDDocumentDto`, `VerificationMethodDto`, `PublicKeyDto`, `CreateDIDRequest`
+- `Application/Services/DIDService` — `CreateDIDAsync`, `ResolveDIDAsync`, `GetPublicKeysAsync`
+- `Infrastructure/Cryptography/KeyGenerator` — secp256k1 key generation via Nethereum
+- `Infrastructure/Persistence/` — `IdentityDbContext`, `DIDRepository`
+- `Endpoints/` — `CreateDIDEndpoint`, `ResolveDIDEndpoint`, `GetDIDKeysEndpoint`
+- Publishes `DIDCreatedEvent` to RabbitMQ on creation
+- DB: `did_identity` — migrations in `Migrations/`, applied on startup
+- Swagger: http://localhost:5259/swagger
+- README written
 
 **API Endpoints:**
-- `POST /api/dids` - Create new DID
-- `GET /api/dids/{did}` - Resolve DID document
-- `GET /api/dids/{did}/keys` - Get public keys
+- `POST /api/dids` — create DID from Ethereum address
+- `GET /api/dids/{did}` — resolve DID document
+- `GET /api/dids/{did}/keys` — list public keys
 
-**IMPORTANT:** Does NOT authorize who can create DIDs. Authorization happens at accreditation level via smart contracts.
-
-**Dependencies:** Tasks #2, #3, #4
+**Dependencies:** Tasks #2, #3, #4 ✅
 
 ---
 
 ## Phase 2: Accreditation & Credential Services
 
-### ⏳ Task #6: Implement Accreditation Service
-**Status:** Pending
+### ✅ Task #6: Implement Accreditation Service
+**Status:** Completed
 
 **Location:** `DID.WalletThesis/src/Services/DID.Accreditation/`
 
-**Critical Principle:** UI wrapper for AccreditationRegistry.sol. Does NOT make authorization decisions - smart contract does.
-
-**Key Responsibilities:**
-- Issue/revoke accreditations by submitting to blockchain
-- Validate trust chains by calling smart contract
-- Cache blockchain state from Blockchain Sync Service events
-- Provide trust chain hierarchy visualization
-
-**Database Schema:**
-- `accreditations` (id, accreditation_id, issuer_did, subject_did, parent_id, scope, permissions_hash, issued_at, expires_at, revoked, block_number, transaction_hash)
+**Implemented (Clean Architecture):**
+- `Domain/` — `Accreditation` entity (with `AccreditationStatus` enum), `IAccreditationRepository`
+- `Application/DTOs/` — `AccreditationDto`, `AccreditationVerificationDto`, `IssueAccreditationRequest`, `RevokeAccreditationRequest`
+- `Application/Services/AccreditationService` — `IssueAsync`, `RevokeAsync`, `ResolveAsync`, `ListAsync`, `VerifyAsync`, `RecordIssuedAsync`, `RecordRevokedAsync`
+- `Infrastructure/Persistence/` — `AccreditationDbContext`, `AccreditationRepository`
+- `Infrastructure/Consumers/` — `AccreditationIssuedConsumer`, `AccreditationRevokedConsumer` (MassTransit)
+- `Endpoints/` — `IssueAccreditationEndpoint`, `ResolveAccreditationEndpoint`, `ListAccreditationsEndpoint`, `VerifyAccreditationEndpoint`, `RevokeAccreditationEndpoint`
+- DB: `did_accreditation` — run `dotnet ef migrations add InitialCreate` then restart
+- Swagger: http://localhost:5211/swagger
+- README and DEMO guide written
 
 **API Endpoints:**
-- `POST /api/accreditations` - Issue accreditation (submits to blockchain)
-- `GET /api/accreditations/{id}` - Get accreditation details
-- `GET /api/accreditations/subject/{did}` - Get all accreditations for subject
-- `GET /api/accreditations/{id}/trust-chain` - Validate and reconstruct trust chain FROM BLOCKCHAIN
-- `POST /api/accreditations/{id}/revoke` - Revoke accreditation
+- `POST /api/accreditations` — issue (demo shortcut; primary path is blockchain → BlockchainSync → RabbitMQ)
+- `GET /api/accreditations` — list (filter by `issuerDid` or `subjectDid`)
+- `GET /api/accreditations/{id}` — resolve
+- `GET /api/accreditations/{id}/verify` — verify active/revoked status
+- `DELETE /api/accreditations/{id}` — revoke
 
-**Blockchain-First Pattern:** All authorization checks call `AccreditationRegistry.validateTrustChain()` and `hasValidAccreditation()`
-
-**Event Consumption:** Subscribe to `accreditation-events` from RabbitMQ
-
-**Dependencies:** Tasks #1, #2, #3, #4, #5
+**Dependencies:** Tasks #1, #2, #3, #4, #5 ✅
 
 ---
 
@@ -359,55 +355,57 @@ zkp-service/
 ## Development Order (Critical Path)
 
 ```
-1. Smart Contracts ✅ COMPLETED
+1. Smart Contracts              ✅ COMPLETED
    ↓
-2. Shared Infrastructure + Docker Compose ✅ COMPLETED
+2. Shared Infrastructure        ✅ COMPLETED
    ↓
-3. Blockchain Sync Service ✅ COMPLETED
+3. Docker Compose               ✅ COMPLETED
    ↓
-4. Identity Service ⏳ NEXT
+4. BlockchainSync Service       ✅ COMPLETED
    ↓
-5. Accreditation Service
+5. Identity Service             ✅ COMPLETED
    ↓
-6. Credential Service
+6. Accreditation Service        ✅ COMPLETED
    ↓
-7. Verification Service + ZKP Service (Parallel)
+7. Credential Service           ⏳ NEXT
    ↓
-8. Presentation Service
+8. Verification Service + ZKP Service (Parallel)
    ↓
-9. Notification Service + Audit Service (Parallel)
+9. Presentation Service
    ↓
-10. Integration Testing
+10. Notification Service + Audit Service (Parallel)
+   ↓
+11. Integration Testing
 ```
 
 ---
 
 ## Next Immediate Steps
 
-1. **Implement Identity Service (Task #5):**
-   - Add NuGet packages + shared project references
-   - Domain: `DecentralizedIdentifier`, `KeyPair` entities
-   - Application: `DIDService`, `CreateDIDCommand`, `ResolveDIDQuery`
-   - Infrastructure: `IdentityDbContext`, `DIDRepository`, `KeyGenerator`
-   - API: `DIDController` with POST /api/dids, GET /api/dids/{did}
-   - Create DB: `docker exec did-postgres psql -U did_user -d postgres -c "CREATE DATABASE did_identity;"`
+1. **Implement Credential Service (Task #7)** — highest priority
+   - Domain: `Credential` entity, `ICredentialRepository`
+   - Application: `CredentialService` — issue, revoke, resolve, verify status
+   - Infrastructure: `CredentialDbContext`, `CredentialRepository`, `CredentialIssuedConsumer`, `CredentialRevokedConsumer`
+   - Endpoints: issue, get, revoke, status
+   - DB: `did_credential`
 
-2. **Implement Accreditation Service (Task #6)**
+2. **Implement ZKP Service (Task #9)** — can be done in parallel with Credential
 
-3. **Implement Credential Service (Task #7)**
+3. **Implement Verification Service (Task #8)** — after Credential + ZKP are done
 
 ---
 
 ## Progress Tracking
 
 - **Total Tasks:** 13
-- **Completed:** 4 (Smart Contracts, Shared Infrastructure, Docker Compose, BlockchainSync)
+- **Completed:** 6 (Smart Contracts, Shared Infrastructure, Docker Compose, BlockchainSync, Identity, Accreditation)
 - **In Progress:** 0
-- **Pending:** 9
-- **Overall Progress:** 30.8%
+- **Pending:** 7
+- **Overall Progress:** 46.2%
 
 **Phase 0 Progress:** 100% (3/3 completed)
-**Phase 1 Progress:** 50% (1/2 completed — Identity Service pending)
+**Phase 1 Progress:** 100% (2/2 completed)
+**Phase 2 Progress:** 50% (1/2 completed — Credential Service pending)
 
 ---
 
