@@ -15,7 +15,14 @@ public class IssueAccreditationEndpoint(AccreditationService service)
 
     public override async Task HandleAsync(IssueAccreditationRequest req, CancellationToken ct)
     {
-        var result = await service.IssueAsync(req.IssuerDID, req.SubjectDID, req.Scope, req.ParentAccreditationId, ct);
+        var result = await service.IssueAsync(
+            req.IssuerDID,
+            req.SubjectDID,
+            req.Scope,
+            req.ParentAccreditationId,
+            req.PermissionsHash,
+            req.ExpiresAt,
+            ct);
         await Send.CreatedAtAsync<ResolveAccreditationEndpoint>(
             new { accreditationId = result.AccreditationId }, result, cancellation: ct);
     }

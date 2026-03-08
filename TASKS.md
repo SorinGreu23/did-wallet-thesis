@@ -131,12 +131,19 @@ docker exec did-postgres psql -U did_user -d postgres -c "CREATE DATABASE did_<s
 - Swagger: http://localhost:5211/swagger
 - README and DEMO guide written
 
+**Blockchain-First State Achieved:**
+- `POST /api/accreditations` now submits on-chain transactions through `AccreditationRegistry.sol`
+- `DELETE /api/accreditations/{id}` now revokes on-chain
+- `GET /api/accreditations/{id}/verify` validates blockchain-backed status/trust-chain state
+- Service wired to shared `IBlockchainService` with local Hardhat contract config
+- Live issuance/resolve/verify tested successfully against local chain
+
 **API Endpoints:**
-- `POST /api/accreditations` — issue (demo shortcut; primary path is blockchain → BlockchainSync → RabbitMQ)
+- `POST /api/accreditations` — issue on-chain accreditation
 - `GET /api/accreditations` — list (filter by `issuerDid` or `subjectDid`)
 - `GET /api/accreditations/{id}` — resolve
-- `GET /api/accreditations/{id}/verify` — verify active/revoked status
-- `DELETE /api/accreditations/{id}` — revoke
+- `GET /api/accreditations/{id}/verify` — verify blockchain-backed status and trust-chain validity
+- `DELETE /api/accreditations/{id}` — revoke on-chain
 
 **Dependencies:** Tasks #1, #2, #3, #4, #5 ✅
 
@@ -264,9 +271,41 @@ zkp-service/
 
 ---
 
+### ⏳ Task #11: Implement Angular Admin Console
+**Status:** Pending
+
+**Planned Location:** `admin-client/`
+
+**Goal:** Institutional/admin-facing demo UI for accreditation hierarchy management and later diploma issuance.
+
+**Primary Scope:**
+- Select demo actor context (`Romania`, `Ministry of Education`, `University of Bucharest`)
+- Issue accreditations with parent-chain selection
+- Browse trust hierarchy visually
+- Inspect accreditation status, on-chain IDs, and transaction hashes
+- Issue diploma credentials after Credential Service is complete
+- Verify credentials and issuer trust chains through backend APIs
+
+**Initial Pages:**
+- `Dashboard`
+- `Actors`
+- `Accreditations`
+- `Trust Chain`
+- `Credentials`
+- `Verification`
+
+**Constraints:**
+- Angular app talks to microservices only, never directly to smart contracts
+- Built after Credential Service is stable
+- Full EU member-state voting UI is out of scope for the first version
+
+**Dependencies:** Tasks #6, #7, #8
+
+---
+
 ## Phase 5: Support Services
 
-### ⏳ Task #11: Implement Notification Service
+### ⏳ Task #12: Implement Notification Service
 **Status:** Pending
 
 **Location:** `DID.WalletThesis/src/Services/DID.Notification/`
@@ -288,7 +327,7 @@ zkp-service/
 
 ---
 
-### ⏳ Task #12: Implement Audit Service
+### ⏳ Task #13: Implement Audit Service
 **Status:** Pending
 
 **Location:** `DID.WalletThesis/src/Services/DID.Audit/`
@@ -313,13 +352,13 @@ zkp-service/
 
 ## Phase 6: Integration & Testing
 
-### ⏳ Task #13: Integration Testing and End-to-End Scenarios
+### ⏳ Task #14: Integration Testing and End-to-End Scenarios
 **Status:** Pending
 
 **Test Scenarios:**
 
 **Scenario 1: Complete Diploma Issuance**
-1. EU Root accredits Romania (smart contract)
+1. Romania exists as a bootstrapped demo member state
 2. Romania accredits Ministry of Education
 3. Ministry accredits University of Bucharest
 4. University issues diploma to student
@@ -373,9 +412,11 @@ zkp-service/
    ↓
 9. Presentation Service
    ↓
-10. Notification Service + Audit Service (Parallel)
+10. Angular Admin Console
    ↓
-11. Integration Testing
+11. Notification Service + Audit Service (Parallel)
+   ↓
+12. Integration Testing
 ```
 
 ---
@@ -393,15 +434,20 @@ zkp-service/
 
 3. **Implement Verification Service (Task #8)** — after Credential + ZKP are done
 
+4. **Implement Angular Admin Console (Task #11)** — after Credential + Verification APIs stabilize
+   - accreditation chain management first
+   - diploma issuance UI second
+   - no full EU voting workflow in the first version
+
 ---
 
 ## Progress Tracking
 
-- **Total Tasks:** 13
+- **Total Tasks:** 14
 - **Completed:** 6 (Smart Contracts, Shared Infrastructure, Docker Compose, BlockchainSync, Identity, Accreditation)
 - **In Progress:** 0
-- **Pending:** 7
-- **Overall Progress:** 46.2%
+- **Pending:** 8
+- **Overall Progress:** 42.9%
 
 **Phase 0 Progress:** 100% (3/3 completed)
 **Phase 1 Progress:** 100% (2/2 completed)
@@ -423,8 +469,8 @@ zkp-service/
 - [ ] Events flowing through RabbitMQ
 
 ### Phase 2
-- [ ] Accreditation issuance calling smart contract
-- [ ] Trust chain validation reading from blockchain
+- [x] Accreditation issuance calling smart contract
+- [x] Trust chain validation reading from blockchain
 - [ ] Credentials recorded on-chain
 
 ### Phase 3
@@ -435,6 +481,8 @@ zkp-service/
 ### Phase 4
 - [ ] QR code flow working
 - [ ] SignalR real-time communication functional
+- [ ] Angular admin console can issue and inspect accreditations
+- [ ] Trust hierarchy visualized in web UI
 
 ### Phase 5
 - [ ] Email notifications working
@@ -454,3 +502,4 @@ zkp-service/
 - Each service has its own PostgreSQL database/schema
 - RabbitMQ for all async communication
 - Smart contracts validate all authorization decisions
+- Full EU member-state voting is contract/design scope, not a required first-version application workflow

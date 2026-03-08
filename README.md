@@ -3,7 +3,7 @@
 **Bachelor's Thesis — Computer Science, Alexandru Ioan Cuza University, Iași**
 Expected Graduation: July 2026
 
-A hierarchical trust-chain DID system aligned with EU eIDAS 2.0, built on Ethereum smart contracts, .NET 10 microservices, and a React Native mobile wallet.
+A hierarchical trust-chain DID system aligned with EU eIDAS 2.0, built on Ethereum smart contracts, .NET 10 microservices, a React Native mobile wallet, and a planned Angular admin console for institutional accreditation workflows.
 
 ---
 
@@ -21,6 +21,10 @@ EU Root Authority (EURootAuthority.sol)
 
 A German employer scans a QR code, the Romanian student submits their diploma with a ZKP (age > 21), and the Verification Service validates the full trust chain directly from the blockchain — all without trusting any individual microservice.
 
+For thesis scope, the primary end-to-end demo focuses on the accreditation and diploma path:
+`Member State -> Ministry -> University -> Diploma issuance -> Verification`.
+`EURootAuthority.sol` governance remains part of the smart-contract design, but a full voting UI/workflow for new member-state admission is not required for the main application demo.
+
 ---
 
 ## Architecture
@@ -29,6 +33,8 @@ A German employer scans a QR code, the Romanian student submits their diploma wi
 ┌─────────────────────────────────────────────────────────────────┐
 │  Mobile Wallet (React Native / Expo / Veramo)                   │
 │  • DID management  • VC storage  • QR code scanning            │
+│  Angular Admin Console (planned)                                │
+│  • Accreditation chain UI  • Diploma issuance demo             │
 └────────────────────────────┬────────────────────────────────────┘
                              │ REST / SignalR
 ┌────────────────────────────▼────────────────────────────────────┐
@@ -90,19 +96,20 @@ A German employer scans a QR code, the Romanian student submits their diploma wi
 | # | Service | Status |
 |---|---------|--------|
 | 10 | Presentation Service — QR codes, SignalR, session management | ⏳ Pending |
+| 11 | Angular Admin Console — accreditation chain and diploma demo UI | ⏳ Planned |
 
 ### Phase 5 — Support
 | # | Service | Status |
 |---|---------|--------|
-| 11 | Notification Service — email + push (SendGrid / FCM) | ⏳ Pending |
-| 12 | Audit Service — immutable append-only event log | ⏳ Pending |
+| 12 | Notification Service — email + push (SendGrid / FCM) | ⏳ Pending |
+| 13 | Audit Service — immutable append-only event log | ⏳ Pending |
 
 ### Phase 6
 | # | Task | Status |
 |---|------|--------|
-| 13 | Integration & end-to-end testing | ⏳ Pending |
+| 14 | Integration & end-to-end testing | ⏳ Pending |
 
-**Overall progress: 6 / 13 tasks (46%)**
+**Overall progress: 6 / 14 tasks (43%)**
 
 ---
 
@@ -116,6 +123,7 @@ A German employer scans a QR code, the Romanian student submits their diploma wi
 | Persistence | PostgreSQL 16, EF Core, Npgsql |
 | Messaging | RabbitMQ 3.12, MassTransit |
 | ZKP | snarkjs, circom |
+| Web Admin | Angular (planned) |
 | Infrastructure | Docker Compose |
 
 ---
@@ -150,6 +158,7 @@ did-wallet-thesis/
 │           └── DID.Audit/                 # ⏳ port 5219
 │
 ├── mobile-wallet/                 # React Native / Expo app
+├── admin-client/                  # ⏳ Planned Angular admin/demo console
 ├── zkp-service/                   # ⏳ Node.js snarkjs service (port 3001)
 ├── docker-compose.yml
 ├── TASKS.md                       # Detailed task breakdown
@@ -163,14 +172,18 @@ did-wallet-thesis/
 
 ### Prerequisites
 
-- Docker Desktop
-- .NET 10 SDK
-- Node.js 20+
+| Tool | Version | Notes |
+|------|---------|-------|
+| Docker Desktop | Latest | Runs PostgreSQL, RabbitMQ, Hardhat node |
+| .NET 10 SDK | 10.0+ | Microservices |
+| Node.js | 20+ | Blockchain scripts, mobile wallet |
+| Xcode | 16+ | iOS simulator (macOS only) |
+| Expo CLI | Latest | `npm install -g expo-cli` |
 
 ### 1. Start infrastructure
 
 ```bash
-docker-compose up postgres rabbitmq hardhat -d
+docker compose up -d
 ```
 
 Create service databases (one-time):
@@ -198,14 +211,14 @@ Contract addresses are deterministic and already configured in `appsettings.json
 ```bash
 cd DID.WalletThesis
 
-# Terminal 1
+# Terminal 1 — background event sync (no HTTP port)
 dotnet run --project src/Services/DID.BlockchainSync
 
 # Terminal 2
-dotnet run --project src/Services/DID.Accreditation
+dotnet run --project src/Services/DID.Identity
 
 # Terminal 3
-dotnet run --project src/Services/DID.Identity
+dotnet run --project src/Services/DID.Accreditation
 ```
 
 Migrations apply automatically on startup.
@@ -215,7 +228,19 @@ Migrations apply automatically on startup.
 | Identity | http://localhost:5259 | http://localhost:5259/swagger |
 | Accreditation | http://localhost:5211 | http://localhost:5211/swagger |
 
+### 4. Run mobile wallet
+
+```bash
+cd mobile-wallet
+npm install
+npx expo start --ios
+```
+
+Press `i` to open the iOS simulator, or scan the QR code with the Expo Go app on a physical device.
+
 See [DID.WalletThesis/DEMO.md](DID.WalletThesis/DEMO.md) for a full blockchain-to-API walkthrough.
+
+The Angular admin console is planned after the Credential Service is stable. It will provide a browser-based demo flow for accreditation hierarchy management and later diploma issuance.
 
 ---
 
@@ -235,11 +260,11 @@ Other endpoints: `GET /api/dids/{did}`, `GET /api/dids/{did}/keys`
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/accreditations` | Issue (demo shortcut; primary path is via blockchain event) |
+| POST | `/api/accreditations` | Issue on-chain accreditation (used for demo/admin flows) |
 | GET | `/api/accreditations` | List (filter by `issuerDid` / `subjectDid`) |
 | GET | `/api/accreditations/{id}` | Resolve |
-| GET | `/api/accreditations/{id}/verify` | Verify active/revoked status |
-| DELETE | `/api/accreditations/{id}` | Revoke |
+| GET | `/api/accreditations/{id}/verify` | Verify blockchain-backed status and trust-chain validity |
+| DELETE | `/api/accreditations/{id}` | Revoke on-chain |
 
 ---
 
@@ -261,6 +286,8 @@ Other endpoints: `GET /api/dids/{did}`, `GET /api/dids/{did}/keys`
 - **Clean Architecture per service.** Domain → Application → Infrastructure → Endpoints, no cross-layer shortcuts.
 - **Event-driven sync.** BlockchainSync polls the chain, writes to PostgreSQL, and publishes to RabbitMQ. Other services consume events to maintain off-chain caches.
 - **FastEndpoints** over MVC controllers — minimal overhead, request/response classes, vertical slice per endpoint.
+- **Thesis demo scope is deliberately narrow.** Full EU governance voting is kept at contract/design level; the implemented application demo focuses on accreditation hierarchy and diploma issuance.
+- **Separate operator and holder UX.** The mobile wallet remains holder-facing, while the planned Angular admin console will handle institutional accreditation and issuance workflows.
 
 ---
 

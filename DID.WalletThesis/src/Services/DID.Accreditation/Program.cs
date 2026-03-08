@@ -2,6 +2,9 @@ using DID.Accreditation.Application.Services;
 using DID.Accreditation.Domain.Interfaces;
 using DID.Accreditation.Infrastructure.Consumers;
 using DID.Accreditation.Infrastructure.Persistence;
+using DID.Shared.Application.Interfaces;
+using DID.Shared.Infrastructure.Blockchain;
+using DID.Shared.Infrastructure.Options;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using MassTransit;
@@ -16,6 +19,10 @@ builder.Services.AddSerilog((_, lc) => lc
 
 builder.Services.AddDbContext<AccreditationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.Configure<BlockchainOptions>(
+    builder.Configuration.GetSection(BlockchainOptions.SectionName));
+builder.Services.AddSingleton<IBlockchainService, BlockchainService>();
 
 builder.Services.AddScoped<IAccreditationRepository, AccreditationRepository>();
 builder.Services.AddScoped<AccreditationService>();

@@ -42,8 +42,10 @@ public class BlockchainService : IBlockchainService
   {
     var contract = GetContract(contractName);
     var function = contract.GetFunction(functionName);
-    var txHash = await function.SendTransactionAsync(
-        _web3.TransactionManager.Account.Address, args);
+    var fromAddress = _web3.TransactionManager.Account.Address;
+    var gas = await function.EstimateGasAsync(fromAddress, null, null, args);
+    var transactionInput = function.CreateTransactionInput(fromAddress, gas, null, args);
+    var txHash = await _web3.TransactionManager.SendTransactionAsync(transactionInput);
     _logger.LogInformation("Transaction submitted: {TxHash} for {Contract}.{Function}",
         txHash, contractName, functionName);
     return txHash;

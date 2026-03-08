@@ -15,6 +15,7 @@
 - ✅ Identity Service — fully implemented (DID generation, key pairs, resolution, Swagger, README)
 - ✅ Accreditation Service — fully implemented (event consumers, REST API, verify/revoke, Swagger, README)
 - ⏳ Credential Service — next priority
+- ⏳ Angular Admin Console — planned after Credential Service for accreditation and diploma demo flows
 - ⏳ Remaining 5 microservices
 
 **Core Architectural Principle:**
@@ -129,6 +130,15 @@ DID.WalletThesis/src/
 ### Event-Driven Architecture
 
 RabbitMQ + MassTransit for asynchronous communication. Blockchain Sync Service is the single source of blockchain state updates.
+
+### Demo Scope Boundary
+
+To keep the thesis focused, the end-to-end demo prioritizes the accreditation and diploma issuance chain, not full EU governance orchestration.
+
+- `EURootAuthority.sol` governance and voting remain part of the contract design and contract-level tests.
+- The implemented demo may bootstrap one or more member states for local scenarios instead of building a full voting UI/workflow.
+- The primary application demo target is: `Member State -> Ministry -> University -> Diploma issuance -> Verification`.
+- A dedicated Angular admin/demo console will be added after the Credential Service is stable.
 
 ---
 
@@ -1014,6 +1024,48 @@ public class PresentationHub : Hub
 }
 ```
 
+### 4.2 Angular Admin Console
+
+**Goal:** Provide a clear institutional/admin-facing demo UI for hierarchical accreditation and later diploma issuance.
+
+**Scope:** Build this after the Credential Service is functional and the accreditation/credential APIs are stable.
+
+**Planned Location:** `admin-client/`
+
+**Primary Use Cases:**
+- Select demo actor context (`Romania`, `Ministry of Education`, `University of Bucharest`)
+- Issue accreditations with parent-chain selection
+- Browse trust hierarchy visually
+- Inspect accreditation status, transaction hash, and on-chain identifiers
+- Issue diploma credentials once Credential Service is implemented
+- Verify credentials and issuer trust chain for demo purposes
+
+**Initial Routes / Pages:**
+- `/dashboard` — contract addresses, active actors, recent blockchain-backed actions
+- `/actors` — demo entities, DIDs, Ethereum addresses, active signer context
+- `/accreditations` — list and inspect accreditations
+- `/accreditations/new` — issue accreditation form with issuer/subject/scope/parent selection
+- `/trust-chain` — visual tree from member state to ministry to institution
+- `/credentials` — issue and inspect diploma credentials
+- `/verification` — verify a credential and display trust-chain status
+
+**Frontend Constraints:**
+- Angular standalone app, routed pages, thin API client layer
+- UI talks to microservices only, never directly to smart contracts
+- Demo/admin console only; not a holder wallet replacement
+- Full EU member-state voting UI is explicitly out of scope for the first client version
+
+**Suggested API Dependencies:**
+- `DID.Accreditation` for accreditation issue/list/resolve/verify
+- `DID.Credential` for diploma issue/list/resolve/verify
+- `DID.Verification` for end-to-end blockchain-first validation
+
+**Delivery Order:**
+1. Stabilize Credential Service
+2. Finalize multi-actor demo signing approach
+3. Build Angular accreditation pages
+4. Add diploma issuance and verification pages
+
 ---
 
 ## PHASE 5: Support Services (Week 12-13)
@@ -1088,9 +1140,8 @@ CREATE INDEX idx_audit_target ON audit_logs(target_did);
 [Fact]
 public async Task CompleteIssuanceFlow_ShouldPropagateEvents()
 {
-    // 1. EU Root accredits Romania
-    var romaniaTx = await _rootAuthority.ProposeAddMemberStateAsync("RO", "did:web:gov.ro");
-    await VoteAndExecuteProposal(romaniaTx);
+    // 1. Romania exists as a demo bootstrapped member state
+    Assert.True(await _rootAuthority.IsMemberStateAsync(romaniaAddress));
 
     // 2. Romania accredits Ministry of Education
     var ministryTx = await _accreditationRegistry.IssueAccreditationAsync(
@@ -1310,6 +1361,8 @@ catch (RpcClientTimeoutException)
 ### Phase 4
 - [ ] QR code flow working
 - [ ] SignalR real-time communication functional
+- [ ] Angular admin console can issue and inspect accreditations
+- [ ] Trust hierarchy page visualizes state -> ministry -> university chain
 
 ### Phase 5
 - [ ] Email notifications working
@@ -1333,8 +1386,8 @@ catch (RpcClientTimeoutException)
 | 8 | Phase 3 | Verification Service | 5-step verification working |
 | 9 | Phase 3 | ZKP Service | ZKP proofs working |
 | 10 | Phase 4 | Presentation Service | QR flow working |
-| 11 | Phase 5 | Notification Service | Emails sending |
-| 12 | Phase 5 | Audit Service | Complete audit trail |
+| 11 | Phase 4 | Angular Admin Console | Accreditation chain demo UI working |
+| 12 | Phase 5 | Notification Service + Audit Service | Emails and audit trail working |
 | 13 | Phase 6 | Integration testing | E2E scenarios passing |
 | 14 | Phase 6 | Final testing & documentation | Demo ready |
 
@@ -1358,6 +1411,11 @@ catch (RpcClientTimeoutException)
    ```
 
 7. **Copy ABIs into solution:**
+
+8. **After Credential Service is stable, add Angular admin console:**
+    - focus on accreditation chain management first
+    - defer full EU voting workflow to contract-only scope
+    - add diploma issuance UI only after credential endpoints are stable
    ```bash
    mkdir DID.WalletThesis/src/ABIs
    cp blockchain/abis/*.json DID.WalletThesis/src/ABIs/
