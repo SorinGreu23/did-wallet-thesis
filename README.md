@@ -84,19 +84,19 @@ For thesis scope, the primary end-to-end demo focuses on the accreditation and d
 | # | Service | Status |
 |---|---------|--------|
 | 6 | Accreditation Service — off-chain cache of AccreditationRegistry.sol | ✅ Complete |
-| 7 | Credential Service — W3C VC issuance against CredentialRegistry.sol | ⏳ Pending |
+| 7 | Credential Service — W3C VC issuance against CredentialRegistry.sol | ✅ Complete |
 
 ### Phase 3 — Verification
 | # | Service | Status |
 |---|---------|--------|
 | 8 | Verification Service — 5-step blockchain-first verification | ⏳ Pending |
-| 9 | ZKP Service (Node.js) — snarkjs age/graduation proofs | ⏳ Pending |
+| 9 | ZKP Service (Node.js) — snarkjs age/graduation proofs | ✅ Complete |
 
 ### Phase 4 — Presentation
 | # | Service | Status |
 |---|---------|--------|
 | 10 | Presentation Service — QR codes, SignalR, session management | ⏳ Pending |
-| 11 | Angular Admin Console — accreditation chain and diploma demo UI | ⏳ Planned |
+| 11 | Angular Admin Console — accreditation chain and diploma demo UI | 🚧 In Progress |
 
 ### Phase 5 — Support
 | # | Service | Status |
@@ -109,7 +109,7 @@ For thesis scope, the primary end-to-end demo focuses on the accreditation and d
 |---|------|--------|
 | 14 | Integration & end-to-end testing | ⏳ Pending |
 
-**Overall progress: 6 / 14 tasks (43%)**
+**Overall progress: 8 / 14 tasks (57%)**
 
 ---
 
@@ -123,7 +123,7 @@ For thesis scope, the primary end-to-end demo focuses on the accreditation and d
 | Persistence | PostgreSQL 16, EF Core, Npgsql |
 | Messaging | RabbitMQ 3.12, MassTransit |
 | ZKP | snarkjs, circom |
-| Web Admin | Angular (planned) |
+| Web Admin | Angular 19, Tailwind CSS |
 | Infrastructure | Docker Compose |
 
 ---
@@ -147,20 +147,21 @@ did-wallet-thesis/
 │       │   ├── DID.Shared.Domain/         # Entity, ValueObject, AggregateRoot
 │       │   ├── DID.Shared.Application/    # IBlockchainService, IEventBus, IRepository
 │       │   └── DID.Shared.Infrastructure/ # Nethereum, MassTransit, EF Core impls
-│       └── Services/
-│           ├── DID.BlockchainSync/        # ✅ Background worker
-│           ├── DID.Identity/              # ✅ port 5259
-│           ├── DID.Accreditation/         # ✅ port 5211
-│           ├── DID.Credential/            # ⏳ port 5214
-│           ├── DID.Verification/          # ⏳ port 5216
-│           ├── DID.Presentation/          # ⏳ port 5217
-│           ├── DID.Notification/          # ⏳ port 5218
-│           └── DID.Audit/                 # ⏳ port 5219
+│       ├── Services/
+│       │   ├── DID.BlockchainSync/        # ✅ Background worker
+│       │   ├── DID.Identity/              # ✅ port 5259
+│       │   ├── DID.Accreditation/         # ✅ port 5211
+│       │   ├── DID.Credential/            # ✅ port 5214
+│       │   ├── DID.Verification/          # ⏳ port 5216
+│       │   ├── DID.Presentation/          # ⏳ port 5217
+│       │   ├── DID.Notification/          # ⏳ port 5218
+│       │   └── DID.Audit/                 # ⏳ port 5219
+│       └── admin-client/                  # ✅ Angular admin console (ng serve)
 │
 ├── mobile-wallet/                 # React Native / Expo app
-├── admin-client/                  # ⏳ Planned Angular admin/demo console
-├── zkp-service/                   # ⏳ Node.js snarkjs service (port 3001)
-├── docker-compose.yml
+├── zkp-service/                   # ✅ Node.js snarkjs service (port 3001)
+├── docker-compose.infra.yml       # Postgres, RabbitMQ, Hardhat — start once, leave running
+├── docker-compose.services.yml    # .NET services — rebuild freely without touching infra
 ├── TASKS.md                       # Detailed task breakdown
 ├── IMPLEMENTATION_PLAN.md         # Architecture decisions
 └── DID.WalletThesis/DEMO.md       # End-to-end demo walkthrough
@@ -182,43 +183,31 @@ did-wallet-thesis/
 
 ### 1. Start infrastructure
 
+Infrastructure (Postgres, RabbitMQ, Hardhat) persists state across restarts via named Docker volumes. Start it once and leave it running:
+
 ```bash
-docker compose up -d
+docker compose -f docker-compose.infra.yml up -d
 ```
 
-Create service databases (one-time):
+Hardhat chain state is saved to the `hardhat_state` volume — contracts stay at the same addresses and your on-chain data survives container restarts. Databases are created automatically on first boot via `docker/postgres/init.sql`.
+
+To fully reset (wipe chain + all data):
 
 ```bash
-docker exec -it did-postgres psql -U did_user -d did_wallet -c "
-  CREATE DATABASE did_identity;
-  CREATE DATABASE did_accreditation;
-  CREATE DATABASE did_blockchainsync;
-"
+docker compose -f docker-compose.infra.yml down -v
+docker compose -f docker-compose.infra.yml up -d
 ```
 
-### 2. Deploy smart contracts
+### 2. Start .NET services
 
 ```bash
-cd blockchain
-npm install
-npx hardhat run scripts/deploy.ts --network localhost
+docker compose -f docker-compose.services.yml up -d --build
 ```
 
-Contract addresses are deterministic and already configured in `appsettings.json`.
-
-### 3. Run services
+Rebuild a single service after changes without touching infra or other services:
 
 ```bash
-cd DID.WalletThesis
-
-# Terminal 1 — background event sync (no HTTP port)
-dotnet run --project src/Services/DID.BlockchainSync
-
-# Terminal 2
-dotnet run --project src/Services/DID.Identity
-
-# Terminal 3
-dotnet run --project src/Services/DID.Accreditation
+docker compose -f docker-compose.services.yml up -d --build accreditation
 ```
 
 Migrations apply automatically on startup.
@@ -227,6 +216,18 @@ Migrations apply automatically on startup.
 |---------|-----|---------|
 | Identity | http://localhost:5259 | http://localhost:5259/swagger |
 | Accreditation | http://localhost:5211 | http://localhost:5211/swagger |
+| Credential | http://localhost:5214 | http://localhost:5214/swagger |
+| ZKP Service | http://localhost:3001 | — |
+
+### 3. Start Angular admin console
+
+```bash
+cd DID.WalletThesis/src/admin-client
+npm install
+ng serve
+```
+
+Open http://localhost:4200.
 
 ### 4. Run mobile wallet
 
@@ -240,7 +241,7 @@ Press `i` to open the iOS simulator, or scan the QR code with the Expo Go app on
 
 See [DID.WalletThesis/DEMO.md](DID.WalletThesis/DEMO.md) for a full blockchain-to-API walkthrough.
 
-The Angular admin console is planned after the Credential Service is stable. It will provide a browser-based demo flow for accreditation hierarchy management and later diploma issuance.
+The Angular admin console is planned after the Verification Service is stable. It will provide a browser-based demo flow for accreditation hierarchy management and diploma issuance.
 
 ---
 
@@ -256,15 +257,36 @@ Returns a W3C DID Document with `did:ethr:sepolia:{address}` format and secp256k
 
 Other endpoints: `GET /api/dids/{did}`, `GET /api/dids/{did}/keys`
 
-### Accreditation Service
+### Accreditation Service — port 5211
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/accreditations` | Issue on-chain accreditation (used for demo/admin flows) |
-| GET | `/api/accreditations` | List (filter by `issuerDid` / `subjectDid`) |
+| POST | `/api/accreditations` | Issue on-chain accreditation |
+| GET | `/api/accreditations` | List (filter by `issuerDid`, `subjectDid`, `scope`) |
 | GET | `/api/accreditations/{id}` | Resolve |
 | GET | `/api/accreditations/{id}/verify` | Verify blockchain-backed status and trust-chain validity |
 | DELETE | `/api/accreditations/{id}` | Revoke on-chain |
+| GET | `/api/config` | Returns runtime config (e.g. `euRootDid`) derived from the backend signer |
+
+### Credential Service — port 5214
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/credentials` | Issue credential (calls CredentialRegistry.sol) |
+| GET | `/api/credentials` | List (filter by `issuerDid` / `holderDid`) |
+| GET | `/api/credentials/{id}` | Resolve credential |
+| GET | `/api/credentials/{id}/verify` | Verify status from blockchain |
+| DELETE | `/api/credentials/{id}` | Revoke on-chain |
+| POST | `/api/credentials/{id}/suspend` | Suspend credential on-chain |
+
+### ZKP Service — port 3001
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/zkp/generate/age` | Generate age proof (`birthYear`, `currentYear`, `threshold`) |
+| POST | `/zkp/generate/graduation-year` | Generate graduation year range proof |
+| POST | `/zkp/verify` | Verify any proof (`circuitName`, `proof`, `publicSignals`) |
+| GET | `/health` | Health check |
 
 ---
 

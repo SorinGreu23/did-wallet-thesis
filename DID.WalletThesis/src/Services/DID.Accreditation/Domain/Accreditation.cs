@@ -11,6 +11,7 @@ public class Accreditation : Entity
     public string SubjectDID { get; set; } = string.Empty;
     public string? ParentAccreditationId { get; set; }
     public string Scope { get; set; } = string.Empty;
+    public string? Name { get; set; }
     public AccreditationStatus Status { get; set; } = AccreditationStatus.Active;
     public long BlockNumber { get; set; }
     public string TransactionHash { get; set; } = string.Empty;

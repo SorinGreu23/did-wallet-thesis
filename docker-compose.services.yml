@@ -1,0 +1,105 @@
+name: did-wallet-thesis
+
+# .NET services — rebuild and redeploy freely without touching infra.
+# Requires infra to be running first:
+#   docker compose -f docker-compose.infra.yml up -d
+#
+# Rebuild all:        docker compose -f docker-compose.services.yml up -d --build
+# Rebuild one:        docker compose -f docker-compose.services.yml up -d --build accreditation
+# Tear down services: docker compose -f docker-compose.services.yml down  (infra untouched)
+
+services:
+  identity:
+    build:
+      context: ./DID.WalletThesis
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: DID.Identity
+    container_name: did-identity
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=did_identity;Username=did_user;Password=did_password"
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: did_user
+      RabbitMQ__Password: did_password
+    ports:
+      - "5259:8080"
+    networks:
+      - did-infra
+      - did-services
+
+  accreditation:
+    build:
+      context: ./DID.WalletThesis
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: DID.Accreditation
+    container_name: did-accreditation
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=did_accreditation;Username=did_user;Password=did_password"
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: did_user
+      RabbitMQ__Password: did_password
+      Blockchain__RpcUrl: "http://hardhat:8545"
+      Blockchain__AbisDirectory: /app/abis
+    ports:
+      - "5211:8080"
+    volumes:
+      - ./blockchain/abis:/app/abis:ro
+    networks:
+      - did-infra
+      - did-services
+
+  blockchain-sync:
+    build:
+      context: ./DID.WalletThesis
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: DID.BlockchainSync
+    container_name: did-blockchain-sync
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=did_blockchainsync;Username=did_user;Password=did_password"
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: did_user
+      RabbitMQ__Password: did_password
+      Blockchain__RpcUrl: "http://hardhat:8545"
+      Blockchain__AbisDirectory: /app/abis
+    volumes:
+      - ./blockchain/abis:/app/abis:ro
+    networks:
+      - did-infra
+      - did-services
+
+  credential:
+    build:
+      context: ./DID.WalletThesis
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: DID.Credential
+    container_name: did-credential
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=did_credential;Username=did_user;Password=did_password"
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: did_user
+      RabbitMQ__Password: did_password
+      Blockchain__RpcUrl: "http://hardhat:8545"
+      Blockchain__AbisDirectory: /app/abis
+    ports:
+      - "5214:8080"
+    volumes:
+      - ./blockchain/abis:/app/abis:ro
+    networks:
+      - did-infra
+      - did-services
+
+networks:
+  did-infra:
+    external: true
+    name: did-infra
+  did-services:
+    driver: bridge
+    name: did-services
+

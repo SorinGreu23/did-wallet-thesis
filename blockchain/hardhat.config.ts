@@ -14,9 +14,15 @@ const config: HardhatUserConfig = {
   networks: {
     hardhat: {
       chainId: 31337,
+      accounts: {
+        mnemonic: "test test test test test test test test test test test junk",
+        path: "m/44'/60'/0'/0",
+        initialIndex: 0,
+        count: 20,
+      },
       mining: {
         auto: true,
-        interval: 1000
+        interval: 0
       }
     },
     localhost: {

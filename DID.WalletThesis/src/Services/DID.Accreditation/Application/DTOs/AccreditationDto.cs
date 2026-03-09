@@ -6,6 +6,7 @@ public record AccreditationDto(
     string SubjectDID,
     string? ParentAccreditationId,
     string Scope,
+    string? Name,
     string Status,
     long BlockNumber,
     string TransactionHash,
@@ -25,9 +26,11 @@ public record IssueAccreditationRequest(
     string IssuerDID,
     string SubjectDID,
     string Scope,
+    string? Name,
     string? ParentAccreditationId,
     string? PermissionsHash = null,
-    DateTime? ExpiresAt = null
+    DateTime? ExpiresAt = null,
+    string? IssuerPrivateKey = null
 );
 
 public record RevokeAccreditationRequest(

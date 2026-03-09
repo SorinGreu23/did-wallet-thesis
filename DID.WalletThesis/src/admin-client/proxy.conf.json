@@ -1,0 +1,20 @@
+{
+  "/api/accreditations": {
+    "target": "http://localhost:5211",
+    "secure": false,
+    "changeOrigin": true,
+    "logLevel": "info"
+  },
+  "/api/config": {
+    "target": "http://localhost:5211",
+    "secure": false,
+    "changeOrigin": true,
+    "logLevel": "info"
+  },
+  "/api/dids": {
+    "target": "http://localhost:5259",
+    "secure": false,
+    "changeOrigin": true,
+    "logLevel": "info"
+  }
+}

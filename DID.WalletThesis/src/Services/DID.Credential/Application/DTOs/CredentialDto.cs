@@ -1,0 +1,42 @@
+namespace DID.Credential.Application.DTOs;
+
+public record CredentialDto(
+    string CredentialId,
+    string IssuerDID,
+    string HolderDID,
+    string CredentialType,
+    string? IssuerAccreditationId,
+    string Status,
+    long BlockNumber,
+    string TransactionHash,
+    DateTime IssuedAt,
+    DateTime? RevokedAt,
+    string? RevokedByDID,
+    string? RevocationReason,
+    DateTime? SuspendedAt,
+    string? SuspendedByDID
+);
+
+public record CredentialVerificationDto(
+    string CredentialId,
+    bool IsValid,
+    string Status,
+    string? Reason
+);
+
+public record IssueCredentialRequest(
+    string IssuerDID,
+    string HolderDID,
+    string CredentialType,
+    string? IssuerAccreditationId,
+    DateTime? ExpiresAt
+);
+
+public record RevokeCredentialRequest(
+    string RevokedByDID,
+    string Reason
+);
+
+public record SuspendCredentialRequest(
+    string SuspendedByDID
+);

@@ -1,3 +1,12 @@
+name: did-wallet-thesis
+
+# Infrastructure services — start once, leave running.
+# Hardhat chain state, Postgres data, and RabbitMQ state all persist via named volumes.
+#
+# Start:   docker compose -f docker-compose.infra.yml up -d
+# Stop:    docker compose -f docker-compose.infra.yml stop   (keeps volumes intact)
+# Destroy: docker compose -f docker-compose.infra.yml down -v  (wipes everything)
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -10,8 +19,9 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
-      - did-network
+      - did-infra
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U did_user -d did_wallet"]
       interval: 10s
@@ -30,7 +40,7 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
-      - did-network
+      - did-infra
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
@@ -45,18 +55,22 @@ services:
     ports:
       - "8545:8545"
     networks:
-      - did-network
+      - did-infra
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8545 || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
+      test: ["CMD-SHELL", "test -f /app/deployments/latest.json"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
 volumes:
   postgres_data:
   rabbitmq_data:
 
 networks:
-  did-network:
+  did-infra:
     driver: bridge
+    name: did-infra
+
+
+

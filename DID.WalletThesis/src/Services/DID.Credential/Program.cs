@@ -1,41 +1,71 @@
+using DID.Credential.Application.Services;
+using DID.Credential.Domain.Interfaces;
+using DID.Credential.Infrastructure.Consumers;
+using DID.Credential.Infrastructure.Persistence;
+using DID.Shared.Application.Interfaces;
+using DID.Shared.Infrastructure.Blockchain;
+using DID.Shared.Infrastructure.Options;
+using FastEndpoints;
+using FastEndpoints.Swagger;
+using MassTransit;
+using Microsoft.EntityFrameworkCore;
+using Serilog;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddSerilog((_, lc) => lc
+    .ReadFrom.Configuration(builder.Configuration)
+    .WriteTo.Console());
+
+builder.Services.AddDbContext<CredentialDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.Configure<BlockchainOptions>(
+    builder.Configuration.GetSection(BlockchainOptions.SectionName));
+builder.Services.AddSingleton<IBlockchainService, BlockchainService>();
+
+builder.Services.AddScoped<ICredentialRepository, CredentialRepository>();
+builder.Services.AddScoped<CredentialService>();
+
+builder.Services.AddMassTransit(x =>
+{
+    x.AddConsumer<CredentialIssuedConsumer>();
+    x.AddConsumer<CredentialRevokedConsumer>();
+    x.AddConsumer<CredentialSuspendedConsumer>();
+
+    x.UsingRabbitMq((ctx, cfg) =>
+    {
+        cfg.Host(builder.Configuration["RabbitMQ:Host"], h =>
+        {
+            h.Username(builder.Configuration["RabbitMQ:Username"]!);
+            h.Password(builder.Configuration["RabbitMQ:Password"]!);
+        });
+
+        cfg.ConfigureEndpoints(ctx);
+    });
+});
+
+builder.Services.AddFastEndpoints();
+builder.Services.SwaggerDocument(o =>
+{
+    o.DocumentSettings = s =>
+    {
+        s.Title = "DID Credential Service";
+        s.Version = "v1";
+        s.Description = "Credential lifecycle management and verification";
+    };
+});
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+app.UseSwaggerGen();
+
+using (var scope = app.Services.CreateScope())
 {
-    app.MapOpenApi();
+    var db = scope.ServiceProvider.GetRequiredService<CredentialDbContext>();
+    await db.Database.MigrateAsync();
 }
 
 app.UseHttpsRedirection();
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
-
-app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
+app.UseFastEndpoints();
+await app.RunAsync();

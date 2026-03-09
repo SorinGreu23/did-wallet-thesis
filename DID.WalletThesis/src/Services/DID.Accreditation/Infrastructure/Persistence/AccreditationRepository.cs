@@ -11,8 +11,11 @@ public class AccreditationRepository(AccreditationDbContext context)
         => await dbSet.FirstOrDefaultAsync(x => x.AccreditationId == accreditationId, ct);
 
     public async Task<IEnumerable<Domain.Accreditation>> GetByIssuerDIDAsync(string issuerDid, CancellationToken ct = default)
-        => await dbSet.Where(x => x.IssuerDID == issuerDid).ToListAsync(ct);
+        => await dbSet.Where(x => EF.Functions.ILike(x.IssuerDID, issuerDid)).ToListAsync(ct);
+
+    public async Task<IEnumerable<Domain.Accreditation>> GetByIssuerDIDAndScopeAsync(string issuerDid, string scope, CancellationToken ct = default)
+        => await dbSet.Where(x => EF.Functions.ILike(x.IssuerDID, issuerDid) && EF.Functions.ILike(x.Scope, scope)).ToListAsync(ct);
 
     public async Task<IEnumerable<Domain.Accreditation>> GetBySubjectDIDAsync(string subjectDid, CancellationToken ct = default)
-        => await dbSet.Where(x => x.SubjectDID == subjectDid).ToListAsync(ct);
+        => await dbSet.Where(x => EF.Functions.ILike(x.SubjectDID, subjectDid)).ToListAsync(ct);
 }

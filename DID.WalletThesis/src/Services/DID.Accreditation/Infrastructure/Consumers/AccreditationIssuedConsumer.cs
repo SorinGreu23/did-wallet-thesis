@@ -19,6 +19,7 @@ public class AccreditationIssuedConsumer(
             subjectDid: msg.SubjectDID,
             parentAccreditationId: msg.ParentAccreditationId,
             scope: msg.Scope,
+            name: null,
             blockNumber: msg.BlockNumber,
             transactionHash: msg.TransactionHash,
             timestamp: msg.Timestamp,

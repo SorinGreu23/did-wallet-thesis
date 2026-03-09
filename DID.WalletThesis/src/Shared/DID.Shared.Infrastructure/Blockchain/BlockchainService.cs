@@ -51,6 +51,31 @@ public class BlockchainService : IBlockchainService
     return txHash;
   }
 
+  public async Task<string> SubmitTransactionAsync<T>(string signerPrivateKey, string contractName, string functionName, params object[] args)
+  {
+    var account = new Account(signerPrivateKey);
+    var web3 = new Web3(account, _options.RpcUrl);
+    var contractAddress = ResolveContractAddress(contractName);
+    var abi = _abis[contractName];
+    var contract = web3.Eth.GetContract(abi, contractAddress);
+    var function = contract.GetFunction(functionName);
+    var fromAddress = account.Address;
+    try
+    {
+      var gas = await function.EstimateGasAsync(fromAddress, null, null, args);
+      var transactionInput = function.CreateTransactionInput(fromAddress, gas, null, args);
+      var txHash = await web3.TransactionManager.SendTransactionAsync(transactionInput);
+      _logger.LogInformation("Transaction submitted: {TxHash} for {Contract}.{Function} (custom signer {Address})",
+          txHash, contractName, functionName, fromAddress);
+      return txHash;
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Transaction failed for {Contract}.{Function} from {Address}", contractName, functionName, fromAddress);
+      throw new InvalidOperationException($"Blockchain transaction failed: {ex.Message}", ex);
+    }
+  }
+
   public async Task SubscribeToEventAsync<TEvent>(
       string contractName, string eventName,
       Func<TEvent, Task> handler, CancellationToken ct = default)

@@ -15,15 +15,40 @@ public class IssueAccreditationEndpoint(AccreditationService service)
 
     public override async Task HandleAsync(IssueAccreditationRequest req, CancellationToken ct)
     {
-        var result = await service.IssueAsync(
-            req.IssuerDID,
-            req.SubjectDID,
-            req.Scope,
-            req.ParentAccreditationId,
-            req.PermissionsHash,
-            req.ExpiresAt,
-            ct);
-        await Send.CreatedAtAsync<ResolveAccreditationEndpoint>(
-            new { accreditationId = result.AccreditationId }, result, cancellation: ct);
+        try
+        {
+            var result = await service.IssueAsync(
+                req.IssuerDID,
+                req.SubjectDID,
+                req.Scope,
+                req.Name,
+                req.ParentAccreditationId,
+                req.PermissionsHash,
+                req.ExpiresAt,
+                req.IssuerPrivateKey,
+                ct);
+            await Send.CreatedAtAsync<ResolveAccreditationEndpoint>(
+                new { accreditationId = result.AccreditationId }, result, cancellation: ct);
+        }
+        catch (ArgumentOutOfRangeException ex) when (ex.ParamName == "scope")
+        {
+            AddError(r => r.Scope, ex.Message);
+            await Send.ErrorsAsync(400, ct);
+        }
+        catch (ArgumentException ex)
+        {
+            AddError(ex.Message);
+            await Send.ErrorsAsync(400, ct);
+        }
+        catch (InvalidOperationException ex)
+        {
+            AddError(ex.Message);
+            await Send.ErrorsAsync(400, ct);
+        }
+        catch (Exception ex)
+        {
+            AddError(ex.Message);
+            await Send.ErrorsAsync(400, ct);
+        }
     }
 }

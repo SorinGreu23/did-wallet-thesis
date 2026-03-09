@@ -14,9 +14,11 @@
 - ✅ BlockchainSync Service — fully implemented (event listener → PostgreSQL + RabbitMQ)
 - ✅ Identity Service — fully implemented (DID generation, key pairs, resolution, Swagger, README)
 - ✅ Accreditation Service — fully implemented (event consumers, REST API, verify/revoke, Swagger, README)
-- ⏳ Credential Service — next priority
-- ⏳ Angular Admin Console — planned after Credential Service for accreditation and diploma demo flows
-- ⏳ Remaining 5 microservices
+- ✅ Credential Service — fully implemented (issue/revoke/suspend on-chain, CredentialRegistry.sol, Swagger)
+- ✅ ZKP Service — fully implemented (circom circuits, snarkjs groth16, age + graduation-year proofs, Docker)
+- ⏳ Verification Service — next priority (5-step blockchain-first verification)
+- ⏳ Angular Admin Console — planned after Verification Service for accreditation and diploma demo flows
+- ⏳ Remaining 3 microservices (Presentation, Notification, Audit)
 
 **Core Architectural Principle:**
 > **Blockchain is the source of truth — NOT microservices.**
@@ -26,13 +28,13 @@
 **9 Microservices — Implementation Status:**
 1. ✅ Identity Service - DID document generation, key pair storage (port 5259)
 2. ✅ Accreditation Service - off-chain cache of AccreditationRegistry.sol events (port 5211)
-3. ⏳ Credential Service - W3C VC generation, calls CredentialRegistry.sol
-4. ⏳ Verification Service - Orchestrates 5-step verification reading from blockchain
+3. ✅ Credential Service - W3C VC generation, calls CredentialRegistry.sol (port 5214)
+4. ⏳ Verification Service - Orchestrates 5-step verification reading from blockchain (port 5216)
 5. ✅ Blockchain Sync Service - Event listener, mirrors blockchain to PostgreSQL, publishes to RabbitMQ
-6. ⏳ Presentation Service - QR codes, SignalR for holder-verifier communication
-7. ⏳ ZKP Service (Node.js) - Zero-knowledge proof generation/verification
-8. ⏳ Notification Service - Email (SendGrid), push (FCM)
-9. ⏳ Audit Service - Event sourcing, immutable audit logs
+6. ⏳ Presentation Service - QR codes, SignalR for holder-verifier communication (port 5217)
+7. ✅ ZKP Service (Node.js) - Zero-knowledge proof generation/verification (port 3001)
+8. ⏳ Notification Service - Email (SendGrid), push (FCM) (port 5218)
+9. ⏳ Audit Service - Event sourcing, immutable audit logs (port 5219)
 
 **Timeline:** 14 weeks across 6 phases
 
@@ -120,8 +122,8 @@ DID.WalletThesis/src/
     ├── DID.BlockchainSync/     ← ✅ implemented
     ├── DID.Identity/           ← ✅ implemented
     ├── DID.Accreditation/      ← ✅ implemented
-    ├── DID.Credential/         ← ⏳ next
-    ├── DID.Verification/       ← ⏳
+    ├── DID.Credential/         ← ✅ implemented
+    ├── DID.Verification/       ← ⏳ next
     ├── DID.Presentation/       ← ⏳
     ├── DID.Notification/       ← ⏳
     └── DID.Audit/              ← ⏳
@@ -710,7 +712,7 @@ public class AccreditationEventConsumer : IConsumer<AccreditationIssuedEvent>
 
 ---
 
-### 2.2 Credential Service
+### 2.2 Credential Service ✅ COMPLETED
 
 **Location:** `DID.WalletThesis/src/Services/DID.Credential/`
 
@@ -873,7 +875,7 @@ public class VerificationOrchestrator
 
 ---
 
-### 3.2 ZKP Service (Node.js) ✅ COMPLETED
+### 3.2 ZKP Service (Node.js) ✅ COMPLETED ✅ COMPLETED
 
 **Location:** `zkp-service/` (project root)
 
@@ -1061,10 +1063,11 @@ public class PresentationHub : Hub
 - `DID.Verification` for end-to-end blockchain-first validation
 
 **Delivery Order:**
-1. Stabilize Credential Service
-2. Finalize multi-actor demo signing approach
-3. Build Angular accreditation pages
-4. Add diploma issuance and verification pages
+1. ✅ Stabilize Credential Service
+2. Stabilize Verification Service
+3. Finalize multi-actor demo signing approach
+4. Build Angular accreditation pages
+5. Add diploma issuance and verification pages
 
 ---
 
@@ -1345,13 +1348,13 @@ catch (RpcClientTimeoutException)
 ### Phase 1
 - [x] Blockchain Sync Service fully implemented — polls events, saves to PostgreSQL, publishes to RabbitMQ
 - [x] DB migration applied (`did_blockchainsync`)
-- [ ] Identity Service creating DIDs
-- [ ] Events flowing end-to-end through RabbitMQ (requires Identity + at least one consumer)
+- [x] Identity Service creating DIDs
+- [x] Events flowing end-to-end through RabbitMQ
 
 ### Phase 2
-- [ ] Accreditation issuance calling smart contract
-- [ ] Trust chain validation reading from blockchain
-- [ ] Credentials recorded on-chain
+- [x] Accreditation issuance calling smart contract
+- [x] Trust chain validation reading from blockchain
+- [x] Credentials recorded on-chain
 
 ### Phase 3
 - [ ] 5-step verification working
@@ -1379,17 +1382,16 @@ catch (RpcClientTimeoutException)
 
 | Week | Phase | Tasks | Deliverables |
 |------|-------|-------|--------------|
-| 1-2 | Phase 0 | Smart contracts (DONE), Shared infrastructure, Docker Compose | Contracts deployed, Infrastructure ready |
-| 3-4 | Phase 1 | Blockchain Sync Service, Identity Service | Events syncing, DIDs being created |
-| 5-6 | Phase 2 | Accreditation Service | Accreditations on blockchain |
-| 6-7 | Phase 2 | Credential Service | Credentials on blockchain |
-| 8 | Phase 3 | Verification Service | 5-step verification working |
-| 9 | Phase 3 | ZKP Service | ZKP proofs working |
-| 10 | Phase 4 | Presentation Service | QR flow working |
-| 11 | Phase 4 | Angular Admin Console | Accreditation chain demo UI working |
-| 12 | Phase 5 | Notification Service + Audit Service | Emails and audit trail working |
-| 13 | Phase 6 | Integration testing | E2E scenarios passing |
-| 14 | Phase 6 | Final testing & documentation | Demo ready |
+| 1-2 | Phase 0 | Smart contracts ✅, Shared infrastructure ✅, Docker Compose ✅ | Contracts deployed, Infrastructure ready |
+| 3-4 | Phase 1 | Blockchain Sync Service ✅, Identity Service ✅ | Events syncing, DIDs being created |
+| 5-6 | Phase 2 | Accreditation Service ✅ | Accreditations on blockchain |
+| 6-7 | Phase 2 | Credential Service ✅, ZKP Service ✅ | Credentials on blockchain, ZKP proofs working |
+| 8 | Phase 3 | Verification Service ⏳ | 5-step verification working |
+| 9 | Phase 4 | Presentation Service ⏳ | QR flow working |
+| 10 | Phase 4 | Angular Admin Console ⏳ | Accreditation chain demo UI working |
+| 11 | Phase 5 | Notification Service ⏳ + Audit Service ⏳ | Emails and audit trail working |
+| 12-13 | Phase 6 | Integration testing ⏳ | E2E scenarios passing |
+| 14 | Phase 6 | Final testing & documentation ⏳ | Demo ready |
 
 ---
 
@@ -1400,35 +1402,31 @@ catch (RpcClientTimeoutException)
 3. ✅ **All 8 .NET service scaffolds** — Clean Architecture structure in place
 4. ✅ **Docker Compose** — configured with PostgreSQL, RabbitMQ, Hardhat
 5. ✅ **ZKP Service** — circuits compiled, keys generated, cross-platform setup
+6. ✅ **BlockchainSync Service** — event listener, PostgreSQL, RabbitMQ publishers
+7. ✅ **Identity Service** — DID generation, key pairs, Swagger
+8. ✅ **Accreditation Service** — blockchain-first issue/revoke/verify, Swagger
+9. ✅ **Credential Service** — blockchain-first issue/revoke/suspend/verify via CredentialRegistry.sol, Swagger
 
-6. **Start Docker and redeploy contracts:**
-   ```bash
-   docker-compose up -d --build
-   docker-compose ps                          # wait for healthy
-   cd blockchain
-   npx hardhat run scripts/deploy.ts --network localhost
-   # copy new addresses to each service appsettings.json
-   ```
+10. **Implement Verification Service (Task #8) — NEXT:**
+    ```
+    Domain:         VerificationSession, VerificationResult entities
+    Application:    VerificationService — 5-step blockchain-first verification orchestrator
+    Infrastructure: VerificationDbContext, VerificationRepository
+    Endpoints:      POST /api/verify/presentation
+                    POST /api/verify/credential
+                    GET  /api/verify/results/{sessionId}
+    HTTP Client:    Calls ZKP Service at http://localhost:3001 for ZKP step
+    DB:             did_verification
+    ```
 
-7. **Copy ABIs into solution:**
+11. **After Verification Service is stable, add Angular admin console:**
+    - Focus on accreditation chain management first
+    - Add diploma issuance UI after credential endpoints are stable
+    - Defer full EU voting workflow to contract-only scope
 
-8. **After Credential Service is stable, add Angular admin console:**
-    - focus on accreditation chain management first
-    - defer full EU voting workflow to contract-only scope
-    - add diploma issuance UI only after credential endpoints are stable
-   ```bash
-   mkdir DID.WalletThesis/src/ABIs
-   cp blockchain/abis/*.json DID.WalletThesis/src/ABIs/
-   ```
+12. **Implement Presentation Service (Task #10)** — QR codes + SignalR hub
 
-8. **Begin Phase 1 — implement Blockchain Sync Service business logic:**
-   - Add NuGet packages (Nethereum, MassTransit, EF Core)
-   - Implement `IBlockchainService` + `BlockchainService` (Nethereum)
-   - Implement `BlockchainSyncWorker` (subscribe to contract events)
-   - Implement `SyncDbContext` + migrations
-   - Wire up RabbitMQ publishers
-
-9. **Implement Identity Service in parallel with Blockchain Sync**
+13. **Implement Notification + Audit Services (Tasks #12, #13)** — in parallel
 
 ---
 

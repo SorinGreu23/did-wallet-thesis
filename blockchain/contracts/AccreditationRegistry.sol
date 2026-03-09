@@ -293,29 +293,26 @@ contract AccreditationRegistry {
         AccreditationScope scope,
         bytes32 parentAccreditationId
     ) private view {
+        // The root authority deployer can issue at any scope (admin/backend use)
+        bool isRootDeployer = rootAuthority.isMemberState(issuer);
+
         if (scope == AccreditationScope.MemberState) {
-            // Only EU Root can issue member state accreditations
-            // In practice, this would be checked via the root authority
-            // For now, we'll allow any member state to propose (handled by root authority governance)
-            if (!rootAuthority.isMemberState(issuer)) revert NotMemberState();
+            if (!isRootDeployer) revert NotMemberState();
         } else if (scope == AccreditationScope.Ministry) {
-            // Issuer must be a member state with valid accreditation
-            if (!rootAuthority.isMemberState(issuer)) revert UnauthorizedIssuer();
+            if (!isRootDeployer) revert UnauthorizedIssuer();
         } else if (scope == AccreditationScope.Institution) {
-            // Issuer must have ministry-level accreditation
             if (parentAccreditationId == bytes32(0)) revert InvalidParentAccreditation();
             Accreditation memory parent = accreditations[parentAccreditationId];
             if (!parent.exists) revert InvalidParentAccreditation();
             if (parent.scope != AccreditationScope.Ministry) revert InvalidScope();
-            if (parent.subject != issuer) revert UnauthorizedIssuer();
+            if (parent.subject != issuer && !isRootDeployer) revert UnauthorizedIssuer();
             if (!validateTrustChain(parentAccreditationId)) revert InvalidTrustChain();
         } else if (scope == AccreditationScope.Department) {
-            // Issuer must have institution-level accreditation
             if (parentAccreditationId == bytes32(0)) revert InvalidParentAccreditation();
             Accreditation memory parent = accreditations[parentAccreditationId];
             if (!parent.exists) revert InvalidParentAccreditation();
             if (parent.scope != AccreditationScope.Institution) revert InvalidScope();
-            if (parent.subject != issuer) revert UnauthorizedIssuer();
+            if (parent.subject != issuer && !isRootDeployer) revert UnauthorizedIssuer();
             if (!validateTrustChain(parentAccreditationId)) revert InvalidTrustChain();
         } else {
             revert InvalidScope();

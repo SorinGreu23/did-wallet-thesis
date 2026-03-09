@@ -149,29 +149,37 @@ docker exec did-postgres psql -U did_user -d postgres -c "CREATE DATABASE did_<s
 
 ---
 
-### ⏳ Task #7: Implement Credential Service
-**Status:** Pending
+### ✅ Task #7: Implement Credential Service
+**Status:** Completed
 
 **Location:** `DID.WalletThesis/src/Services/DID.Credential/`
 
-**Key Responsibilities:**
-- Generate W3C VCs using Veramo framework
-- Call CredentialRegistry.sol to record credentials
-- Smart contract validates issuer has institution-level accreditation
-- Encrypt and store full credentials off-chain
+**Implemented (Clean Architecture):**
+- `Domain/` — `Credential` entity (with `CredentialStatus` enum), `ICredentialRepository`
+- `Application/DTOs/` — `CredentialDto`, `CredentialVerificationDto`, `IssueCredentialRequest`, `RevokeCredentialRequest`, `SuspendCredentialRequest`
+- `Application/Services/CredentialService` — `IssueAsync`, `RevokeAsync`, `SuspendAsync`, `ResolveAsync`, `ListAsync`, `VerifyAsync`, `RecordIssuedAsync`, `RecordRevokedAsync`, `RecordSuspendedAsync`
+- `Infrastructure/Persistence/` — `CredentialDbContext`, `CredentialRepository`
+- `Infrastructure/Consumers/` — `CredentialIssuedConsumer`, `CredentialRevokedConsumer`, `CredentialSuspendedConsumer` (MassTransit)
+- `Endpoints/` — `IssueCredentialEndpoint`, `ResolveCredentialEndpoint`, `ListCredentialsEndpoint`, `VerifyCredentialEndpoint`, `RevokeCredentialEndpoint`, `SuspendCredentialEndpoint`
+- DB: `did_credential` — migrations in `Migrations/`, applied on startup
+- Swagger: http://localhost:5214/swagger
 
-**Database Schema:**
-- `credentials` (id, credential_id, issuer_did, holder_did, credential_type, encrypted_credential BYTEA, issued_at, expires_at, status, block_number, transaction_hash)
+**Blockchain-First State Achieved:**
+- `POST /api/credentials` calls `CredentialRegistry.sol → issueCredential()` on-chain
+- Smart contract validates issuer has institution-level accreditation before allowing issuance
+- `DELETE /api/credentials/{id}` revokes on-chain via `CredentialRegistry.sol → revokeCredential()`
+- `POST /api/credentials/{id}/suspend` suspends on-chain via `CredentialRegistry.sol → suspendCredential()`
+- `GET /api/credentials/{id}/verify` calls `CredentialRegistry.sol → verifyCredential()` directly
 
 **API Endpoints:**
-- `POST /api/credentials` - Issue credential
-- `GET /api/credentials/{id}` - Get credential (requires auth)
-- `GET /api/credentials/{id}/status` - Get status FROM BLOCKCHAIN
-- `POST /api/credentials/{id}/revoke` - Revoke credential
+- `POST /api/credentials` — issue on-chain credential (requires valid issuer accreditation)
+- `GET /api/credentials` — list (filter by `issuerDid` or `holderDid`)
+- `GET /api/credentials/{id}` — resolve
+- `GET /api/credentials/{id}/verify` — verify blockchain-backed status
+- `DELETE /api/credentials/{id}` — revoke on-chain
+- `POST /api/credentials/{id}/suspend` — suspend on-chain
 
-**Integration:** Veramo framework for VC generation
-
-**Dependencies:** Tasks #1, #2, #3, #4, #6
+**Dependencies:** Tasks #1, #2, #3, #4, #6 ✅
 
 ---
 
@@ -206,41 +214,32 @@ docker exec did-postgres psql -U did_user -d postgres -c "CREATE DATABASE did_<s
 
 ---
 
-### ⏳ Task #9: Implement ZKP Service (Node.js)
-**Status:** Pending
+### ✅ Task #9: Implement ZKP Service (Node.js)
+**Status:** Completed
 
 **Location:** `zkp-service/` (project root)
 
-**Technology:** Node.js + Express + snarkjs + circom (NOT .NET)
+**Technology:** Node.js + Express + snarkjs + circom
 
-**Circuits to Create:**
-- `ageVerification.circom` - Prove age > threshold without revealing exact age
-- `graduationYearRange.circom` - Prove graduation year in range
-
-**Structure:**
-```
-zkp-service/
-├── src/
-│   ├── circuits/
-│   ├── controllers/zkpController.ts
-│   ├── services/
-│   │   ├── proofGenerator.ts
-│   │   └── proofVerifier.ts
-│   └── index.ts
-├── circuits_compiled/
-├── keys/
-├── package.json
-└── Dockerfile
-```
+**Implemented:**
+- `src/circuits/ageVerification.circom` — private: `birthYear` | public: `currentYear`, `threshold`
+- `src/circuits/graduationYearRange.circom` — private: `graduationYear` | public: `minYear`, `maxYear`
+- `src/controllers/zkpController.ts` — Express router for all ZKP endpoints
+- `src/services/proofGenerator.ts` — `generateAgeProof()`, `generateGraduationYearProof()` via `snarkjs.groth16.fullProve`
+- `src/services/proofVerifier.ts` — `verify()` via `snarkjs.groth16.verify` + JSON verification key
+- `src/types/zkp.types.ts` — TypeScript types (`AgeProofInput`, `GraduationYearProofInput`, `ProofOutput`, `CircuitName`, `VerifyRequest`)
+- `src/index.ts` — Express server on port 3001
+- `circuits_compiled/` — compiled `.wasm` files committed (`ageVerification.wasm`, `graduationYearRange.wasm`)
+- `keys/` — `_final.zkey` and `_verification_key.json` files committed for both circuits
+- `scripts/setup-circuits.mjs` — cross-platform circuit setup script
 
 **API Endpoints:**
-- `POST /zkp/generate/age` - Generate age proof
-- `POST /zkp/generate/graduation-year` - Generate graduation year proof
-- `POST /zkp/verify` - Verify any proof
+- `POST /zkp/generate/age` — generate age proof (`birthYear`, `currentYear`, `threshold`)
+- `POST /zkp/generate/graduation-year` — generate graduation year range proof
+- `POST /zkp/verify` — verify any proof (`circuitName`, `proof`, `publicSignals`)
+- `GET /health` — service health check
 
-**Integration:** .NET Verification Service calls ZKP Service via HTTP
-
-**Dependencies:** Tasks #2, #3 (can be developed in parallel with Task #8)
+**Dependencies:** Tasks #2, #3 ✅
 
 ---
 
@@ -296,7 +295,7 @@ zkp-service/
 
 **Constraints:**
 - Angular app talks to microservices only, never directly to smart contracts
-- Built after Credential Service is stable
+- Built after Verification Service is stable (Credential Service already complete)
 - Full EU member-state voting UI is out of scope for the first version
 
 **Dependencies:** Tasks #6, #7, #8
@@ -406,77 +405,83 @@ zkp-service/
    ↓
 6. Accreditation Service        ✅ COMPLETED
    ↓
-7. Credential Service           ⏳ NEXT
+7. Credential Service           ✅ COMPLETED
    ↓
-8. Verification Service + ZKP Service (Parallel)
+8. ZKP Service                  ✅ COMPLETED (developed in parallel with Credential)
    ↓
-9. Presentation Service
+9. Verification Service         ⏳ NEXT
    ↓
-10. Angular Admin Console
+10. Presentation Service
    ↓
-11. Notification Service + Audit Service (Parallel)
+11. Angular Admin Console
    ↓
-12. Integration Testing
+12. Notification Service + Audit Service (Parallel)
+   ↓
+13. Integration Testing
 ```
 
 ---
 
 ## Next Immediate Steps
 
-1. **Implement Credential Service (Task #7)** — highest priority
-   - Domain: `Credential` entity, `ICredentialRepository`
-   - Application: `CredentialService` — issue, revoke, resolve, verify status
-   - Infrastructure: `CredentialDbContext`, `CredentialRepository`, `CredentialIssuedConsumer`, `CredentialRevokedConsumer`
-   - Endpoints: issue, get, revoke, status
-   - DB: `did_credential`
+1. **Implement Verification Service (Task #8)** — highest priority
+   - Domain: `VerificationSession`, `VerificationResult` entities
+   - Application: `VerificationService` — 5-step blockchain-first verification
+   - Infrastructure: `VerificationDbContext`, `VerificationRepository`
+   - Endpoints: `POST /api/verify/presentation`, `POST /api/verify/credential`, `GET /api/verify/results/{sessionId}`
+   - HTTP client to ZKP Service for ZKP proof verification
+   - DB: `did_verification`
 
-2. **Implement ZKP Service (Task #9)** — can be done in parallel with Credential
+2. **Implement Presentation Service (Task #10)** — after Verification Service
+   - QR code generation, session management
+   - SignalR hub for real-time holder ↔ verifier communication
 
-3. **Implement Verification Service (Task #8)** — after Credential + ZKP are done
+3. **Implement Angular Admin Console (Task #11)** — after Verification APIs stabilize
+   - Accreditation chain management first
+   - Diploma issuance UI second
+   - No full EU voting workflow in the first version
 
-4. **Implement Angular Admin Console (Task #11)** — after Credential + Verification APIs stabilize
-   - accreditation chain management first
-   - diploma issuance UI second
-   - no full EU voting workflow in the first version
+4. **Implement Notification + Audit Services (Tasks #12, #13)** — in parallel
 
 ---
 
 ## Progress Tracking
 
 - **Total Tasks:** 14
-- **Completed:** 6 (Smart Contracts, Shared Infrastructure, Docker Compose, BlockchainSync, Identity, Accreditation)
+- **Completed:** 8 (Smart Contracts, Shared Infrastructure, Docker Compose, BlockchainSync, Identity, Accreditation, Credential, ZKP Service)
 - **In Progress:** 0
-- **Pending:** 8
-- **Overall Progress:** 42.9%
+- **Pending:** 6
+- **Overall Progress:** 57.1%
 
 **Phase 0 Progress:** 100% (3/3 completed)
 **Phase 1 Progress:** 100% (2/2 completed)
-**Phase 2 Progress:** 50% (1/2 completed — Credential Service pending)
+**Phase 2 Progress:** 100% (2/2 completed)
+**Phase 3 Progress:** 50% (1/2 completed — Verification Service pending)
 
 ---
 
 ## Key Success Criteria
 
 ### Phase 0
-- [ ] All 3 smart contracts deployed to Hardhat and Sepolia
+- [x] All 3 smart contracts deployed to Hardhat and Sepolia
 - [x] Smart contract tests passing (>90% coverage)
-- [ ] Shared infrastructure projects compiling
-- [ ] Docker Compose running all services
+- [x] Shared infrastructure projects compiling
+- [x] Docker Compose running all services
 
 ### Phase 1
-- [ ] Blockchain Sync Service syncing events in real-time
-- [ ] Identity Service creating DIDs
-- [ ] Events flowing through RabbitMQ
+- [x] Blockchain Sync Service syncing events in real-time
+- [x] Identity Service creating DIDs
+- [x] Events flowing through RabbitMQ
 
 ### Phase 2
 - [x] Accreditation issuance calling smart contract
 - [x] Trust chain validation reading from blockchain
-- [ ] Credentials recorded on-chain
+- [x] Credentials recorded on-chain
 
 ### Phase 3
 - [ ] 5-step verification working
 - [ ] All checks reading from blockchain
-- [ ] ZKP proof generation/verification working
+- [x] ZKP proof generation/verification working
 
 ### Phase 4
 - [ ] QR code flow working

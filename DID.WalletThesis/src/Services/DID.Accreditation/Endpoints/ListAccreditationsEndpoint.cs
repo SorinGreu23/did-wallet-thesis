@@ -8,6 +8,7 @@ public class ListAccreditationsRequest
 {
     public string? IssuerDid { get; set; }
     public string? SubjectDid { get; set; }
+    public string? Scope { get; set; }
 }
 
 public class ListAccreditationsEndpoint(AccreditationService service)
@@ -21,7 +22,7 @@ public class ListAccreditationsEndpoint(AccreditationService service)
 
     public override async Task HandleAsync(ListAccreditationsRequest req, CancellationToken ct)
     {
-        var results = await service.ListAsync(req.IssuerDid, req.SubjectDid, ct);
+        var results = await service.ListAsync(req.IssuerDid, req.SubjectDid, req.Scope, ct);
         await Send.OkAsync(results.ToList(), ct);
     }
 }

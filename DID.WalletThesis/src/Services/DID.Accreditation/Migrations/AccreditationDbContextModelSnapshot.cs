@@ -47,6 +47,10 @@ namespace DID.Accreditation.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("Name")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("ParentAccreditationId")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");

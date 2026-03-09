@@ -37,6 +37,14 @@ builder.Services.AddMassTransit(x =>
 builder.Services.AddScoped<DID.Shared.Application.Interfaces.IEventBus>(sp =>
     new RabbitMQEventBus(sp.GetRequiredService<IPublishEndpoint>()));
 builder.Services.AddScoped<DIDService>();
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+        policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod());
+});
+
 builder.Services.AddFastEndpoints();
 builder.Services.SwaggerDocument(o =>
 {
@@ -58,6 +66,7 @@ using (var scope = app.Services.CreateScope())
     await db.Database.MigrateAsync();
 }
 
+app.UseCors();
 app.UseHttpsRedirection();
 app.UseFastEndpoints();
 await app.RunAsync();
