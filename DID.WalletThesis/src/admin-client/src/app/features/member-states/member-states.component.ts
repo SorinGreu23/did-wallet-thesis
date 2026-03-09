@@ -106,7 +106,7 @@ export class MemberStatesComponent implements OnInit {
       });
   }
 
-  drillInto(ms: Accreditation): void {
+  selectMemberState(ms: Accreditation): void {
     this.navState.selectMemberState({
       did: ms.subjectDID,
       label: ms.name || ms.scope,

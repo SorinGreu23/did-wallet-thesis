@@ -14,6 +14,9 @@ contract AccreditationRegistry {
     /// @notice Reference to the EU Root Authority contract
     EURootAuthority public immutable rootAuthority;
 
+    /// @notice Address that deployed this contract (EU Root backend signer)
+    address public immutable owner;
+
     /// @notice Accreditation records
     mapping(bytes32 => Accreditation) public accreditations;
 
@@ -84,6 +87,7 @@ contract AccreditationRegistry {
 
     constructor(address _rootAuthority) {
         rootAuthority = EURootAuthority(_rootAuthority);
+        owner = msg.sender;
     }
 
     // ============ Core Functions ============
@@ -293,8 +297,8 @@ contract AccreditationRegistry {
         AccreditationScope scope,
         bytes32 parentAccreditationId
     ) private view {
-        // The root authority deployer can issue at any scope (admin/backend use)
-        bool isRootDeployer = rootAuthority.isMemberState(issuer);
+        // The contract owner (EU Root backend signer) can issue at any scope
+        bool isRootDeployer = (issuer == owner);
 
         if (scope == AccreditationScope.MemberState) {
             if (!isRootDeployer) revert NotMemberState();

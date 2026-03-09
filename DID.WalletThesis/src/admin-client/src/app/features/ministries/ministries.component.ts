@@ -109,7 +109,7 @@ export class MinistriesComponent implements OnInit {
       });
   }
 
-  drillInto(ministry: Accreditation): void {
+  selectMinistry(ministry: Accreditation): void {
     this.navState.selectMinistry({
       did: ministry.subjectDID,
       label: ministry.name || ministry.scope,

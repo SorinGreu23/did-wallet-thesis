@@ -74,6 +74,7 @@ export interface AccreditationRegistryInterface extends Interface {
       | "getTrustChain"
       | "hasValidAccreditation"
       | "issueAccreditation"
+      | "owner"
       | "revokeAccreditation"
       | "rootAuthority"
       | "validAccreditations"
@@ -123,6 +124,7 @@ export interface AccreditationRegistryInterface extends Interface {
     functionFragment: "issueAccreditation",
     values: [AddressLike, BigNumberish, BytesLike, BytesLike, BigNumberish]
   ): string;
+  encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "revokeAccreditation",
     values: [BytesLike]
@@ -176,6 +178,7 @@ export interface AccreditationRegistryInterface extends Interface {
     functionFragment: "issueAccreditation",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "revokeAccreditation",
     data: BytesLike
@@ -380,6 +383,8 @@ export interface AccreditationRegistry extends BaseContract {
     "nonpayable"
   >;
 
+  owner: TypedContractMethod<[], [string], "view">;
+
   revokeAccreditation: TypedContractMethod<
     [accreditationId: BytesLike],
     [void],
@@ -485,6 +490,9 @@ export interface AccreditationRegistry extends BaseContract {
     [string],
     "nonpayable"
   >;
+  getFunction(
+    nameOrSignature: "owner"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "revokeAccreditation"
   ): TypedContractMethod<[accreditationId: BytesLike], [void], "nonpayable">;
