@@ -21,6 +21,7 @@ public class IssueCredentialEndpoint(CredentialService service)
             req.CredentialType,
             req.CredentialHash,
             req.IssuerAccreditationId,
+            req.IssuerName,
             req.ExpiresAt,
             req.IssuerPrivateKey,
             ct);

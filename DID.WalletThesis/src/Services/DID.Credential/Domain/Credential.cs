@@ -11,6 +11,7 @@ public class Credential : Entity
     public string HolderDID { get; set; } = string.Empty;
     public string CredentialType { get; set; } = string.Empty;
     public string? IssuerAccreditationId { get; set; }
+    public string? IssuerName { get; set; }
     public CredentialStatus Status { get; set; } = CredentialStatus.Active;
     public long BlockNumber { get; set; }
     public string TransactionHash { get; set; } = string.Empty;

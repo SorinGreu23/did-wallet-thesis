@@ -3,6 +3,7 @@ using System;
 using DID.Credential.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace DID.Credential.Migrations
 {
     [DbContext(typeof(CredentialDbContext))]
-    partial class CredentialDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260315233035_AddIssuerNameToCredential")]
+    partial class AddIssuerNameToCredential
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

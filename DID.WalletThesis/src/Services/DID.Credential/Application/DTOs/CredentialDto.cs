@@ -6,6 +6,7 @@ public record CredentialDto(
     string HolderDID,
     string CredentialType,
     string? IssuerAccreditationId,
+    string? IssuerName,
     string Status,
     long BlockNumber,
     string TransactionHash,
@@ -30,6 +31,7 @@ public record IssueCredentialRequest(
     string CredentialType,
     string CredentialHash,
     string? IssuerAccreditationId,
+    string? IssuerName,
     DateTime? ExpiresAt,
     string? IssuerPrivateKey = null
 );

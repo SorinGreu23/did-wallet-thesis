@@ -13,7 +13,19 @@ export interface AccreditationChainNode {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (accreditation(); as item) {
-      <section class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <!-- backdrop -->
+      <div
+        class="modal-backdrop fixed inset-0 z-40 bg-gray-900/60 backdrop-blur-sm"
+        (click)="close.emit()"
+        aria-hidden="true"
+      ></div>
+
+      <!-- modal panel -->
+      <div class="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+      <section class="modal-panel rounded-xl border border-gray-200 bg-white shadow-2xl overflow-hidden w-full max-w-3xl max-h-[90vh] flex flex-col pointer-events-auto"
+        role="dialog" aria-modal="true"
+        (click)="$event.stopPropagation()"
+      >
         <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
           <div>
             <h2 class="text-sm font-semibold text-gray-800">Accreditation Detail</h2>
@@ -31,7 +43,7 @@ export interface AccreditationChainNode {
           </button>
         </div>
 
-        <div class="p-5 space-y-6">
+        <div class="p-5 space-y-6 overflow-y-auto">
           <div class="grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
             <div class="space-y-4">
               <div>
@@ -173,9 +185,26 @@ export interface AccreditationChainNode {
           </div>
         </div>
       </section>
+      </div>
     }
   `,
   imports: [DatePipe],
+  styles: [`
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: scale(0.95) translateY(12px); }
+      to   { opacity: 1; transform: scale(1)    translateY(0);    }
+    }
+    .modal-backdrop {
+      animation: fadeIn 180ms ease both;
+    }
+    .modal-panel {
+      animation: slideUp 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+  `],
 })
 export class AccreditationDetailPanelComponent {
   readonly accreditation = input.required<Accreditation | null>();

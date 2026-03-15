@@ -13,7 +13,10 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "EU Identity Wallet uses Face ID to protect your identity data."
+      }
     },
     "android": {
       "adaptiveIcon": {

@@ -4,6 +4,7 @@ export interface Credential {
   holderDID: string;
   credentialType: string;
   issuerAccreditationId: string | null;
+  issuerName?: string | null;
   status: string;
   blockNumber: number;
   transactionHash: string;
@@ -17,6 +18,7 @@ export interface IssueCredentialRequest {
   credentialType: string;
   credentialHash: string;
   issuerAccreditationId: string;
+  issuerName?: string | null;
   expiresAt?: string | null;
   issuerPrivateKey: string;
 }

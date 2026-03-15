@@ -148,7 +148,6 @@ export class UniversitiesComponent implements OnInit {
   inspect(university: Accreditation): void {
     this.selected.set(university);
     this.verification.set(null);
-    this.loadDiplomas(university);
   }
 
   loadDiplomas(university: Accreditation): void {
@@ -171,7 +170,7 @@ export class UniversitiesComponent implements OnInit {
   }
 
   confirmRevoke(credentialId: string): void {
-    const university = this.selected();
+    const university = this.diplomaUniversity();
     const key = this.revokeKey();
     if (!university || !key) return;
     this.credentialService.revoke(credentialId, university.subjectDID, this.revokeReason(), key).subscribe({
@@ -187,6 +186,7 @@ export class UniversitiesComponent implements OnInit {
     this.diplomaUniversity.set(university);
     this.lastIssuedDiploma.set(null);
     this.diplomaForm.reset();
+    this.loadDiplomas(university);
   }
 
   closeDiplomaForm(): void {
@@ -289,6 +289,7 @@ export class UniversitiesComponent implements OnInit {
       credentialType: 'DiplomaCredential',
       credentialHash,
       issuerAccreditationId: university.accreditationId,
+      issuerName: university.name ?? null,
       issuerPrivateKey: issuerPrivateKey!,
     };
 

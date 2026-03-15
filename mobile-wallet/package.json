@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@ethersproject/shims": "^5.8.0",
+    "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@veramo/core": "^6.0.2",
     "@veramo/core-types": "^6.0.2",
@@ -28,6 +29,7 @@
     "ethr-did-resolver": "^11.0.5",
     "expo": "~54.0.31",
     "expo-clipboard": "~8.0.8",
+    "expo-local-authentication": "~17.0.8",
     "expo-sqlite": "^16.0.10",
     "expo-status-bar": "~3.0.9",
     "key-did-resolver": "^4.0.0",

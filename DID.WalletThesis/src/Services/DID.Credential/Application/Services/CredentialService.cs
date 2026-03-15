@@ -88,6 +88,7 @@ public class CredentialService(
         string issuerDid, string holderDid, string credentialType,
         string credentialHash,
         string? issuerAccreditationId,
+        string? issuerName,
         DateTime? expiresAt,
         string? issuerPrivateKey = null,
         CancellationToken ct = default)
@@ -129,6 +130,26 @@ public class CredentialService(
 
         var onChain = await GetRequiredOnChainCredentialAsync(credentialId);
 
+        // Persist immediately so BlockchainSync's RecordIssuedAsync finds it and skips
+        if (await repository.GetByCredentialIdAsync(credentialId, ct) is null)
+        {
+            var entity = new Domain.Credential
+            {
+                CredentialId = credentialId,
+                IssuerDID = ToDid(effectiveSignerAddress),
+                HolderDID = ToDid(holderAddress),
+                CredentialType = credentialType,
+                IssuerAccreditationId = issuerAccreditationId,
+                IssuerName = issuerName,
+                Status = CredentialStatus.Active,
+                BlockNumber = 0,
+                TransactionHash = txHash,
+                IssuedAt = DateTimeOffset.FromUnixTimeSeconds((long)onChain.IssuedAtUnix).UtcDateTime,
+            };
+            await repository.AddAsync(entity, ct);
+            await repository.SaveChangesAsync(ct);
+        }
+
         logger.LogInformation(
             "Issued credential {Id} on-chain from {Issuer} to {Holder} in tx {TxHash}",
             credentialId,
@@ -136,7 +157,7 @@ public class CredentialService(
             holderAddress,
             txHash);
 
-        return ToDto(onChain, txHash, 0);
+        return ToDto(onChain, txHash, 0, issuerName);
     }
 
     public async Task<bool> RevokeAsync(
@@ -201,8 +222,16 @@ public class CredentialService(
         long blockNumber, string transactionHash, DateTime timestamp,
         CancellationToken ct = default)
     {
-        if (await repository.GetByCredentialIdAsync(credentialId, ct) is not null)
+        var existing = await repository.GetByCredentialIdAsync(credentialId, ct);
+        if (existing is not null)
         {
+            if (existing.BlockNumber == 0 && blockNumber != 0)
+            {
+                existing.BlockNumber = blockNumber;
+                existing.TransactionHash = transactionHash;
+                await repository.UpdateAsync(existing, ct);
+                await repository.SaveChangesAsync(ct);
+            }
             logger.LogWarning("Credential {Id} already recorded, skipping", credentialId);
             return;
         }
@@ -284,6 +313,7 @@ public class CredentialService(
         HolderDID: e.HolderDID,
         CredentialType: e.CredentialType,
         IssuerAccreditationId: e.IssuerAccreditationId,
+        IssuerName: e.IssuerName,
         Status: e.Status.ToString(),
         BlockNumber: e.BlockNumber,
         TransactionHash: e.TransactionHash,
@@ -402,7 +432,7 @@ public class CredentialService(
         return $"{DidPrefix}{address}";
     }
 
-    private static CredentialDto ToDto(OnChainCredentialDto credential, string transactionHash, long blockNumber)
+    private static CredentialDto ToDto(OnChainCredentialDto credential, string transactionHash, long blockNumber, string? issuerName = null)
     {
         var issuerAccreditationId = credential.IssuerAccreditationId.Any(b => b != 0)
             ? Bytes32ToHex(credential.IssuerAccreditationId)
@@ -416,6 +446,7 @@ public class CredentialService(
             HolderDID: ToDid(credential.Holder),
             CredentialType: credential.CredentialType,
             IssuerAccreditationId: issuerAccreditationId,
+            IssuerName: issuerName,
             Status: status,
             BlockNumber: blockNumber,
             TransactionHash: transactionHash,
