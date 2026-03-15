@@ -1,320 +1,314 @@
-# EU Decentralized Digital Identity System
+# EU Digital Identity Research Prototype
 
-**Bachelor's Thesis — Computer Science, Alexandru Ioan Cuza University, Iași**
-Expected Graduation: July 2026
+Bachelor's Thesis — Computer Science, Alexandru Ioan Cuza University, Iasi
 
-A hierarchical trust-chain DID system aligned with EU eIDAS 2.0, built on Ethereum smart contracts, .NET 10 microservices, a React Native mobile wallet, and a planned Angular admin console for institutional accreditation workflows.
+This repository is being reshaped into a blockchain-anchored, privacy-preserving digital identity prototype with 3 main platforms:
 
----
+1. Accreditation Platform
+2. Mobile Wallet App
+3. Verifier Platform
 
-## System Overview
+The goal is not to reproduce the full future EUDI ecosystem. The goal is to build and evaluate a focused prototype that:
 
-The blockchain is the **single source of truth**. Microservices are convenience wrappers — they cache events and expose REST APIs, but they never make authorization decisions. Smart contracts enforce all trust-chain rules on-chain.
+- enforces institutional trust and credential status on-chain
+- keeps keys under wallet control
+- uses zero-knowledge proofs as a mandatory privacy mechanism
+- aligns wallet-facing flows with EUDI-style issuance and presentation standards
+- uses off-chain services only as helpers for UX, communication, indexing, or proof execution
 
-```
-EU Root Authority (EURootAuthority.sol)
-    └── Member State (e.g. RO)
-            └── Ministry of Education
-                    └── University of Bucharest
-                            └── Issues diploma → CredentialRegistry.sol
-```
+## System Vision
 
-A German employer scans a QR code, the Romanian student submits their diploma with a ZKP (age > 21), and the Verification Service validates the full trust chain directly from the blockchain — all without trusting any individual microservice.
+### 1. Accreditation Platform
 
-For thesis scope, the primary end-to-end demo focuses on the accreditation and diploma path:
-`Member State -> Ministry -> University -> Diploma issuance -> Verification`.
-`EURootAuthority.sol` governance remains part of the smart-contract design, but a full voting UI/workflow for new member-state admission is not required for the main application demo.
+The accreditation platform is the institutional control plane.
 
----
+It is used by:
 
-## Architecture
+- EU root demo authority
+- member states
+- ministries
+- institutions
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Mobile Wallet (React Native / Expo / Veramo)                   │
-│  • DID management  • VC storage  • QR code scanning            │
-│  Angular Admin Console (planned)                                │
-│  • Accreditation chain UI  • Diploma issuance demo             │
-└────────────────────────────┬────────────────────────────────────┘
-                             │ REST / SignalR
-┌────────────────────────────▼────────────────────────────────────┐
-│                     .NET 10 Microservices                       │
-│                                                                 │
-│  Identity ──── Accreditation ──── Credential ──── Verification  │
-│  :5259         :5211               :5214           :5216        │
-│                                                                 │
-│  Presentation ── ZKP (Node.js) ── Notification ── Audit        │
-│  :5217           :3001             :5218            :5219       │
-│                                                                 │
-│  BlockchainSync (background worker — no HTTP)                   │
-└──────┬───────────────────────────────┬───────────────────────────┘
-       │ EF Core / Npgsql              │ MassTransit / RabbitMQ
-┌──────▼──────┐              ┌─────────▼──────────────────────────┐
-│ PostgreSQL  │              │  RabbitMQ (event bus)              │
-│ (per-svc DB)│              │  DIDCreated · AccreditationIssued  │
-└─────────────┘              │  CredentialIssued · Revoked …      │
-                             └──────────────────────────────────┬─┘
-                                                                │ Nethereum
-                             ┌──────────────────────────────────▼─┐
-                             │  Hardhat / Ethereum Node           │
-                             │  EURootAuthority.sol               │
-                             │  AccreditationRegistry.sol         │
-                             │  CredentialRegistry.sol            │
-                             └────────────────────────────────────┘
+It manages a hierarchical trust model:
+
+```text
+EU Root
+  -> Member State
+      -> Ministry
+          -> Institution
+              -> Credential issuance authority
 ```
 
----
+What it must do:
 
-## Implementation Status
+- register the demo member states used in the thesis scenario
+- issue scoped accreditations on-chain
+- revoke and inspect accreditations
+- show trust-chain hierarchy, status, expiry, and transaction references
+- act as an issuer/admin operator UI, not as the source of trust
 
-### Phase 0 — Foundation
-| # | Component | Status |
-|---|-----------|--------|
-| 1 | Smart Contracts (Solidity + Hardhat) | ✅ Complete |
-| 2 | Shared Libraries (`DID.Shared.*`, `DID.Contracts`) | ✅ Complete |
-| 3 | Docker Compose (PostgreSQL, RabbitMQ, Hardhat) | ✅ Complete |
+### 2. Mobile Wallet App
 
-### Phase 1 — Core Services
-| # | Service | Status |
-|---|---------|--------|
-| 4 | BlockchainSync — listens to on-chain events, publishes to RabbitMQ | ✅ Complete |
-| 5 | Identity Service — DID generation, key storage, resolution | ✅ Complete |
+The wallet is the citizen-controlled component.
 
-### Phase 2 — Accreditation & Credentials
-| # | Service | Status |
-|---|---------|--------|
-| 6 | Accreditation Service — off-chain cache of AccreditationRegistry.sol | ✅ Complete |
-| 7 | Credential Service — W3C VC issuance against CredentialRegistry.sol | ✅ Complete |
+What it must do:
 
-### Phase 3 — Verification
-| # | Service | Status |
-|---|---------|--------|
-| 8 | Verification Service — 5-step blockchain-first verification | ⏳ Pending |
-| 9 | ZKP Service (Node.js) — snarkjs age/graduation proofs | ✅ Complete |
+- hold keys locally
+- receive and store credentials
+- create privacy-preserving presentations
+- generate mandatory ZKP-backed proofs
+- share proofs through QR or time-limited request flows
+- avoid disclosing unnecessary personal data
 
-### Phase 4 — Presentation
-| # | Service | Status |
-|---|---------|--------|
-| 10 | Presentation Service — QR codes, SignalR, session management | ⏳ Pending |
-| 11 | Angular Admin Console — accreditation chain and diploma demo UI | 🚧 In Progress |
+### 3. Verifier Platform
 
-### Phase 5 — Support
-| # | Service | Status |
-|---|---------|--------|
-| 12 | Notification Service — email + push (SendGrid / FCM) | ⏳ Pending |
-| 13 | Audit Service — immutable append-only event log | ⏳ Pending |
+The verifier platform is the relying-party UI for banks, employers, and academic institutions.
 
-### Phase 6
-| # | Task | Status |
-|---|------|--------|
-| 14 | Integration & end-to-end testing | ⏳ Pending |
+What it must do:
 
-**Overall progress: 8 / 14 tasks (57%)**
+- request a presentation for a specific purpose
+- validate credential signatures and proof artifacts
+- validate credential status on-chain
+- validate issuer trust through the accreditation chain
+- return an eligibility decision without unnecessary data exposure
 
----
+## Trust Model
 
-## Tech Stack
+The blockchain is the trust anchor.
 
-| Layer | Technology |
-|-------|-----------|
-| Mobile | React Native, Expo, Veramo Framework, TypeScript |
-| Blockchain | Solidity 0.8, Hardhat, Nethereum 5.8 |
-| Microservices | .NET 10, ASP.NET Core, FastEndpoints v8 |
-| Persistence | PostgreSQL 16, EF Core, Npgsql |
-| Messaging | RabbitMQ 3.12, MassTransit |
-| ZKP | snarkjs, circom |
-| Web Admin | Angular 19, Tailwind CSS |
-| Infrastructure | Docker Compose |
+Smart contracts are responsible for:
 
----
+- trust hierarchy
+- issuer authorization
+- credential status
+- revocation and suspension
+- trust-chain validation
+- event emission
+
+Wallets and clients are responsible for:
+
+- key custody
+- DID and credential ownership
+- transaction signing
+- presentation creation
+- proof generation or proof-orchestration
+- direct verification reads when correctness matters
+
+Helper services are allowed only for:
+
+- indexing
+- relaying
+- presentation brokering
+- notification
+- proof execution assistance
+
+Helper services are not allowed to be:
+
+- key custodians
+- trust authorities
+- authorization gates
+- the only source of verification truth
+
+## EUDI Alignment
+
+This project is a research prototype aligned with the direction of the EUDI ecosystem, not a full EUDI implementation.
+
+Target alignment:
+
+- OpenID4VCI for issuance interactions
+- OpenID4VP for presentation interactions
+- EUDI-compatible credential/presentation modeling
+- minimal disclosure
+- holder-controlled consent
+- mandatory privacy-preserving proof flow
+
+Important constraint:
+
+- blockchain is the internal trust and status infrastructure
+- EUDI-style issuance and presentation protocols are the interoperability layer exposed to wallets and verifiers
+
+## Current Direction
+
+The previous repository direction emphasized many domain microservices. The new direction is:
+
+- keep the smart contracts as the center of trust
+- keep or refactor the admin client into the accreditation platform
+- refactor the mobile wallet into a real holder wallet
+- add a verifier-facing platform
+- downgrade most backend services into optional helpers
+- extract reusable client-side chain and verification logic into a shared SDK
 
 ## Repository Layout
 
-```
+```text
 did-wallet-thesis/
-├── blockchain/                    # Hardhat project — Solidity contracts + tests
-│   ├── contracts/
-│   │   ├── EURootAuthority.sol
-│   │   ├── AccreditationRegistry.sol
-│   │   └── CredentialRegistry.sol
-│   ├── scripts/deploy.ts
-│   └── test/
-│
-├── DID.WalletThesis/              # .NET solution
+├── blockchain/                    # authoritative on-chain trust logic
+├── DID.WalletThesis/
 │   └── src/
-│       ├── Shared/
-│       │   ├── DID.Contracts/             # RabbitMQ event DTOs
-│       │   ├── DID.Shared.Domain/         # Entity, ValueObject, AggregateRoot
-│       │   ├── DID.Shared.Application/    # IBlockchainService, IEventBus, IRepository
-│       │   └── DID.Shared.Infrastructure/ # Nethereum, MassTransit, EF Core impls
-│       ├── Services/
-│       │   ├── DID.BlockchainSync/        # ✅ Background worker
-│       │   ├── DID.Identity/              # ✅ port 5259
-│       │   ├── DID.Accreditation/         # ✅ port 5211
-│       │   ├── DID.Credential/            # ✅ port 5214
-│       │   ├── DID.Verification/          # ⏳ port 5216
-│       │   ├── DID.Presentation/          # ⏳ port 5217
-│       │   ├── DID.Notification/          # ⏳ port 5218
-│       │   └── DID.Audit/                 # ⏳ port 5219
-│       └── admin-client/                  # ✅ Angular admin console (ng serve)
-│
-├── mobile-wallet/                 # React Native / Expo app
-├── zkp-service/                   # ✅ Node.js snarkjs service (port 3001)
-├── docker-compose.infra.yml       # Postgres, RabbitMQ, Hardhat — start once, leave running
-├── docker-compose.services.yml    # .NET services — rebuild freely without touching infra
-├── TASKS.md                       # Detailed task breakdown
-├── IMPLEMENTATION_PLAN.md         # Architecture decisions
-└── DID.WalletThesis/DEMO.md       # End-to-end demo walkthrough
+│       ├── admin-client/          # accreditation platform UI
+│       ├── Services/              # current helper/backend services, to be reduced in authority
+│       └── Shared/
+├── mobile-wallet/                 # holder wallet
+├── zkp-service/                   # proof-generation / verification helper
+├── IMPLEMENTATION_PLAN.md         # architecture and migration strategy
+├── TASKS.md                       # execution backlog and weekly plan
+└── PROJECT_ANALYSIS_v2.md         # code-based assessment and feasibility analysis
 ```
 
----
+## Current Status Snapshot
 
-## Quick Start
+Implemented foundations:
 
-### Prerequisites
+- Solidity contracts for root authority, accreditations, and credential status
+- Hardhat project with tests and deployment scripts
+- Angular admin client scaffold with accreditation-oriented UI direction
+- React Native wallet scaffold with Veramo-based DID/VC groundwork
+- ZKP service with proof generation and verification
+- .NET services that currently expose blockchain-backed APIs, but must be demoted from trust authorities to helper roles over time
 
-| Tool | Version | Notes |
-|------|---------|-------|
-| Docker Desktop | Latest | Runs PostgreSQL, RabbitMQ, Hardhat node |
-| .NET 10 SDK | 10.0+ | Microservices |
-| Node.js | 20+ | Blockchain scripts, mobile wallet |
-| Xcode | 16+ | iOS simulator (macOS only) |
-| Expo CLI | Latest | `npm install -g expo-cli` |
+Main architectural gaps still to close:
 
-### 1. Start infrastructure
+- contract / service mismatch in the credential flow
+- incomplete EUDI-compatible issuance and presentation flows
+- mobile wallet not yet aligned with the final identity and privacy model
+- verifier platform not yet implemented as a coherent product
+- backend still too authoritative in several places
 
-Infrastructure (Postgres, RabbitMQ, Hardhat) persists state across restarts via named Docker volumes. Start it once and leave it running:
+## This Week's Goal
 
-```bash
-docker compose -f docker-compose.infra.yml up -d
-```
+The immediate milestone is not the whole thesis platform. It is a finished accreditation-platform vertical slice plus mobile-wallet refactoring groundwork.
 
-Hardhat chain state is saved to the `hardhat_state` volume — contracts stay at the same addresses and your on-chain data survives container restarts. Databases are created automatically on first boot via `docker/postgres/init.sql`.
+By the end of this week, the target is:
 
-To fully reset (wipe chain + all data):
+- a presentable accreditation platform demo
+- stable on-chain issuance, listing, revocation, and verification for accreditations
+- trust-chain visualization in the admin UI
+- a refactored mobile-wallet foundation prepared for real holder credentials and ZKP-backed presentations
 
-```bash
-docker compose -f docker-compose.infra.yml down -v
-docker compose -f docker-compose.infra.yml up -d
-```
+## Week-by-Week Roadmap
 
-### 2. Start .NET services
+### Week 1 — March 9 to March 15
 
-```bash
-docker compose -f docker-compose.services.yml up -d --build
-```
+Focus:
 
-Rebuild a single service after changes without touching infra or other services:
+- finish the accreditation platform
+- refactor the mobile wallet foundation
 
-```bash
-docker compose -f docker-compose.services.yml up -d --build accreditation
-```
+Expected deliverables:
 
-Migrations apply automatically on startup.
+- admin UI for actor selection, accreditation issuance, list, detail, revoke, and verify
+- stable accreditation service and contract path for the demo
+- trust-chain display in the UI
+- mobile-wallet refactor plan started or partially executed
+- wallet code cleaned up around DID, credential, and storage boundaries
 
-| Service | URL | Swagger |
-|---------|-----|---------|
-| Identity | http://localhost:5259 | http://localhost:5259/swagger |
-| Accreditation | http://localhost:5211 | http://localhost:5211/swagger |
-| Credential | http://localhost:5214 | http://localhost:5214/swagger |
-| ZKP Service | http://localhost:3001 | — |
+### Week 2 — March 16 to March 22
 
-### 3. Start Angular admin console
+Focus:
 
-```bash
-cd DID.WalletThesis/src/admin-client
-npm install
-ng serve
-```
+- stabilize credential path and remove contract/service drift
+- define the final identity model and credential format strategy
 
-Open http://localhost:4200.
+Expected deliverables:
 
-### 4. Run mobile wallet
+- credential contract/API compatibility fixed
+- final DID / identifier strategy documented
+- shared client SDK structure started
+- mobile wallet ready to receive real thesis credentials instead of demo-only self-issued ones
 
-```bash
-cd mobile-wallet
-npm install
-npx expo start --ios
-```
+### Week 3 — March 23 to March 29
 
-Press `i` to open the iOS simulator, or scan the QR code with the Expo Go app on a physical device.
+Focus:
 
-See [DID.WalletThesis/DEMO.md](DID.WalletThesis/DEMO.md) for a full blockchain-to-API walkthrough.
+- wallet-first credential issuance flow
+- start EUDI-aligned issuance orchestration
 
-The Angular admin console is planned after the Verification Service is stable. It will provide a browser-based demo flow for accreditation hierarchy management and diploma issuance.
+Expected deliverables:
 
----
+- institution-side issuance flow clarified
+- wallet receives and stores thesis credentials
+- shared SDK handles contract reads and normalization
+- OpenID4VCI-aligned flow design documented or partially implemented
 
-## API Reference (Implemented Services)
+### Week 4 — March 30 to April 5
 
-### Identity Service — `POST /api/dids`
+Focus:
 
-```json
-{ "controllerAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" }
-```
+- verifier platform foundation
+- presentation request and response flow
 
-Returns a W3C DID Document with `did:ethr:sepolia:{address}` format and secp256k1 keys.
+Expected deliverables:
 
-Other endpoints: `GET /api/dids/{did}`, `GET /api/dids/{did}/keys`
+- verifier UI scaffold
+- verifier request model
+- QR or challenge-based flow between verifier and wallet
+- initial on-chain verification path for credentials and issuer trust
 
-### Accreditation Service — port 5211
+### Week 5 — April 6 to April 12
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/accreditations` | Issue on-chain accreditation |
-| GET | `/api/accreditations` | List (filter by `issuerDid`, `subjectDid`, `scope`) |
-| GET | `/api/accreditations/{id}` | Resolve |
-| GET | `/api/accreditations/{id}/verify` | Verify blockchain-backed status and trust-chain validity |
-| DELETE | `/api/accreditations/{id}` | Revoke on-chain |
-| GET | `/api/config` | Returns runtime config (e.g. `euRootDid`) derived from the backend signer |
+Focus:
 
-### Credential Service — port 5214
+- mandatory ZKP integration in the holder-to-verifier flow
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/credentials` | Issue credential (calls CredentialRegistry.sol) |
-| GET | `/api/credentials` | List (filter by `issuerDid` / `holderDid`) |
-| GET | `/api/credentials/{id}` | Resolve credential |
-| GET | `/api/credentials/{id}/verify` | Verify status from blockchain |
-| DELETE | `/api/credentials/{id}` | Revoke on-chain |
-| POST | `/api/credentials/{id}/suspend` | Suspend credential on-chain |
+Expected deliverables:
 
-### ZKP Service — port 3001
+- wallet prepares ZKP-backed disclosure
+- verifier validates proof and on-chain status together
+- at least one real scenario works end to end
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/zkp/generate/age` | Generate age proof (`birthYear`, `currentYear`, `threshold`) |
-| POST | `/zkp/generate/graduation-year` | Generate graduation year range proof |
-| POST | `/zkp/verify` | Verify any proof (`circuitName`, `proof`, `publicSignals`) |
-| GET | `/health` | Health check |
+### Week 6 — April 13 to April 19
 
----
+Focus:
 
-## Standards & Compliance
+- end-to-end scenario hardening
+- reduce backend authority
 
-| Standard | Status |
-|----------|--------|
-| W3C DID Core 1.0 | Implemented |
-| W3C Verifiable Credentials 1.1 | Implemented (mobile wallet) |
-| eIDAS 2.0 trust hierarchy | Implemented (smart contracts) |
-| OpenID4VP / OpenID4VCI | Planned (Presentation Service) |
-| SD-JWT | Planned |
+Expected deliverables:
 
----
+- services re-scoped as indexer, broker, relay, or helper only
+- clearer trust boundaries in code and docs
+- demo path works with minimal backend trust assumptions
 
-## Key Design Decisions
+### Week 7 — April 20 to April 26
 
-- **Blockchain is the source of truth.** Smart contracts always validate authorization on-chain; microservices never act as gatekeepers.
-- **Clean Architecture per service.** Domain → Application → Infrastructure → Endpoints, no cross-layer shortcuts.
-- **Event-driven sync.** BlockchainSync polls the chain, writes to PostgreSQL, and publishes to RabbitMQ. Other services consume events to maintain off-chain caches.
-- **FastEndpoints** over MVC controllers — minimal overhead, request/response classes, vertical slice per endpoint.
-- **Thesis demo scope is deliberately narrow.** Full EU governance voting is kept at contract/design level; the implemented application demo focuses on accreditation hierarchy and diploma issuance.
-- **Separate operator and holder UX.** The mobile wallet remains holder-facing, while the planned Angular admin console will handle institutional accreditation and issuance workflows.
+Focus:
 
----
+- thesis demo polishing
+- documentation and architecture hardening
 
-## License
+Expected deliverables:
 
-Academic research project — for educational purposes.
+- stable 3-platform narrative
+- polished accreditation platform
+- stable wallet flow
+- stable verifier flow
+- updated diagrams, README, plan, and thesis notes
 
-**Alexandru Ioan Cuza University, Iași — Faculty of Computer Science**
+### Week 8 — April 27 to May 3
+
+Focus:
+
+- buffer, bug fixing, presentation preparation
+
+Expected deliverables:
+
+- rehearsable demo
+- stable screenshots and architecture explanation
+- explicit limitations and future-work framing
+
+## What “Done” Means for the Thesis
+
+The thesis is in a good state if these are true:
+
+1. Accreditation hierarchy works and is demonstrable.
+2. Wallet stores and presents real thesis credentials.
+3. Verifier checks trust and eligibility without depending on a trusted backend answer.
+4. ZKP is part of the live privacy story, not a side experiment.
+5. EUDI alignment is visible in the issuance and presentation design.
+6. Off-chain services are helpers, not trust anchors.
+
+## Where to Look Next
+
+- [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the target architecture and migration strategy
+- [TASKS.md](TASKS.md) for the execution backlog and weekly breakdown
+- [PROJECT_ANALYSIS_v2.md](PROJECT_ANALYSIS_v2.md) for the feasibility and risk analysis

@@ -14,23 +14,23 @@ public class OnChainCredentialDto
     [Parameter("address", "holder", 3)]
     public string Holder { get; set; } = string.Empty;
 
-    [Parameter("string", "credentialType", 4)]
+    [Parameter("bytes32", "credentialHash", 4)]
+    public byte[] CredentialHash { get; set; } = [];
+
+    [Parameter("string", "credentialType", 5)]
     public string CredentialType { get; set; } = string.Empty;
 
-    [Parameter("bytes32", "issuerAccreditationId", 5)]
-    public byte[] IssuerAccreditationId { get; set; } = [];
+    [Parameter("uint8", "status", 6)]
+    public int Status { get; set; }
 
-    [Parameter("uint256", "issuedAt", 6)]
+    [Parameter("uint256", "issuedAt", 7)]
     public System.Numerics.BigInteger IssuedAtUnix { get; set; }
 
-    [Parameter("uint256", "expiresAt", 7)]
+    [Parameter("uint256", "expiresAt", 8)]
     public System.Numerics.BigInteger ExpiresAtUnix { get; set; }
 
-    [Parameter("bool", "revoked", 8)]
-    public bool Revoked { get; set; }
-
-    [Parameter("bool", "suspended", 9)]
-    public bool Suspended { get; set; }
+    [Parameter("bytes32", "issuerAccreditationId", 9)]
+    public byte[] IssuerAccreditationId { get; set; } = [];
 
     [Parameter("bool", "exists", 10)]
     public bool Exists { get; set; }

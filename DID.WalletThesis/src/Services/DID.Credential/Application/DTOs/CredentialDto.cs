@@ -28,15 +28,20 @@ public record IssueCredentialRequest(
     string IssuerDID,
     string HolderDID,
     string CredentialType,
+    string CredentialHash,
     string? IssuerAccreditationId,
-    DateTime? ExpiresAt
+    DateTime? ExpiresAt,
+    string? IssuerPrivateKey = null
 );
 
 public record RevokeCredentialRequest(
     string RevokedByDID,
-    string Reason
+    string Reason,
+    string? RevokedByPrivateKey = null
 );
 
 public record SuspendCredentialRequest(
-    string SuspendedByDID
+    string SuspendedByDID,
+    string Reason,
+    string? SuspendedByPrivateKey = null
 );

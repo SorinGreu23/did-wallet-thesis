@@ -19,8 +19,10 @@ public class IssueCredentialEndpoint(CredentialService service)
             req.IssuerDID,
             req.HolderDID,
             req.CredentialType,
+            req.CredentialHash,
             req.IssuerAccreditationId,
             req.ExpiresAt,
+            req.IssuerPrivateKey,
             ct);
         await Send.CreatedAtAsync<ResolveCredentialEndpoint>(
             new { credentialId = result.CredentialId }, result, cancellation: ct);

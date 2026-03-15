@@ -18,7 +18,7 @@ public class CredentialIssuedConsumer(
             issuerDid: msg.IssuerDID,
             holderDid: msg.HolderDID,
             credentialType: msg.CredentialType,
-            issuerAccreditationId: null,
+            issuerAccreditationId: msg.IssuerAccreditationId,
             blockNumber: msg.BlockNumber,
             transactionHash: msg.TransactionHash,
             timestamp: msg.Timestamp,

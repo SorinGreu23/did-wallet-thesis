@@ -1,1466 +1,831 @@
-# Development Plan: 9 Microservices for DID Wallet Thesis
+# Implementation Plan: Decentralized-First DID System
 
 ## Executive Summary
 
-**Project:** Bachelor's thesis - EU Decentralized Digital Identity System with hierarchical trust chains
+This plan replaces the previous service-centric architecture with a decentralized-first architecture.
 
-**Current State:**
-- ✅ Mobile wallet (React Native/Expo) fully implemented with DID and credential management
-- ✅ Smart contracts implemented, compiled, tested, deployed (Hardhat via Docker, chainId 31337)
-- ✅ Docker Compose infrastructure (PostgreSQL 16, RabbitMQ 3.12, Hardhat node)
-- ✅ DID.Contracts — RabbitMQ event DTOs for all services
-- ✅ DID.Shared.Domain / Application / Infrastructure — shared base classes + Nethereum/MassTransit/EF Core implementations
-- ✅ All 9 .NET microservice projects scaffolded in solution
-- ✅ BlockchainSync Service — fully implemented (event listener → PostgreSQL + RabbitMQ)
-- ✅ Identity Service — fully implemented (DID generation, key pairs, resolution, Swagger, README)
-- ✅ Accreditation Service — fully implemented (event consumers, REST API, verify/revoke, Swagger, README)
-- ✅ Credential Service — fully implemented (issue/revoke/suspend on-chain, CredentialRegistry.sol, Swagger)
-- ✅ ZKP Service — fully implemented (circom circuits, snarkjs groth16, age + graduation-year proofs, Docker)
-- ⏳ Verification Service — next priority (5-step blockchain-first verification)
-- ⏳ Angular Admin Console — planned after Verification Service for accreditation and diploma demo flows
-- ⏳ Remaining 3 microservices (Presentation, Notification, Audit)
+Target outcome:
 
-**Core Architectural Principle:**
-> **Blockchain is the source of truth — NOT microservices.**
->
-> Smart contracts always validate authorization on-chain. Microservices are convenience wrappers only (off-chain storage, event listeners, UI helpers). Microservices NEVER make authorization decisions, validate trust chains, or act as gatekeepers.
+- Smart contracts remain the only trust anchor and authorization layer.
+- Wallets hold keys and sign transactions or presentations directly.
+- Clients read blockchain state directly when correctness matters.
+- Helper services exist only for communication, indexing, relaying, notification, and UX acceleration.
+- No helper service is allowed to be a source of truth, a key custodian, or an authorization gatekeeper.
 
-**9 Microservices — Implementation Status:**
-1. ✅ Identity Service - DID document generation, key pair storage (port 5259)
-2. ✅ Accreditation Service - off-chain cache of AccreditationRegistry.sol events (port 5211)
-3. ✅ Credential Service - W3C VC generation, calls CredentialRegistry.sol (port 5214)
-4. ⏳ Verification Service - Orchestrates 5-step verification reading from blockchain (port 5216)
-5. ✅ Blockchain Sync Service - Event listener, mirrors blockchain to PostgreSQL, publishes to RabbitMQ
-6. ⏳ Presentation Service - QR codes, SignalR for holder-verifier communication (port 5217)
-7. ✅ ZKP Service (Node.js) - Zero-knowledge proof generation/verification (port 3001)
-8. ⏳ Notification Service - Email (SendGrid), push (FCM) (port 5218)
-9. ⏳ Audit Service - Event sourcing, immutable audit logs (port 5219)
+This is the architectural position the thesis should aim to defend:
 
-**Timeline:** 14 weeks across 6 phases
+> The blockchain enforces institutional trust and credential status.
+> Wallets control identities and credentials.
+> Off-chain services only improve usability, interoperability, and performance.
+
+This also fits the thesis scope better than the current 9-microservice plan.
+
+- Full member-state voting for EU adherence remains outside application scope.
+- Root governance may remain part of the contract design and contract tests.
+- The thesis delivery focus is the vertical slice:
+  `Member State -> Ministry -> Institution -> Credential issuance -> Holder wallet -> Verifier check -> ZKP-backed presentation`
+- The wallet-facing and verifier-facing flows must align with EUDI standards, especially OpenID4VCI, OpenID4VP, and EUDI-compatible credential and presentation formats.
 
 ---
 
-## Table of Contents
+## 1. Core Design Principles
 
-1. [Trust Hierarchy](#trust-hierarchy)
-2. [Development Philosophy](#development-philosophy)
-3. [Phase 0: Foundation & Prerequisites](#phase-0-foundation--prerequisites)
-4. [Phase 1: Core Infrastructure Services](#phase-1-core-infrastructure-services)
-5. [Phase 2: Accreditation & Credential Services](#phase-2-accreditation--credential-services)
-6. [Phase 3: Verification Services](#phase-3-verification-services)
-7. [Phase 4: Presentation & Communication](#phase-4-presentation--communication)
-8. [Phase 5: Support Services](#phase-5-support-services)
-9. [Phase 6: Integration & Testing](#phase-6-integration--testing)
-10. [Critical Implementation Patterns](#critical-implementation-patterns)
-11. [Configuration Strategy](#configuration-strategy)
-12. [Testing Strategy](#testing-strategy)
-13. [Success Criteria](#success-criteria)
+### 1.1 Non-negotiable principles
 
----
+1. Smart contracts make authorization decisions.
+2. Wallets hold private keys.
+3. Credentials are issued by issuer wallets, not by backend-owned service keys.
+4. Verification reads from blockchain or from cryptographically verifiable artifacts.
+5. Helper services may cache, relay, notify, or index, but they may never override on-chain truth.
+6. Every helper service must be optional from a trust perspective.
+7. Zero-knowledge proof support is mandatory in the holder-to-verifier flow, not an optional enhancement.
+8. Wallet-facing issuance and presentation flows must align with EUDI standards rather than ad hoc custom APIs.
 
-## Trust Hierarchy
+### 1.2 What must no longer happen
 
-Every arrow is enforced by smart contract logic:
+The decentralized target architecture explicitly avoids these patterns:
 
-```
-EU Root Authority (EURootAuthority.sol - multi-sig governance, 66% approval)
-  → Member State (AccreditationRegistry.sol - checks isMemberState())
-    → Ministry (AccreditationRegistry.sol - validates parent chain)
-      → Institution (AccreditationRegistry.sol - validates parent chain)
-        → Credential (CredentialRegistry.sol - validates issuer accreditation)
-```
+- backend-generated DIDs as the primary identity model
+- backend custody of issuer or holder private keys
+- backend authorization decisions based on local databases
+- backend-only verification results treated as authoritative
+- service-to-service trust chains that are not independently reproducible from on-chain state
+- wallet flows that are disconnected from the same DID and credential model used by contracts
 
-### Three-Layer Trust Anchor
+### 1.3 Honest decentralization boundary
 
-Solves the bootstrapping problem:
+The system can still use helper infrastructure without breaking decentralization, as long as the following is true:
 
-1. **Institutional Trust:** europa.eu publishes DID configuration with contract addresses (GPG-signed)
-2. **Cryptographic Trust:** Deployment ceremony with 18+ EU member state witness signatures stored on-chain
-3. **Bidirectional Verification:** Website publishes contract address, contract stores `did:web:europa.eu`
+- if an indexer goes down, verification is slower but still possible
+- if a relay goes down, users can still submit transactions directly
+- if a notification service goes down, credentials still work
+- if a presentation broker goes down, wallets can still exchange signed requests and responses by another channel
+
+That is the correct decentralization test.
 
 ---
 
-## Development Philosophy
+## 2. Target Architecture
 
-### Blockchain-First Pattern
+## 2.1 High-level architecture
 
-**ALWAYS:**
-```csharp
-var isAuthorized = await _blockchain.CallContractAsync<bool>(
-    "AccreditationRegistry",
-    "hasValidAccreditation",
-    issuerAddress,
-    scope
-);
+```text
+Issuer Wallet / Admin Wallet          Holder Wallet                   Verifier App / Wallet
+- holds issuer keys                   - holds holder keys             - creates verification requests
+- issues accreditations               - stores credentials            - validates proofs and status
+- issues credentials                  - creates presentations         - reads blockchain directly
+          \                                 |                                 /
+           \                                |                                /
+            \                               |                               /
+             ---------------- Ethereum / EVM Blockchain -------------------
+                              - EURootAuthority
+                              - AccreditationRegistry
+                              - CredentialRegistry
+
+Optional helper layer (non-authoritative):
+- Indexer / Event mirror
+- Relay / gas sponsor
+- Presentation broker
+- Notification service
+- ZKP proving helper or verifier helper
 ```
 
-**NEVER:**
-```csharp
-var issuer = await _repository.GetAsync(issuerDID);
-var isAuthorized = issuer.IsAuthorized; // ❌ CENTRALIZED!
-```
+## 2.2 Responsibility split
 
-### Clean Architecture
+### On-chain
 
-Each .NET service has its own `Domain/ → Application/ → Infrastructure/ → Workers or Controllers/` layers. Shared infrastructure (Nethereum, MassTransit, EF Core base classes) lives in `DID.Shared.*` projects to avoid duplication.
+Smart contracts are responsible for:
 
-**Shared projects:**
-- `DID.Contracts` — RabbitMQ event DTOs (records only, no logic)
-- `DID.Shared.Domain` — `Entity`, `ValueObject`, `AggregateRoot` base classes
-- `DID.Shared.Application` — `IBlockchainService`, `IEventBus`, `IRepository<T>` interfaces
-- `DID.Shared.Infrastructure` — `BlockchainService` (Nethereum), `RabbitMQEventBus`, `BaseRepository<T,TContext>`
+- trust hierarchy
+- issuer authorization
+- credential status
+- revocation / suspension
+- accreditation-chain validation
+- immutable event emission
 
-```
-DID.WalletThesis/src/
-├── Contracts/
-│   └── DID.Contracts/              ← event DTOs (records)
-├── Shared/
-│   ├── DID.Shared.Domain/          ← base entities/value objects
-│   ├── DID.Shared.Application/     ← interfaces
-│   └── DID.Shared.Infrastructure/  ← Nethereum, MassTransit, EF Core impls
-└── Services/
-    ├── DID.BlockchainSync/     ← ✅ implemented
-    ├── DID.Identity/           ← ✅ implemented
-    ├── DID.Accreditation/      ← ✅ implemented
-    ├── DID.Credential/         ← ✅ implemented
-    ├── DID.Verification/       ← ⏳ next
-    ├── DID.Presentation/       ← ⏳
-    ├── DID.Notification/       ← ⏳
-    └── DID.Audit/              ← ⏳
-```
+### Wallets / clients
 
-### Event-Driven Architecture
+Clients are responsible for:
 
-RabbitMQ + MassTransit for asynchronous communication. Blockchain Sync Service is the single source of blockchain state updates.
+- key generation and storage
+- DID ownership
+- transaction signing
+- VC creation and storage
+- presentation creation
+- proof submission
+- direct verification reads when high assurance is required
 
-### Demo Scope Boundary
+### Helper services
 
-To keep the thesis focused, the end-to-end demo prioritizes the accreditation and diploma issuance chain, not full EU governance orchestration.
+Helper services are responsible only for:
 
-- `EURootAuthority.sol` governance and voting remain part of the contract design and contract-level tests.
-- The implemented demo may bootstrap one or more member states for local scenarios instead of building a full voting UI/workflow.
-- The primary application demo target is: `Member State -> Ministry -> University -> Diploma issuance -> Verification`.
-- A dedicated Angular admin/demo console will be added after the Credential Service is stable.
+- indexing events for fast UI queries
+- relaying transactions if gas abstraction is needed
+- brokering presentation sessions between verifier and holder
+- sending notifications
+- generating ZK proofs when client-side proving is too heavy
+
+They are not responsible for:
+
+- issuing identities as an authority
+- deciding who is accredited
+- deciding whether a credential is valid
+- owning private keys for institutional actors
+- acting as the mandatory path for verification
 
 ---
 
-## PHASE 0: Foundation & Prerequisites (Week 1-2)
+## 3. Identity Model
 
-**Status:** ✅ Complete
+## 3.0 EUDI alignment requirements
 
-### 0.1 Smart Contracts ✅ COMPLETED
+If the project must align with EUDI standards, the blockchain layer cannot be the only thing that defines interoperability.
 
-**Directory Structure:**
-```
-blockchain/
-├── contracts/
-│   ├── EURootAuthority.sol       ✅ Implemented
-│   ├── AccreditationRegistry.sol ✅ Implemented
-│   └── CredentialRegistry.sol    ✅ Implemented
-├── scripts/
-│   └── deploy.ts                 ✅ Implemented
-├── test/
-│   ├── EURootAuthority.test.ts   ✅ Implemented
-│   ├── AccreditationRegistry.test.ts ✅ Implemented
-│   └── CredentialRegistry.test.ts    ✅ Implemented
-├── abis/ (will be generated on compile)
-├── hardhat.config.ts             ✅ Implemented
-└── package.json                  ✅ Implemented
-```
+The plan must therefore separate two concerns:
 
-**Key Functions Implemented:**
+- blockchain as internal trust and status infrastructure
+- EUDI-compatible issuance and presentation protocols as the external interoperability layer
 
-**EURootAuthority.sol:**
-- `isMemberState(address)` - Source of truth for EU membership
-- `verifyDeploymentCeremony()` - Validates witness signatures
-- `bootstrapMemberStates()` - One-time initialization
-- Multi-sig governance with 66% approval threshold
+Required EUDI alignment targets for the thesis architecture:
 
-**AccreditationRegistry.sol:**
-- `issueAccreditation()` - Validates parent chain before issuing
-- `validateTrustChain(bytes32)` - Walks chain up to root
-- `hasValidAccreditation(address, scope)` - Authorization check
-- `getTrustChain(bytes32)` - Reconstruct full chain
+- OpenID4VCI for credential issuance interactions
+- OpenID4VP for presentation and verifier request flows
+- EUDI-compatible credential formats, with priority given to SD-JWT VC and/or ISO mdoc where appropriate for the selected use case
+- wallet-controlled keys and holder-controlled presentations
+- minimal disclosure, with ZKP or selective-disclosure mechanisms built into the demonstration path
 
-**CredentialRegistry.sol:**
-- `recordCredential()` - Validates issuer has institution-level accreditation
-- `isActive(bytes32)` - Check credential status
-- `revokeCredential()` - Mark credential as revoked
-- `verifyCredential()` - Complete verification (status + trust chain)
-- `batchVerifyCredentials()` - Batch verification
+Practical implication:
 
-**Completed:**
-- ✅ `npm install` run, all tests passing
-- ✅ Deployed to local Hardhat network — addresses in `blockchain/deployments/latest.json`
-- ✅ ABIs exported to `blockchain/abis/`
-- ✅ TypeScript bindings (typechain-types) generated
+- the blockchain should anchor accreditation and credential status
+- the wallet should speak EUDI-style issuance and presentation protocols
+- helper services may assist protocol exchange, but they should not become the trust anchor
 
----
+## 3.1 Required identity strategy
 
-### 0.2 Shared Contracts Project ✅ COMPLETED
+The current project mixes `did:ethr:sepolia`, `did:key`, and `did:web` without clear boundaries. The revised plan must make this explicit.
 
-**Architecture decision:** No shared Domain/Infrastructure libraries. Each service is fully self-contained. The only shared project is a thin contracts library for RabbitMQ message DTOs.
+Recommended model:
 
-**Location:** `DID.WalletThesis/src/Contracts/DID.Contracts/`
+- Institutional actors: expose EUDI-compatible identifiers and metadata to external parties; if DIDs are used, prefer methods that are easier to align with public trust infrastructure and interoperability, such as `did:web` or another explicitly supported method for your chosen wallet flow.
+- Holder wallets: use the identifier model most compatible with the selected EUDI issuance/presentation flow; do not leave this as an open-ended mix in the final thesis design.
+- Blockchain addresses remain internal authorization anchors for smart contracts, but they should not be the only interoperability surface exposed to wallets and verifiers.
 
-```
-DID.Contracts/
-├── Identity/
-│   └── DIDCreatedEvent.cs
-├── Accreditation/
-│   ├── AccreditationIssuedEvent.cs
-│   └── AccreditationRevokedEvent.cs
-├── Credential/
-│   ├── CredentialIssuedEvent.cs
-│   ├── CredentialRevokedEvent.cs
-│   └── CredentialSuspendedEvent.cs
-└── Verification/
-    └── VerificationCompletedEvent.cs
-```
+### Recommended thesis choice
 
-**Per-service NuGet packages (added to each service individually):**
-- Nethereum.Web3
-- MassTransit
-- MassTransit.RabbitMQ
-- Npgsql.EntityFrameworkCore.PostgreSQL
-- Serilog.AspNetCore
+For maximum coherence with both the current contracts and EUDI-style interoperability, use a dual-layer identity model:
 
-**IBlockchainService pattern (defined and implemented within each service):**
-```csharp
-public interface IBlockchainService
-{
-    Task<T> CallContractAsync<T>(string contractName, string functionName, params object[] args);
-    Task<string> SubmitTransactionAsync(TransactionData transaction);
-    Task<TransactionReceipt> WaitForConfirmationAsync(string txHash, CancellationToken ct = default);
-    Task SubscribeToEventAsync<TEventDTO>(string contractName, string eventName,
-        Func<TEventDTO, Task> handler) where TEventDTO : class, new();
-}
-```
+- smart-contract authorization keyed by blockchain addresses
+- wallet and verifier interoperability keyed by EUDI-compatible credential exchange identifiers and metadata
+- public institutional metadata exposed in a standards-friendly form rather than only as `did:ethr`
+
+If holders use `did:key` or another non-address DID method, the plan must explicitly define how that identifier is bound to an on-chain holder address for credential status lookup and presentation.
+
+If simplicity is the priority for the demo, you may still use address-based blockchain identifiers internally, but the issuance and presentation layer should still be modeled around EUDI-compatible flows rather than raw custom REST endpoints.
+
+## 3.2 Remove Identity Service as an authority
+
+The current Identity Service should not remain a source of truth for DID creation.
+
+Replace it with one of these roles:
+
+- a thin DID helper API that formats DID Documents from public blockchain data only
+- a client SDK module inside the wallet and admin app
+- an optional resolver cache, never authoritative
+
+New rule:
+
+- DIDs are created by wallets or admin clients locally.
+- The backend does not mint identities for users.
+- The backend may expose convenience resolution, but resolution must be derivable without trusting it.
 
 ---
 
-### 0.3 Docker Compose Infrastructure ✅ COMPLETED
+## 4. Credential and Accreditation Model
 
-**Location:** `docker-compose.yml` in project root
+## 4.1 Accreditation issuance
 
-```yaml
-version: '3.8'
+Target model:
 
-services:
-  postgres:
-    image: postgres:16
-    container_name: did-postgres
-    environment:
-      POSTGRES_USER: did_admin
-      POSTGRES_PASSWORD: dev_password
-      POSTGRES_DB: did_platform
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U did_admin"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+- institutional admin wallet signs and submits accreditation transactions directly to the blockchain
+- the smart contract validates whether the issuer is allowed to issue that accreditation
+- UI clients may optionally use a relay helper if direct transaction submission is inconvenient
 
-  rabbitmq:
-    image: rabbitmq:3.12-management
-    container_name: did-rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_USER: did_admin
-      RABBITMQ_DEFAULT_PASS: dev_password
-    ports:
-      - "5672:5672"   # AMQP
-      - "15672:15672" # Management UI
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+This replaces the current model where an API service performs issuance using configured keys or request-supplied private keys.
 
-  hardhat:
-    build: ./blockchain
-    container_name: did-hardhat
-    ports:
-      - "8545:8545"
-    command: npx hardhat node
-    volumes:
-      - ./blockchain:/app
+## 4.2 Credential issuance
 
-volumes:
-  postgres_data:
-  rabbitmq_data:
-```
+Target model:
 
-**Verification Commands:**
-```bash
-docker-compose up -d
-docker-compose ps  # All services healthy
-curl http://localhost:15672  # RabbitMQ management (guest:guest)
-psql -h localhost -U did_admin -d did_platform  # PostgreSQL
-curl -X POST http://localhost:8545 -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'  # Hardhat
-```
+- issuer wallet creates the VC payload locally
+- issuer wallet signs the VC locally
+- issuer wallet submits the credential-status anchor to the blockchain directly
+- holder receives the signed VC directly or via a presentation/issuance helper channel
+
+The credential service should no longer be a credential issuer in the trust sense.
+
+It may remain only as:
+
+- an OpenID4VCI helper
+- a transaction relay
+- a VC delivery broker
+- an indexing/query helper
+
+## 4.3 Verification
+
+Target model:
+
+- verifier obtains VC or VP from holder
+- verifier validates cryptographic signature locally
+- verifier checks credential status on-chain directly
+- verifier checks issuer accreditation chain on-chain directly
+- verifier validates the mandatory ZKP locally or with a helper verifier service
+
+The verification helper service, if kept, must be non-authoritative.
+
+New rule:
+
+- any verification result returned by a backend must be reproducible independently by the verifier from the same VC, proof, and blockchain state
 
 ---
 
-## PHASE 1: Core Infrastructure Services (Week 3-4)
+## 5. Helper Services That Still Make Sense
 
-### 1.1 Blockchain Sync Service (HIGHEST PRIORITY)
+A fully decentralized architecture does not mean "no services at all". It means services stop being trust anchors.
 
-**Why first?** All other services depend on blockchain state being synced to PostgreSQL for fast queries.
+## 5.1 Indexer Service
 
-**Location:** `DID.WalletThesis/src/Services/DID.BlockchainSync/`
+Keep a helper equivalent of `BlockchainSync`, but redefine it as an indexer rather than as infrastructure all other services depend on.
 
-**Structure:**
-```
-DID.BlockchainSync/
-├── Domain/
-│   ├── Entities/
-│   │   ├── SyncedBlock.cs
-│   │   ├── SyncedTransaction.cs
-│   │   └── SyncedEvent.cs
-│   └── Interfaces/
-│       └── ISyncRepository.cs
-│
-├── Application/
-│   ├── Services/
-│   │   ├── BlockchainSyncService.cs
-│   │   └── EventProcessingService.cs
-│   └── Handlers/
-│       ├── AccreditationEventHandler.cs
-│       └── CredentialEventHandler.cs
-│
-├── Infrastructure/
-│   ├── Persistence/
-│   │   ├── SyncDbContext.cs
-│   │   └── SyncRepository.cs
-│   └── Blockchain/
-│       └── EventListener.cs
-│
-└── API/
-    ├── Workers/
-    │   └── BlockchainSyncWorker.cs  # Background service
-    ├── Controllers/
-    │   └── SyncController.cs
-    └── Program.cs
-```
+Responsibilities:
 
-**Database Schema:**
-```sql
-CREATE TABLE synced_blocks (
-    block_number BIGINT PRIMARY KEY,
-    block_hash VARCHAR(66) NOT NULL,
-    timestamp TIMESTAMP NOT NULL,
-    synced_at TIMESTAMP DEFAULT NOW()
-);
+- subscribe to contract events
+- store searchable event history
+- expose query APIs for UI convenience
+- speed up dashboards and filtering
 
-CREATE TABLE synced_events (
-    id UUID PRIMARY KEY,
-    event_type VARCHAR(100) NOT NULL,
-    contract_address VARCHAR(42) NOT NULL,
-    block_number BIGINT NOT NULL,
-    transaction_hash VARCHAR(66) NOT NULL,
-    log_index INT NOT NULL,
-    event_data JSONB NOT NULL,
-    processed BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT NOW(),
-    FOREIGN KEY (block_number) REFERENCES synced_blocks(block_number)
-);
+Non-responsibilities:
 
-CREATE INDEX idx_events_type ON synced_events(event_type);
-CREATE INDEX idx_events_block ON synced_events(block_number);
-CREATE INDEX idx_events_processed ON synced_events(processed);
-```
+- no authorization decisions
+- no issuance rights
+- no canonical verification results
 
-**Implementation Pattern:**
-```csharp
-public class BlockchainSyncWorker : BackgroundService
-{
-    private readonly IBlockchainService _blockchain;
-    private readonly IPublishEndpoint _publisher;
-    private readonly ISyncRepository _syncRepo;
-    private readonly ILogger<BlockchainSyncWorker> _logger;
+Suggested name:
 
-    protected override async Task ExecuteAsync(CancellationToken ct)
-    {
-        _logger.LogInformation("Starting blockchain sync worker...");
+- `Indexer`
+- `EventMirror`
+- `ChainIndexer`
 
-        // Subscribe to AccreditationIssued events
-        await _blockchain.SubscribeToEventAsync<AccreditationIssuedEventDTO>(
-            "AccreditationRegistry",
-            "AccreditationIssued",
-            async (eventData) =>
-            {
-                _logger.LogInformation("Received AccreditationIssued event: {Id}", eventData.Id);
+## 5.2 Relay Service
 
-                // Store in database
-                await _syncRepo.SaveEventAsync(new SyncedEvent
-                {
-                    EventType = "AccreditationIssued",
-                    ContractAddress = eventData.ContractAddress,
-                    BlockNumber = eventData.BlockNumber,
-                    TransactionHash = eventData.TransactionHash,
-                    EventData = JsonSerializer.Serialize(eventData)
-                });
+Introduce a dedicated relay helper only if needed.
 
-                // Publish to RabbitMQ
-                await _publisher.Publish(new AccreditationIssuedEvent
-                {
-                    AccreditationId = eventData.Id,
-                    IssuerDID = eventData.Issuer,
-                    SubjectDID = eventData.Subject,
-                    Scope = eventData.Scope,
-                    BlockNumber = eventData.BlockNumber,
-                    TransactionHash = eventData.TransactionHash,
-                    Timestamp = DateTime.UtcNow
-                }, ct);
-            }
-        );
+Responsibilities:
 
-        // Subscribe to CredentialIssued events
-        await _blockchain.SubscribeToEventAsync<CredentialIssuedEventDTO>(
-            "CredentialRegistry",
-            "CredentialIssued",
-            async (eventData) =>
-            {
-                await _syncRepo.SaveEventAsync(/*...*/);
-                await _publisher.Publish(new CredentialIssuedEvent { /*...*/ }, ct);
-            }
-        );
+- forward signed payloads or sponsor gas
+- optionally support meta-transactions if added later
+- improve mobile UX for users with limited native chain interaction
 
-        // Keep worker alive
-        while (!ct.IsCancellationRequested)
-        {
-            await Task.Delay(1000, ct);
-        }
-    }
-}
-```
+Constraints:
 
-**Events to Subscribe:**
-- `AccreditationIssued` → Publish to `accreditation-events`
-- `AccreditationRevoked` → Publish to `accreditation-events`
-- `CredentialIssued` → Publish to `credential-events`
-- `CredentialRevoked` → Publish to `credential-events`
-- `CredentialSuspended` → Publish to `credential-events`
+- relay never signs on behalf of users
+- relay never modifies payload semantics
+- users can bypass relay and submit directly
 
-**API Endpoints:**
-- `GET /api/sync/status` - Get sync status (current block, events synced)
-- `GET /api/sync/health` - Health check
+## 5.3 Presentation Broker
+
+Keep a lightweight presentation service only for communication.
+
+Responsibilities:
+
+- create session IDs or challenge tokens
+- deliver presentation requests
+- coordinate QR-based exchange
+- support WebSocket or SignalR communication
+
+Constraints:
+
+- broker never decides validity
+- broker never owns holder credentials
+- broker never rewrites proofs or presentations
+
+## 5.4 Notification Service
+
+Optional and purely operational.
+
+Responsibilities:
+
+- email or push alerts for issuance / revocation / requests
+
+Constraints:
+
+- notification failure does not affect trust or validity
+
+## 5.5 ZKP Proving and Verification Helper
+
+ZKP is a mandatory part of the architecture and the end-to-end demo.
+
+The only open question is where proof generation happens:
+
+- on-device in the wallet, if performance is acceptable
+- in a helper service, if proving is too heavy for the device class used in the demo
+
+Responsibilities:
+
+- generate proofs from client-provided witness data
+- verify proofs when verifier-side offloading is needed
+- return proof artifacts
+
+Constraints:
+
+- verifier still validates proof independently
+- service must not be treated as proof authority
+- the demo path must include proof generation and proof validation even if helper infrastructure is used
+- helper-based proving must be presented as a performance compromise, not as a trust dependency
 
 ---
 
-### 1.2 Identity Service
+## 6. What to Decommission or Downgrade
 
-**Location:** `DID.WalletThesis/src/Services/DID.Identity/`
+## 6.1 Services to remove as authorities
 
-**Structure:**
-```
-DID.Identity/
-├── Domain/
-│   ├── Entities/
-│   │   ├── DecentralizedIdentifier.cs
-│   │   └── KeyPair.cs
-│   ├── ValueObjects/
-│   │   ├── DIDDocument.cs
-│   │   └── PublicKey.cs
-│   └── Interfaces/
-│       └── IDIDRepository.cs
-│
-├── Application/
-│   ├── Commands/
-│   │   └── CreateDIDCommand.cs
-│   ├── Queries/
-│   │   ├── ResolveDIDQuery.cs
-│   │   └── GetDIDDocumentQuery.cs
-│   └── Services/
-│       └── DIDService.cs
-│
-├── Infrastructure/
-│   ├── Persistence/
-│   │   ├── IdentityDbContext.cs
-│   │   └── DIDRepository.cs
-│   └── Cryptography/
-│       └── KeyGenerator.cs
-│
-└── API/
-    ├── Controllers/
-    │   └── DIDController.cs
-    └── Program.cs
-```
+The following current services should no longer be treated as core domain authorities:
 
-**Database Schema:**
-```sql
-CREATE TABLE dids (
-    id UUID PRIMARY KEY,
-    did VARCHAR(200) UNIQUE NOT NULL,
-    controller_address VARCHAR(42) NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
-);
+- Identity Service
+- Accreditation Service
+- Credential Service
+- Verification Service
 
-CREATE TABLE key_pairs (
-    id UUID PRIMARY KEY,
-    did_id UUID NOT NULL,
-    key_type VARCHAR(50) NOT NULL,  -- Ed25519, secp256k1
-    public_key TEXT NOT NULL,
-    encrypted_private_key TEXT NOT NULL,
-    purpose VARCHAR(50) NOT NULL,    -- authentication, assertionMethod
-    created_at TIMESTAMP DEFAULT NOW(),
-    FOREIGN KEY (did_id) REFERENCES dids(id) ON DELETE CASCADE
-);
+## 6.2 Their replacement role
 
-CREATE TABLE did_documents (
-    id UUID PRIMARY KEY,
-    did_id UUID UNIQUE NOT NULL,
-    document JSONB NOT NULL,
-    cached_at TIMESTAMP DEFAULT NOW(),
-    FOREIGN KEY (did_id) REFERENCES dids(id)
-);
+These may survive only as optional helper APIs:
+
+- `Identity` -> resolver/cache/helper SDK or removed entirely
+- `Accreditation` -> indexer-backed query API only
+- `Credential` -> issuance delivery / OpenID helper / indexer-backed query API only
+- `Verification` -> reproducible helper API only, or removed in favor of client-side verification library
+
+## 6.3 New preferred structure
+
+```text
+did-wallet-thesis/
+├── blockchain/                 # authoritative trust logic
+├── client-sdk/                 # shared chain + VC + DID logic for apps
+├── mobile-wallet/              # holder wallet
+├── admin-client/               # issuer / admin wallet UI
+├── verifier-client/            # verifier UI or module
+├── helper-services/
+│   ├── indexer/
+│   ├── relay/
+│   ├── presentation-broker/
+│   ├── notifications/
+│   └── zkp-helper/
+└── docs/
 ```
 
-**API Endpoints:**
-- `POST /api/dids` - Create new DID (did:ethr:sepolia:0x...)
-- `GET /api/dids/{did}` - Resolve DID document
-- `GET /api/dids/{did}/keys` - Get public keys
-- `POST /api/dids/{did}/rotate-keys` - Rotate key pairs
+The key architectural change is this:
 
-**IMPORTANT:** This service does NOT authorize who can create DIDs. Anyone can create a DID. Authorization happens at accreditation level via smart contracts.
-
-**DIDService Implementation:**
-```csharp
-public class DIDService
-{
-    private readonly IDIDRepository _repository;
-    private readonly IKeyGenerator _keyGen;
-
-    public async Task<DIDDocument> CreateDIDAsync(string controllerAddress)
-    {
-        // Generate DID: did:ethr:sepolia:{address}
-        var did = $"did:ethr:sepolia:{controllerAddress}";
-
-        // Generate key pair
-        var keyPair = await _keyGen.GenerateEd25519KeyPairAsync();
-
-        // Create DID entity
-        var didEntity = new DecentralizedIdentifier
-        {
-            DID = did,
-            ControllerAddress = controllerAddress,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        await _repository.AddAsync(didEntity);
-
-        // Create DID document
-        var didDocument = new DIDDocument
-        {
-            Id = did,
-            Controller = did,
-            VerificationMethod = new[]
-            {
-                new VerificationMethod
-                {
-                    Id = $"{did}#keys-1",
-                    Type = "Ed25519VerificationKey2020",
-                    Controller = did,
-                    PublicKeyMultibase = keyPair.PublicKey
-                }
-            },
-            Authentication = new[] { $"{did}#keys-1" },
-            AssertionMethod = new[] { $"{did}#keys-1" }
-        };
-
-        return didDocument;
-    }
-}
-```
+- move trust logic into contracts and shared client libraries
+- move key ownership into wallets
+- shrink services to optional infrastructure
 
 ---
 
-## PHASE 2: Accreditation & Credential Services (Week 5-7)
+## 7. Shared Client SDK
 
-### 2.1 Accreditation Service
+A decentralized system needs a shared client SDK more than it needs many microservices.
 
-**CRITICAL PRINCIPLE:** This is a UI wrapper for AccreditationRegistry.sol. It does NOT make authorization decisions - the smart contract does.
+## 7.1 Create a shared client SDK
 
-**Location:** `DID.WalletThesis/src/Services/DID.Accreditation/`
+Add a shared TypeScript SDK used by:
 
-**Database Schema:**
-```sql
-CREATE TABLE accreditations (
-    id UUID PRIMARY KEY,
-    accreditation_id VARCHAR(100) UNIQUE NOT NULL,
-    issuer_did VARCHAR(200) NOT NULL,
-    subject_did VARCHAR(200) NOT NULL,
-    parent_id VARCHAR(100),
-    scope VARCHAR(50) NOT NULL,  -- MemberState, Ministry, Institution
-    permissions_hash VARCHAR(66) NOT NULL,
-    issued_at TIMESTAMP NOT NULL,
-    expires_at TIMESTAMP,
-    revoked BOOLEAN DEFAULT FALSE,
-    block_number BIGINT NOT NULL,
-    transaction_hash VARCHAR(66) NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
-);
+- mobile wallet
+- admin client
+- verifier client
 
-CREATE INDEX idx_accred_subject ON accreditations(subject_did);
-CREATE INDEX idx_accred_parent ON accreditations(parent_id);
-CREATE INDEX idx_accred_scope ON accreditations(scope);
-```
+SDK responsibilities:
 
-**Blockchain-First Implementation:**
-```csharp
-public class AccreditationService
-{
-    private readonly IBlockchainService _blockchain;
-    private readonly IAccreditationRepository _repository;
+- contract bindings and reads
+- transaction preparation
+- DID normalization
+- credential-status lookup
+- trust-chain verification
+- event decoding
+- VC creation / parsing helpers
+- presentation request / response models
+- OpenID4VCI / OpenID4VP flow helpers
+- EUDI-compatible credential-format helpers
+- ZKP proof request and verification helpers
 
-    public async Task<AccreditationDto> IssueAccreditationAsync(IssueAccreditationCommand cmd)
-    {
-        var transaction = new TransactionData
-        {
-            ContractName = "AccreditationRegistry",
-            FunctionName = "issueAccreditation",
-            Parameters = new object[]
-            {
-                cmd.SubjectAddress,
-                (int)cmd.Scope,
-                cmd.ParentAccreditationId,
-                cmd.PermissionsHash,
-                cmd.ExpiresAt
-            }
-        };
+This SDK becomes the real integration layer of the system.
 
-        // Submit to blockchain - BLOCKCHAIN validates authority
-        var txHash = await _blockchain.SubmitTransactionAsync(transaction);
-        var receipt = await _blockchain.WaitForConfirmationAsync(txHash);
+## 7.2 Why this matters
 
-        // Cache will be updated by Blockchain Sync Service via events
-        // Return result immediately
-        return new AccreditationDto
-        {
-            TransactionHash = txHash,
-            BlockNumber = receipt.BlockNumber
-        };
-    }
-
-    public async Task<TrustChainResult> ValidateTrustChainAsync(string accredId)
-    {
-        // Call blockchain validation - SOURCE OF TRUTH
-        var isValid = await _blockchain.CallContractAsync<bool>(
-            "AccreditationRegistry",
-            "validateTrustChain",
-            HashToBytes32(accredId)
-        );
-
-        // Optionally reconstruct chain from blockchain for visualization
-        var chainIds = await _blockchain.CallContractAsync<byte[][]>(
-            "AccreditationRegistry",
-            "getTrustChain",
-            HashToBytes32(accredId)
-        );
-
-        var chain = new List<AccreditationDto>();
-        foreach (var id in chainIds)
-        {
-            var accred = await _blockchain.CallContractAsync<AccreditationStruct>(
-                "AccreditationRegistry",
-                "getAccreditation",
-                id
-            );
-            chain.Add(MapToDto(accred));
-        }
-
-        return new TrustChainResult
-        {
-            IsValid = isValid,
-            Chain = chain
-        };
-    }
-}
-```
-
-**Event Consumption:**
-```csharp
-public class AccreditationEventConsumer : IConsumer<AccreditationIssuedEvent>
-{
-    private readonly IAccreditationRepository _repository;
-
-    public async Task Consume(ConsumeContext<AccreditationIssuedEvent> context)
-    {
-        var evt = context.Message;
-
-        // Update local cache
-        var accreditation = new Accreditation
-        {
-            AccreditationId = evt.AccreditationId,
-            IssuerDID = evt.IssuerDID,
-            SubjectDID = evt.SubjectDID,
-            Scope = evt.Scope,
-            IssuedAt = evt.Timestamp,
-            BlockNumber = evt.BlockNumber,
-            TransactionHash = evt.TransactionHash
-        };
-
-        await _repository.AddAsync(accreditation);
-    }
-}
-```
+Right now, too much chain logic is duplicated or hidden inside backend services. In a decentralized architecture, the reusable logic should live in a client-consumable SDK, not in server-only application services.
 
 ---
 
-### 2.2 Credential Service ✅ COMPLETED
+## 8. Revised User Flows
 
-**Location:** `DID.WalletThesis/src/Services/DID.Credential/`
+## 8.1 Accreditation issuance flow
 
-**Database Schema:**
-```sql
-CREATE TABLE credentials (
-    id UUID PRIMARY KEY,
-    credential_id VARCHAR(100) UNIQUE NOT NULL,
-    issuer_did VARCHAR(200) NOT NULL,
-    holder_did VARCHAR(200) NOT NULL,
-    credential_type VARCHAR(100) NOT NULL,
-    encrypted_credential BYTEA NOT NULL,  -- Full W3C VC encrypted
-    issued_at TIMESTAMP NOT NULL,
-    expires_at TIMESTAMP,
-    status VARCHAR(50) NOT NULL,
-    block_number BIGINT NOT NULL,
-    transaction_hash VARCHAR(66) NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
-);
+1. Admin opens issuer UI.
+2. UI reads current hierarchy from blockchain or indexer.
+3. Admin wallet signs and submits accreditation transaction directly.
+4. Smart contract validates issuer rights.
+5. Indexer mirrors resulting event for fast UI updates.
 
-CREATE INDEX idx_cred_issuer ON credentials(issuer_did);
-CREATE INDEX idx_cred_holder ON credentials(holder_did);
-CREATE INDEX idx_cred_type ON credentials(credential_type);
-```
+## 8.2 Credential issuance flow
 
-**Implementation:**
-```csharp
-public class CredentialIssuanceService
-{
-    private readonly IVeramoIntegrationService _veramo;
-    private readonly IBlockchainService _blockchain;
-    private readonly ICredentialRepository _repository;
+1. Institution UI prepares VC payload.
+2. Institution wallet signs VC locally.
+3. Institution wallet anchors credential status on-chain directly.
+4. Holder wallet receives the VC directly, by QR, or by issuance helper.
+5. Holder stores VC locally.
 
-    public async Task<VerifiableCredential> IssueCredentialAsync(IssueCredentialCommand cmd)
-    {
-        // 1. Generate W3C VC using Veramo
-        var vc = await _veramo.CreateCredentialAsync(new CreateCredentialRequest
-        {
-            Issuer = cmd.IssuerDID,
-            Holder = cmd.HolderDID,
-            CredentialSubject = cmd.CredentialSubject,
-            Type = new[] { "VerifiableCredential", cmd.CredentialType },
-            ExpirationDate = cmd.ExpiresAt
-        });
+## 8.3 Verification flow
 
-        // 2. Hash credential for blockchain ID
-        var credentialHash = HashCredential(vc);
-
-        // 3. Call CredentialRegistry.recordCredential()
-        // Smart contract validates issuer accreditation
-        var transaction = new TransactionData
-        {
-            ContractName = "CredentialRegistry",
-            FunctionName = "recordCredential",
-            Parameters = new object[]
-            {
-                cmd.HolderAddress,
-                credentialHash,
-                cmd.CredentialType,
-                cmd.IssuerAccreditationId,
-                cmd.ExpiresAt?.ToUnixTimeSeconds() ?? 0
-            }
-        };
-
-        var txHash = await _blockchain.SubmitTransactionAsync(transaction);
-        await _blockchain.WaitForConfirmationAsync(txHash);
-
-        // 4. Encrypt and store full credential off-chain
-        var encryptedVC = await EncryptCredentialAsync(vc, cmd.HolderPublicKey);
-
-        await _repository.AddAsync(new Credential
-        {
-            CredentialId = vc.Id,
-            IssuerDID = cmd.IssuerDID,
-            HolderDID = cmd.HolderDID,
-            CredentialType = cmd.CredentialType,
-            EncryptedCredential = encryptedVC,
-            TransactionHash = txHash
-        });
-
-        return vc;
-    }
-}
-```
+1. Verifier creates request or challenge.
+2. Holder wallet prepares VP and mandatory ZKP-backed disclosure.
+3. Holder sends presentation directly or via broker.
+4. Verifier validates VC signature locally.
+5. Verifier reads credential status from blockchain.
+6. Verifier reads issuer accreditation chain from blockchain.
+7. Verifier validates the ZKP locally or using a helper verifier.
+8. Final trust decision is made by verifier logic, not by a backend database.
 
 ---
 
-## PHASE 3: Verification Services (Week 8-9)
+## 9. Revised Smart Contract Priorities
 
-### 3.1 Verification Service
+The contracts become even more important in the new plan.
 
-**5-Step Verification Process:**
+## 9.1 Required contract responsibilities
 
-```csharp
-public class VerificationOrchestrator
-{
-    private readonly IBlockchainService _blockchain;
-    private readonly IHttpClientFactory _httpFactory;
+Contracts must be the only place that decides:
 
-    public async Task<VerificationResult> VerifyPresentationAsync(
-        VerifiablePresentation presentation)
-    {
-        var result = new VerificationResult();
+- who can issue which accreditation
+- whether an issuer is currently trusted
+- whether a credential is active / revoked / suspended
+- how trust-chain validity is computed
 
-        // Step 1: Verify cryptographic signature (local)
-        result.SignatureValid = await VerifySignatureAsync(presentation);
+## 9.2 Contract improvements required
 
-        foreach (var credential in presentation.VerifiableCredentials)
-        {
-            var credentialId = HashCredential(credential);
+Before the decentralized-first architecture can work cleanly, the contract layer should be tightened.
 
-            // Step 2: Check credential status ON BLOCKCHAIN
-            var (isActive, status, _) = await _blockchain.CallContractAsync<
-                (bool, CredentialStatus, bool)>(
-                "CredentialRegistry",
-                "verifyCredential",
-                credentialId
-            );
-            result.CredentialActive = isActive;
+Required improvements:
 
-            // Step 3: Get issuer's accreditations FROM BLOCKCHAIN
-            var issuerAccreditations = await _blockchain.CallContractAsync<byte[][]>(
-                "AccreditationRegistry",
-                "getAccreditationsBySubject",
-                credential.Issuer
-            );
+1. Fix the contract / ABI / service drift first.
+2. Make the accreditation hierarchy logic match the intended issuance model.
+3. Tighten root bootstrap logic so the trust anchor is defensible.
+4. Clarify revocation rights in contract logic.
+5. Decide whether holder binding is address-based, DID-based, or both.
+6. Emit clean events that support light clients and indexers.
 
-            // Step 4: Validate trust chain ON BLOCKCHAIN
-            var trustChainValid = false;
-            foreach (var accredId in issuerAccreditations)
-            {
-                trustChainValid = await _blockchain.CallContractAsync<bool>(
-                    "AccreditationRegistry",
-                    "validateTrustChain",
-                    accredId
-                );
-                if (trustChainValid) break;
-            }
-            result.TrustChainValid = trustChainValid;
+## 9.3 Scope note on governance
 
-            // Step 5: Verify ZKP if present (call ZKP Service)
-            if (credential.Proof.Type == "ZeroKnowledgeProof")
-            {
-                var zkpClient = _httpFactory.CreateClient("ZKPService");
-                var zkpResult = await zkpClient.PostAsJsonAsync("/zkp/verify",
-                    credential.Proof);
-                result.ZKPValid = zkpResult.IsSuccessStatusCode;
-            }
-        }
+Full member-state adherence voting is not part of the application delivery scope.
 
-        result.OverallValid = result.SignatureValid &&
-                             result.CredentialActive &&
-                             result.TrustChainValid &&
-                             (result.ZKPValid ?? true);
+For the thesis demo, the root contract only needs to be good enough to:
 
-        return result;
-    }
-}
-```
+- explain the trust anchor
+- bootstrap local scenarios honestly
+- avoid making claims the implementation does not support
+
+That means the real delivery priority is still:
+
+- accreditation correctness
+- credential issuance correctness
+- verification correctness
+- holder/verifier privacy flow with mandatory ZKP support
 
 ---
 
-### 3.2 ZKP Service (Node.js) ✅ COMPLETED ✅ COMPLETED
+## 10. Revised Client Priorities
 
-**Location:** `zkp-service/` (project root)
+## 10.1 Mobile wallet
 
-**Structure:**
-```
-zkp-service/
-├── src/
-│   ├── circuits/
-│   │   ├── ageVerification.circom       ✅ private: birthYear | public: currentYear, threshold
-│   │   └── graduationYearRange.circom   ✅ private: graduationYear | public: minYear, maxYear
-│   ├── controllers/
-│   │   └── zkpController.ts             ✅
-│   ├── services/
-│   │   ├── proofGenerator.ts            ✅ snarkjs.groth16.fullProve
-│   │   └── proofVerifier.ts             ✅ snarkjs.groth16.verify
-│   ├── types/
-│   │   └── zkp.types.ts                 ✅
-│   └── index.ts                         ✅
-├── circuits_compiled/                   ✅ .wasm files committed
-├── keys/                                ✅ _final.zkey + verification_key.json committed
-├── scripts/
-│   ├── setup-circuits.mjs               ✅ cross-platform (Windows/macOS/Linux)
-│   └── setup-circuits.ps1               ✅ Windows fallback
-├── package.json
-├── tsconfig.json
-└── Dockerfile
-```
+The mobile wallet becomes a first-class system component, not just a UI demo.
 
-**ZKP privacy model:**
-- ZKP protects **attribute-level data** (birth date, graduation year) — not the credential as a whole
-- The credential hash and issuer-holder relationship remain on-chain for auditability
-- Trust chain traversal is done via blockchain reads (not ZKP)
+Required capabilities:
 
-**Age Verification Circuit:**
-```circom
-pragma circom 2.0.0;
+- local key custody
+- DID creation aligned with the chosen DID model
+- VC storage
+- direct chain status lookup
+- presentation creation
+- mandatory ZKP generation or helper-service integration
+- OpenID4VCI and OpenID4VP-compatible flow support
+- QR-based or deep-link-based exchange
 
-template AgeVerification() {
-    signal input birthYear;
-    signal input currentYear;
-    signal input threshold;
-    signal output valid;
+## 10.2 Admin / issuer client
 
-    signal age;
-    age <== currentYear - birthYear;
+The Angular admin app should evolve into an issuer wallet UI.
 
-    component greaterThan = GreaterThan(8);
-    greaterThan.in[0] <== age;
-    greaterThan.in[1] <== threshold;
+Required capabilities:
 
-    valid <== greaterThan.out;
-}
+- connect issuer wallet
+- browse trust chain
+- issue accreditations directly
+- issue credentials directly
+- support EUDI-aligned issuance flow orchestration
+- inspect transaction hashes and on-chain results
+- avoid server-side signing
 
-component main = AgeVerification();
-```
+## 10.3 Verifier client
 
-**API Implementation:**
-```typescript
-import express from 'express';
-import { groth16 } from 'snarkjs';
+Add a lightweight verifier-facing client or module.
 
-const app = express();
-app.use(express.json());
+Required capabilities:
 
-app.post('/zkp/generate/age', async (req, res) => {
-    const { birthYear, currentYear, threshold } = req.body;
-
-    const input = {
-        birthYear,
-        currentYear,
-        threshold
-    };
-
-    const { proof, publicSignals } = await groth16.fullProve(
-        input,
-        'circuits_compiled/ageVerification.wasm',
-        'keys/ageVerification_final.zkey'
-    );
-
-    res.json({ proof, publicSignals });
-});
-
-app.post('/zkp/verify', async (req, res) => {
-    const { proof, publicSignals } = req.body;
-
-    const vKey = JSON.parse(
-        fs.readFileSync('keys/verification_key.json', 'utf-8')
-    );
-
-    const isValid = await groth16.verify(vKey, publicSignals, proof);
-
-    res.json({ valid: isValid });
-});
-
-app.listen(3000, () => {
-    console.log('ZKP Service running on port 3000');
-});
-```
+- create verification requests
+- receive presentations
+- support OpenID4VP-style verifier interactions
+- validate VC signatures
+- read contract state directly
+- validate ZK proofs
+- render explanation of verification result
 
 ---
 
-## PHASE 4: Presentation & Communication (Week 10-11)
+## 11. Revised Helper-Service Rules
 
-### 4.1 Presentation Service
+Every helper service must satisfy all of these rules:
 
-**SignalR Hub Implementation:**
-```csharp
-public class PresentationHub : Hub
-{
-    private readonly IPresentationService _presentationService;
+1. It can go down without invalidating credentials.
+2. It never holds long-term user private keys.
+3. It never makes the only copy of required trust data.
+4. It never returns unverifiable "trust me" answers.
+5. Its outputs can be independently checked by a client.
 
-    public async Task CreatePresentationRequest(PresentationRequestDto request)
-    {
-        // Generate QR code
-        var token = GenerateSecureToken();
-        var qrData = new
-        {
-            RequestToken = token,
-            VerifierDID = request.VerifierDID,
-            CallbackUrl = $"https://api.example.com/presentations/{token}"
-        };
-
-        var qrCode = GenerateQRCode(qrData);
-
-        // Store request
-        await _presentationService.CreateRequestAsync(request, token);
-
-        // Send QR to verifier
-        await Clients.Caller.SendAsync("PresentationRequestCreated", new
-        {
-            Token = token,
-            QRCode = qrCode,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(5)
-        });
-    }
-
-    public async Task SubmitPresentation(string token, VerifiablePresentation presentation)
-    {
-        // Find verifier connection
-        var request = await _presentationService.GetRequestAsync(token);
-
-        // Notify verifier
-        await Clients.User(request.VerifierDID).SendAsync(
-            "PresentationReceived",
-            presentation
-        );
-    }
-}
-```
-
-### 4.2 Angular Admin Console
-
-**Goal:** Provide a clear institutional/admin-facing demo UI for hierarchical accreditation and later diploma issuance.
-
-**Scope:** Build this after the Credential Service is functional and the accreditation/credential APIs are stable.
-
-**Planned Location:** `admin-client/`
-
-**Primary Use Cases:**
-- Select demo actor context (`Romania`, `Ministry of Education`, `University of Bucharest`)
-- Issue accreditations with parent-chain selection
-- Browse trust hierarchy visually
-- Inspect accreditation status, transaction hash, and on-chain identifiers
-- Issue diploma credentials once Credential Service is implemented
-- Verify credentials and issuer trust chain for demo purposes
-
-**Initial Routes / Pages:**
-- `/dashboard` — contract addresses, active actors, recent blockchain-backed actions
-- `/actors` — demo entities, DIDs, Ethereum addresses, active signer context
-- `/accreditations` — list and inspect accreditations
-- `/accreditations/new` — issue accreditation form with issuer/subject/scope/parent selection
-- `/trust-chain` — visual tree from member state to ministry to institution
-- `/credentials` — issue and inspect diploma credentials
-- `/verification` — verify a credential and display trust-chain status
-
-**Frontend Constraints:**
-- Angular standalone app, routed pages, thin API client layer
-- UI talks to microservices only, never directly to smart contracts
-- Demo/admin console only; not a holder wallet replacement
-- Full EU member-state voting UI is explicitly out of scope for the first client version
-
-**Suggested API Dependencies:**
-- `DID.Accreditation` for accreditation issue/list/resolve/verify
-- `DID.Credential` for diploma issue/list/resolve/verify
-- `DID.Verification` for end-to-end blockchain-first validation
-
-**Delivery Order:**
-1. ✅ Stabilize Credential Service
-2. Stabilize Verification Service
-3. Finalize multi-actor demo signing approach
-4. Build Angular accreditation pages
-5. Add diploma issuance and verification pages
+If a planned service does not satisfy those rules, it should not exist in the decentralized architecture.
 
 ---
 
-## PHASE 5: Support Services (Week 12-13)
+## 12. Delivery Phases
 
-### 5.1 Notification Service
+## 12.0 Week-by-week roadmap
 
-**Event-Driven Only (No Database):**
-```csharp
-public class CredentialIssuedEventConsumer : IConsumer<CredentialIssuedEvent>
-{
-    private readonly IEmailService _email;
-    private readonly IPushNotificationService _push;
+### Week 1 — March 9 to March 15
 
-    public async Task Consume(ConsumeContext<CredentialIssuedEvent> context)
-    {
-        var evt = context.Message;
+Primary focus:
 
-        // Send email
-        await _email.SendAsync(new EmailMessage
-        {
-            To = evt.HolderEmail,
-            Subject = "New Credential Issued",
-            Body = $"You have received a new {evt.CredentialType} credential."
-        });
+- finish the accreditation platform
+- refactor the mobile wallet foundation
 
-        // Send push notification
-        await _push.SendAsync(new PushNotification
-        {
-            UserId = evt.HolderDID,
-            Title = "New Credential",
-            Body = $"Your {evt.CredentialType} is now available."
-        });
-    }
-}
-```
+Planned deliverables:
 
----
+- operator/admin flow for issuing accreditations
+- accreditation list, detail, revoke, and verify screens
+- trust-chain visualization for the accreditation hierarchy
+- stable blockchain-backed accreditation demo
+- wallet refactor around identity, credential, storage, and proof boundaries
 
-### 5.2 Audit Service
+Non-goals for this week:
 
-**Immutable Event Store:**
-```sql
-CREATE TABLE audit_logs (
-    id UUID PRIMARY KEY,
-    event_id VARCHAR(100) UNIQUE NOT NULL,
-    event_type VARCHAR(100) NOT NULL,
-    event_source VARCHAR(100) NOT NULL,
-    event_data JSONB NOT NULL,
-    actor_did VARCHAR(200),
-    target_did VARCHAR(200),
-    timestamp TIMESTAMP NOT NULL,
-    block_number BIGINT,
-    transaction_hash VARCHAR(66),
-    created_at TIMESTAMP DEFAULT NOW()
-);
+- full verifier platform
+- full EUDI protocol implementation
+- full credential flow
+- governance UI
 
--- NO UPDATE OR DELETE - immutable logs
--- Partitioned by month for performance
-CREATE INDEX idx_audit_timestamp ON audit_logs(timestamp DESC);
-CREATE INDEX idx_audit_actor ON audit_logs(actor_did);
-CREATE INDEX idx_audit_target ON audit_logs(target_did);
-```
+### Week 2 — March 16 to March 22
 
----
+Primary focus:
 
-## PHASE 6: Integration & Testing (Week 14)
+- fix the credential architecture drift
+- finalize identity and credential-format decisions
 
-### End-to-End Test Scenarios
+Planned deliverables:
 
-**Scenario 1: Complete Diploma Issuance**
-```csharp
-[Fact]
-public async Task CompleteIssuanceFlow_ShouldPropagateEvents()
-{
-    // 1. Romania exists as a demo bootstrapped member state
-    Assert.True(await _rootAuthority.IsMemberStateAsync(romaniaAddress));
+- credential path compatibility fixed
+- EUDI-aligned identifier and credential-format strategy documented
+- shared SDK extraction started
 
-    // 2. Romania accredits Ministry of Education
-    var ministryTx = await _accreditationRegistry.IssueAccreditationAsync(
-        ministryAddress,
-        AccreditationScope.Ministry,
-        parentId: null
-    );
+### Week 3 — March 23 to March 29
 
-    // 3. Ministry accredits University of Bucharest
-    var universityTx = await _accreditationRegistry.IssueAccreditationAsync(
-        universityAddress,
-        AccreditationScope.Institution,
-        ministryAccreditationId
-    );
+Primary focus:
 
-    // 4. University issues diploma
-    var credentialTx = await _credentialService.IssueCredentialAsync(new
-    {
-        IssuerDID = "did:ethr:sepolia:university",
-        HolderDID = "did:ethr:sepolia:student",
-        CredentialType = "UniversityDegree",
-        IssuerAccreditationId = universityAccreditationId
-    });
+- wallet-first credential issuance
+- holder-wallet integration with real thesis credentials
 
-    // 5. Verify events propagated
-    await Task.Delay(3000); // Allow event processing
+Planned deliverables:
 
-    var events = await _auditService.GetEventsAsync();
-    Assert.Contains(events, e => e.EventType == "AccreditationIssued");
-    Assert.Contains(events, e => e.EventType == "CredentialIssued");
-}
-```
+- issuer-side signing flow clarified
+- wallet stores real thesis credentials
+- status and trust checks move into shared client logic
 
-**Scenario 2: Cross-Border Verification**
-```csharp
-[Fact]
-public async Task CrossBorderVerification_ShouldValidateTrustChain()
-{
-    // German employer creates presentation request
-    var request = await _presentationService.CreateRequestAsync(new
-    {
-        VerifierDID = "did:ethr:sepolia:german-employer",
-        RequestedCredentials = new[] { "UniversityDegree" },
-        ZKPRequirements = new { MinAge = 21 }
-    });
+### Week 4 — March 30 to April 5
 
-    // Romanian student submits presentation with ZKP
-    var presentation = CreatePresentation(romanianDiploma, ageProof);
-    await _presentationService.SubmitPresentationAsync(request.Token, presentation);
+Primary focus:
 
-    // Verification validates trust chain from blockchain
-    var result = await _verificationService.VerifyPresentationAsync(presentation);
+- verifier platform foundation
+- presentation-request flow
 
-    Assert.True(result.OverallValid);
-    Assert.True(result.TrustChainValid);
-    Assert.True(result.ZKPValid);
+Planned deliverables:
 
-    // Employer receives result via SignalR
-    // (tested separately with SignalR client)
-}
-```
+- verifier UI/module scaffold
+- QR or challenge-based request flow
+- first end-to-end verification skeleton
 
----
+### Week 5 — April 6 to April 12
 
-## Critical Implementation Patterns
+Primary focus:
 
-### 1. Blockchain-First (MOST IMPORTANT)
+- mandatory ZKP-backed presentation flow
 
-**Rule:** If it's an authorization decision, read from blockchain.
+Planned deliverables:
 
-**Examples:**
-- ✅ `await _blockchain.CallContractAsync<bool>("AccreditationRegistry", "hasValidAccreditation", ...)`
-- ❌ `var isAuthorized = await _repository.GetAsync(issuer).IsAuthorized`
+- wallet-side proof generation for one real scenario
+- verifier-side proof validation combined with trust-chain validation
 
-### 2. Cache is Secondary
+### Week 6 — April 13 to April 19
 
-**Pattern:**
-```csharp
-public async Task<Accreditation> GetAccreditationAsync(string id, bool forceRefresh = false)
-{
-    if (forceRefresh)
-    {
-        // Always provide option to bypass cache and read from blockchain
-        return await _blockchain.CallContractAsync<Accreditation>(
-            "AccreditationRegistry",
-            "getAccreditation",
-            id
-        );
-    }
+Primary focus:
 
-    // Try cache first for performance
-    var cached = await _repository.GetAsync(id);
-    return cached;
-}
-```
+- reduce backend authority
+- clarify helper-service roles
 
-### 3. Event-Driven Consistency
+Planned deliverables:
 
-- Blockchain Sync Service is **single source** of blockchain state
-- Other services update via events
-- Eventual consistency acceptable (2-3 second lag)
+- indexer/broker/relay roles clearly separated from trust logic
+- verification reproducible without trusting backend state
 
-### 4. Error Handling
+### Week 7 — April 20 to April 26
 
-**Blockchain Errors:**
-```csharp
-try
-{
-    var txHash = await _blockchain.SubmitTransactionAsync(transaction);
-}
-catch (SmartContractRevertException ex)
-{
-    // Transaction reverted - user not authorized
-    throw new UnauthorizedException(ex.Message);
-}
-catch (RpcClientTimeoutException)
-{
-    // Network timeout - retry with exponential backoff
-    await RetryWithBackoffAsync(() => _blockchain.SubmitTransactionAsync(transaction));
-}
-```
+Primary focus:
 
----
+- polish the complete thesis prototype
 
-## Configuration Strategy
+Planned deliverables:
 
-**Each service requires `appsettings.json`:**
-```json
-{
-  "Blockchain": {
-    "RpcUrl": "http://localhost:8545",
-    "ChainId": 31337,
-    "PrivateKey": "${PRIVATE_KEY}",
-    "Contracts": {
-      "EURootAuthority": {
-        "Address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-        "AbiPath": "ABIs/EURootAuthority.json"
-      },
-      "AccreditationRegistry": {
-        "Address": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
-        "AbiPath": "ABIs/AccreditationRegistry.json"
-      },
-      "CredentialRegistry": {
-        "Address": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-        "AbiPath": "ABIs/CredentialRegistry.json"
-      }
-    }
-  },
-  "RabbitMQ": {
-    "Host": "localhost",
-    "Port": 5672,
-    "Username": "did_admin",
-    "Password": "${RABBITMQ_PASSWORD}"
-  },
-  "ConnectionStrings": {
-    "Postgres": "Host=localhost;Database=did_identity;Username=did_admin;Password=${POSTGRES_PASSWORD}"
-  },
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft": "Warning"
-    }
-  }
-}
-```
+- stable 3-platform narrative
+- stable end-to-end demo path
+- updated documentation and architecture materials
+
+### Week 8 — April 27 to May 3
+
+Primary focus:
+
+- demo hardening and thesis presentation readiness
+
+Planned deliverables:
+
+- rehearsable demo
+- buffer for bug fixing
+- screenshots, diagrams, and final positioning
+
+## Phase A: Contract and model stabilization
+
+Goal:
+
+- make the on-chain model correct and consistent enough that clients can rely on it directly
+
+Tasks:
+
+1. Fix ABI / DTO / service mismatch.
+2. Freeze contract interfaces for thesis scope.
+3. Decide final EUDI-compatible issuance and presentation formats.
+4. Decide final DID / identifier strategy.
+5. Decide holder binding model.
+6. Tighten trust-anchor and revocation semantics.
+
+Exit criteria:
+
+- contracts are stable
+- emitted events are stable
+- client SDK can be built on top of fixed interfaces
+
+## Phase B: Shared SDK extraction
+
+Goal:
+
+- move trust logic out of backend service classes and into a reusable client library
+
+Tasks:
+
+1. Generate typed contract bindings.
+2. Add DID normalization helpers.
+3. Add trust-chain verification helpers.
+4. Add credential-status read helpers.
+5. Add VC / VP shared models.
+6. Add OpenID4VCI / OpenID4VP helpers.
+7. Add proof verification helpers.
+
+Exit criteria:
+
+- mobile, admin, and verifier clients can all use the same chain logic
+
+## Phase C: Wallet-first issuance
+
+Goal:
+
+- issuer and holder actions are performed by clients with local keys
+
+Tasks:
+
+1. Remove backend signing from accreditation issuance.
+2. Remove backend signing from credential issuance.
+3. Add wallet connection to admin client.
+4. Make holder wallet receive and store real thesis credentials.
+5. Add OpenID4VCI-aligned issuance orchestration.
+6. Add direct chain submission or relay-assisted submission.
+
+Exit criteria:
+
+- no server-owned issuer key is required for the demo flow
+
+## Phase D: Verifier-first verification
+
+Goal:
+
+- verification becomes independently reproducible by verifier clients
+
+Tasks:
+
+1. Build verifier module or app.
+2. Validate VC signature locally.
+3. Validate blockchain status directly.
+4. Validate issuer chain directly.
+5. Integrate ZKP verification.
+6. Add OpenID4VP-aligned request and response flow.
+7. Add clear explanation output for demo and thesis analysis.
+
+Exit criteria:
+
+- verifier does not need a backend authority to decide trust
+
+## Phase E: Helper-service minimization
+
+Goal:
+
+- keep only helper services that improve UX without owning trust
+
+Tasks:
+
+1. Convert BlockchainSync into a pure indexer.
+2. Replace Presentation service with broker-only session coordination.
+3. Keep notifications optional.
+4. Keep relay optional.
+5. Evaluate whether Identity, Accreditation, Credential, and Verification services should be removed, merged, or downgraded.
+
+Exit criteria:
+
+- helper services are optional from a trust standpoint
+
+## Phase F: Thesis demo hardening
+
+Goal:
+
+- produce one clean end-to-end decentralized demo path
+
+Demo path:
+
+1. Root bootstraps local demo scenario.
+2. Member state accredits ministry.
+3. Ministry accredits institution.
+4. Institution issues credential via wallet.
+5. Holder stores VC in wallet.
+6. Verifier requests proof.
+7. Holder sends VP and mandatory ZKP-backed disclosure.
+8. Verifier validates directly against blockchain.
+
+Exit criteria:
+
+- demo proves that helper services are conveniences, not trust anchors
 
 ---
 
-## Testing Strategy
+## 13. What Success Looks Like
 
-### Smart Contracts
-- **Tool:** Hardhat + Chai
-- **Coverage:** >90% required
-- **Focus:** All authorization paths, deployment ceremony, governance
+The implementation is successful if the following statements are true:
 
-### Microservices
-- **Unit Tests:** xUnit + Moq for business logic
-- **Integration Tests:** TestContainers for PostgreSQL/RabbitMQ
-- **Blockchain Tests:** Against Hardhat local network
-- **API Tests:** WebApplicationFactory for endpoints
-
-### End-to-End
-- Complete issuance → verification flows
-- Cross-border scenarios
-- Revocation flows
-- Independence test (mobile app verifies without backend)
+1. If all helper services are turned off, the verifier can still validate a credential using the blockchain and the presented artifacts.
+2. If the indexer is stale, it affects convenience only, not correctness.
+3. No backend service holds the issuer's long-term private key.
+4. No backend service is required to create a DID.
+5. The wallet, admin client, and verifier all use the same identity and credential model.
+6. The wallet, admin client, and verifier all use EUDI-aligned issuance and presentation flows.
+7. The demo can explain exactly where decentralization exists and where helper infrastructure still exists.
 
 ---
 
-## Success Criteria
+## 14. Concrete Migration Decisions for This Repository
 
-### Phase 0
-- [x] All 3 smart contracts deployed to Hardhat local network (via Docker)
-- [x] ABIs exported to `blockchain/abis/`, typechain-types generated
-- [x] DID.Contracts event DTO library compiling
-- [x] DID.Shared.Domain / Application / Infrastructure created
-- [x] All 9 .NET service projects scaffolded in solution
-- [x] Docker Compose running (PostgreSQL 16, RabbitMQ 3.12, Hardhat)
-- [x] ZKP Service implemented and circuits compiled
+Based on the current codebase, the recommended migration path is:
 
-### Phase 1
-- [x] Blockchain Sync Service fully implemented — polls events, saves to PostgreSQL, publishes to RabbitMQ
-- [x] DB migration applied (`did_blockchainsync`)
-- [x] Identity Service creating DIDs
-- [x] Events flowing end-to-end through RabbitMQ
-
-### Phase 2
-- [x] Accreditation issuance calling smart contract
-- [x] Trust chain validation reading from blockchain
-- [x] Credentials recorded on-chain
-
-### Phase 3
-- [ ] 5-step verification working
-- [ ] All checks reading from blockchain
-- [ ] ZKP proof generation/verification working
-
-### Phase 4
-- [ ] QR code flow working
-- [ ] SignalR real-time communication functional
-- [ ] Angular admin console can issue and inspect accreditations
-- [ ] Trust hierarchy page visualizes state -> ministry -> university chain
-
-### Phase 5
-- [ ] Email notifications working
-- [ ] Audit logs capturing all events
-
-### Phase 6
-- [ ] End-to-end diploma flow working
-- [ ] Cross-border verification working
-- [ ] Mobile app can verify independently without backend
+1. Keep `blockchain/` as the center of trust.
+2. Keep `mobile-wallet/`, but align it to the same DID model and real chain-backed credentials.
+3. Keep `admin-client/`, but convert it into an issuer wallet UI instead of a backend-signing UI.
+4. Keep `zkp-service/` as a mandatory project component, but treat it as an implementation detail of proof generation and verification rather than as a trust anchor.
+5. Keep `DID.BlockchainSync/`, but rename or reframe it as an indexer.
+6. Stop expanding `DID.Identity/`, `DID.Accreditation/`, `DID.Credential/`, and `DID.Verification/` as domain authorities.
+7. Extract a shared client SDK so chain reads and verification are not trapped inside server code.
 
 ---
 
-## Week-by-Week Timeline
+## 15. Final Position for the Thesis
 
-| Week | Phase | Tasks | Deliverables |
-|------|-------|-------|--------------|
-| 1-2 | Phase 0 | Smart contracts ✅, Shared infrastructure ✅, Docker Compose ✅ | Contracts deployed, Infrastructure ready |
-| 3-4 | Phase 1 | Blockchain Sync Service ✅, Identity Service ✅ | Events syncing, DIDs being created |
-| 5-6 | Phase 2 | Accreditation Service ✅ | Accreditations on blockchain |
-| 6-7 | Phase 2 | Credential Service ✅, ZKP Service ✅ | Credentials on blockchain, ZKP proofs working |
-| 8 | Phase 3 | Verification Service ⏳ | 5-step verification working |
-| 9 | Phase 4 | Presentation Service ⏳ | QR flow working |
-| 10 | Phase 4 | Angular Admin Console ⏳ | Accreditation chain demo UI working |
-| 11 | Phase 5 | Notification Service ⏳ + Audit Service ⏳ | Emails and audit trail working |
-| 12-13 | Phase 6 | Integration testing ⏳ | E2E scenarios passing |
-| 14 | Phase 6 | Final testing & documentation ⏳ | Demo ready |
+The thesis should aim to demonstrate this claim:
 
----
+> We designed and implemented a blockchain-anchored decentralized identity prototype aligned with EUDI issuance and presentation standards, in which institutional trust and credential status are enforced on-chain, wallets control keys and presentations, and off-chain services are reduced to helper roles for communication, indexing, relaying, and proof execution rather than trust.
 
-## Next Immediate Steps
-
-1. ✅ **Smart contracts** — compiled, tested, deployed, ABIs exported
-2. ✅ **DID.Contracts** — thin event DTO library created
-3. ✅ **All 8 .NET service scaffolds** — Clean Architecture structure in place
-4. ✅ **Docker Compose** — configured with PostgreSQL, RabbitMQ, Hardhat
-5. ✅ **ZKP Service** — circuits compiled, keys generated, cross-platform setup
-6. ✅ **BlockchainSync Service** — event listener, PostgreSQL, RabbitMQ publishers
-7. ✅ **Identity Service** — DID generation, key pairs, Swagger
-8. ✅ **Accreditation Service** — blockchain-first issue/revoke/verify, Swagger
-9. ✅ **Credential Service** — blockchain-first issue/revoke/suspend/verify via CredentialRegistry.sol, Swagger
-
-10. **Implement Verification Service (Task #8) — NEXT:**
-    ```
-    Domain:         VerificationSession, VerificationResult entities
-    Application:    VerificationService — 5-step blockchain-first verification orchestrator
-    Infrastructure: VerificationDbContext, VerificationRepository
-    Endpoints:      POST /api/verify/presentation
-                    POST /api/verify/credential
-                    GET  /api/verify/results/{sessionId}
-    HTTP Client:    Calls ZKP Service at http://localhost:3001 for ZKP step
-    DB:             did_verification
-    ```
-
-11. **After Verification Service is stable, add Angular admin console:**
-    - Focus on accreditation chain management first
-    - Add diploma issuance UI after credential endpoints are stable
-    - Defer full EU voting workflow to contract-only scope
-
-12. **Implement Presentation Service (Task #10)** — QR codes + SignalR hub
-
-13. **Implement Notification + Audit Services (Tasks #12, #13)** — in parallel
-
----
-
-## Critical Files Reference
-
-### Phase 0
-1. **`blockchain/contracts/AccreditationRegistry.sol`** ✅ - Core trust chain validation
-2. **`DID.Shared.Infrastructure/Blockchain/BlockchainService.cs`** - Foundation for all blockchain interactions
-3. **`DID.Shared.Application/Interfaces/IBlockchainService.cs`** - Interface every service uses
-4. **`docker-compose.yml`** - Infrastructure setup
-
-### Phase 1
-5. **`DID.BlockchainSync/API/Workers/BlockchainSyncWorker.cs`** - Bridges blockchain to microservices
-6. **`DID.Identity/Application/Services/DIDService.cs`** - DID generation
-
-### Phase 2
-7. **`DID.Accreditation/Application/Services/AccreditationService.cs`** - Reference implementation of blockchain-first
-8. **`DID.Credential/Application/Services/CredentialIssuanceService.cs`** - Smart contract authorization demo
-
-### Phase 3
-9. **`DID.Verification/Application/Services/VerificationOrchestrator.cs`** - 5-step verification
-
----
-
-## Final Notes
-
-- All microservices use **.NET 10** with C# 13
-- **Self-contained services** — no shared Domain/Infrastructure libraries; each service owns its stack
-- **DID.Contracts** is the only shared project — pure event DTO records, no logic
-- Blockchain-first principle is **non-negotiable** — this is the thesis innovation
-- Each service has its own PostgreSQL database/schema
-- RabbitMQ + MassTransit for all async communication between services
-- Smart contracts are the source of truth, always
-- ZKP protects attribute-level privacy (age, dates) — not credential existence
-- Mobile wallet must be able to verify credentials independently without backend services
-
-**Remember:** The innovation of this thesis is proving that blockchain can be the authoritative source of truth for a decentralized identity system, with microservices as optional convenience layers only.
+That is a stronger and more defensible goal than the previous plan centered on many domain microservices.

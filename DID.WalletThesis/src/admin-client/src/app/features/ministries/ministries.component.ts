@@ -14,11 +14,16 @@ import { NavigationStateService } from '../../core/services/navigation-state.ser
 import { BreadcrumbComponent } from '../../shared/components/breadcrumb/breadcrumb.component';
 import { EmptyStateComponent } from '../../shared/components/empty-state/empty-state.component';
 import { TxBadgeComponent } from '../../shared/components/tx-badge/tx-badge.component';
+import {
+  AccreditationChainNode,
+  AccreditationDetailPanelComponent,
+} from '../../shared/components/accreditation-detail-panel/accreditation-detail-panel.component';
+import { AccreditationVerification } from '../../core/models/accreditation.model';
 
 @Component({
   selector: 'app-ministries',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, RouterLink, DatePipe, BreadcrumbComponent, EmptyStateComponent, TxBadgeComponent],
+  imports: [ReactiveFormsModule, RouterLink, DatePipe, BreadcrumbComponent, EmptyStateComponent, TxBadgeComponent, AccreditationDetailPanelComponent],
   templateUrl: './ministries.component.html',
 })
 export class MinistriesComponent implements OnInit {
@@ -33,6 +38,10 @@ export class MinistriesComponent implements OnInit {
   readonly showForm = signal(false);
   readonly submitting = signal(false);
   readonly lastIssued = signal<Accreditation | null>(null);
+  readonly selected = signal<Accreditation | null>(null);
+  readonly verification = signal<AccreditationVerification | null>(null);
+  readonly verifying = signal(false);
+  readonly revoking = signal(false);
 
   readonly form = this.fb.group({
     name: ['', [Validators.required, Validators.minLength(2)]],
@@ -116,6 +125,60 @@ export class MinistriesComponent implements OnInit {
       accreditationId: ministry.accreditationId,
     });
     this.router.navigate(['/universities']);
+  }
+
+  inspect(ministry: Accreditation): void {
+    this.selected.set(ministry);
+    this.verification.set(null);
+  }
+
+  closeDetails(): void {
+    this.selected.set(null);
+    this.verification.set(null);
+  }
+
+  verifySelected(): void {
+    const selected = this.selected();
+    if (!selected) return;
+    this.verifying.set(true);
+    this.accreditationService.verify(selected.accreditationId).subscribe({
+      next: (result) => {
+        this.verification.set(result);
+        this.verifying.set(false);
+      },
+      error: (err) => {
+        this.error.set(err?.error?.message ?? err?.message ?? 'Failed to verify accreditation');
+        this.verifying.set(false);
+      },
+    });
+  }
+
+  revokeSelected(): void {
+    const selected = this.selected();
+    if (!selected) return;
+    this.revoking.set(true);
+    this.accreditationService.revoke(selected.accreditationId, selected.issuerDID).subscribe({
+      next: () => {
+        this.revoking.set(false);
+        this.load();
+        this.verifySelected();
+      },
+      error: (err) => {
+        this.error.set(err?.error?.message ?? err?.message ?? 'Failed to revoke accreditation');
+        this.revoking.set(false);
+      },
+    });
+  }
+
+  trustChainForSelected(): AccreditationChainNode[] {
+    const selected = this.selected();
+    const ms = this.navState.memberState();
+    if (!selected || !ms) return [];
+    return [
+      { label: 'EU Root Authority', did: this.navState.euRootDid, emphasis: 'root' },
+      { label: ms.label, did: ms.did, emphasis: 'intermediate' },
+      { label: selected.name || selected.scope, did: selected.subjectDID, emphasis: 'selected' },
+    ];
   }
 
   statusClass(status: string): string {

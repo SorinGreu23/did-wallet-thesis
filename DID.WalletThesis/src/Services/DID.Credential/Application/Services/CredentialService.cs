@@ -18,6 +18,14 @@ public class CredentialService(
     private const string DidPrefix = "did:ethr:sepolia:";
     private readonly string signerAddress = NormalizeAddress(new Account(blockchainOptions.Value.PrivateKey).Address);
 
+    private enum OnChainCredentialStatus
+    {
+        Active = 0,
+        Revoked = 1,
+        Suspended = 2,
+        Expired = 3
+    }
+
     public async Task<CredentialDto> ResolveAsync(string credentialId, CancellationToken ct = default)
     {
         var entity = await repository.GetByCredentialIdAsync(credentialId, ct);
@@ -52,47 +60,60 @@ public class CredentialService(
         if (onChain is null)
             return new CredentialVerificationDto(credentialId, false, "NotFound", "Credential does not exist");
 
-        if (onChain.Revoked)
-            return new CredentialVerificationDto(credentialId, false, "Revoked",
-                "Credential has been revoked on-chain");
-
-        if (onChain.Suspended)
-            return new CredentialVerificationDto(credentialId, false, "Suspended",
-                "Credential has been suspended on-chain");
-
-        if (onChain.ExpiresAtUnix > 0 && DateTimeOffset.UtcNow.ToUnixTimeSeconds() > (long)onChain.ExpiresAtUnix)
-            return new CredentialVerificationDto(credentialId, false, "Expired",
-                $"Expired at {DateTimeOffset.FromUnixTimeSeconds((long)onChain.ExpiresAtUnix):O}");
-
-        var isValid = await blockchain.CallContractAsync<bool>(
+        var verification = await blockchain.CallContractAsync<VerifyCredentialResultDto>(
             "CredentialRegistry",
             "verifyCredential",
             HexToBytes32(credentialId));
 
-        return isValid
-            ? new CredentialVerificationDto(credentialId, true, "Active", null)
-            : new CredentialVerificationDto(credentialId, false, "Invalid",
-                "Credential validation failed on-chain");
+        var status = MapStatus(verification.Status);
+        var reason = verification.IsValid
+            ? null
+            : status switch
+            {
+                CredentialStatus.Revoked => "Credential has been revoked on-chain",
+                CredentialStatus.Suspended => "Credential has been suspended on-chain",
+                CredentialStatus.Expired => $"Expired at {DateTimeOffset.FromUnixTimeSeconds((long)onChain.ExpiresAtUnix):O}",
+                _ when !verification.TrustChainValid => "Issuer trust chain validation failed on-chain",
+                _ => "Credential validation failed on-chain"
+            };
+
+        return new CredentialVerificationDto(
+            credentialId,
+            verification.IsValid,
+            status.ToString(),
+            reason);
     }
 
     public async Task<CredentialDto> IssueAsync(
         string issuerDid, string holderDid, string credentialType,
+        string credentialHash,
         string? issuerAccreditationId,
         DateTime? expiresAt,
+        string? issuerPrivateKey = null,
         CancellationToken ct = default)
     {
-        EnsureSignerMatchesIssuer(issuerDid);
+        var effectivePrivateKey = issuerPrivateKey ?? blockchainOptions.Value.PrivateKey;
+        var effectiveAccount = new Account(effectivePrivateKey);
+        var effectiveSignerAddress = NormalizeAddress(effectiveAccount.Address);
+        var effectiveIssuerDid = issuerPrivateKey is not null
+            ? ToDid(effectiveSignerAddress)
+            : issuerDid;
+
+        EnsureSignerMatchesIssuer(effectiveIssuerDid, effectiveSignerAddress);
 
         var holderAddress = ExtractAddress(holderDid);
+        var credentialHashBytes = HexToBytes32(credentialHash);
         var accreditationBytes = HexToBytes32(issuerAccreditationId);
         var expiresAtUnix = expiresAt is null
             ? BigInteger.Zero
             : new BigInteger(new DateTimeOffset(DateTime.SpecifyKind(expiresAt.Value, DateTimeKind.Utc)).ToUnixTimeSeconds());
 
         var txHash = await blockchain.SubmitTransactionAsync<object>(
+            effectivePrivateKey,
             "CredentialRegistry",
-            "issueCredential",
+            "recordCredential",
             holderAddress,
+            credentialHashBytes,
             credentialType,
             accreditationBytes,
             expiresAtUnix);
@@ -100,8 +121,9 @@ public class CredentialService(
         await blockchain.WaitForConfirmationAsync(txHash, ct);
 
         var credentialId = await FindIssuedCredentialIdAsync(
-            signerAddress,
+            effectiveSignerAddress,
             holderAddress,
+            credentialHashBytes,
             credentialType,
             accreditationBytes);
 
@@ -110,7 +132,7 @@ public class CredentialService(
         logger.LogInformation(
             "Issued credential {Id} on-chain from {Issuer} to {Holder} in tx {TxHash}",
             credentialId,
-            signerAddress,
+            effectiveSignerAddress,
             holderAddress,
             txHash);
 
@@ -118,15 +140,22 @@ public class CredentialService(
     }
 
     public async Task<bool> RevokeAsync(
-        string credentialId, string revokedByDid, string reason, CancellationToken ct = default)
+        string credentialId, string revokedByDid, string reason, string? revokedByPrivateKey = null, CancellationToken ct = default)
     {
-        EnsureSignerMatchesIssuer(revokedByDid);
+        var effectivePrivateKey = revokedByPrivateKey ?? blockchainOptions.Value.PrivateKey;
+        var effectiveSignerAddress = NormalizeAddress(new Account(effectivePrivateKey).Address);
+        var effectiveRevokerDid = revokedByPrivateKey is not null
+            ? ToDid(effectiveSignerAddress)
+            : revokedByDid;
+
+        EnsureSignerMatchesIssuer(effectiveRevokerDid, effectiveSignerAddress);
 
         var onChain = await GetOnChainCredentialAsync(credentialId);
         if (onChain is null || !onChain.Exists)
             return false;
 
         var txHash = await blockchain.SubmitTransactionAsync<object>(
+            effectivePrivateKey,
             "CredentialRegistry",
             "revokeCredential",
             HexToBytes32(credentialId),
@@ -139,18 +168,26 @@ public class CredentialService(
     }
 
     public async Task<bool> SuspendAsync(
-        string credentialId, string suspendedByDid, CancellationToken ct = default)
+        string credentialId, string suspendedByDid, string reason, string? suspendedByPrivateKey = null, CancellationToken ct = default)
     {
-        EnsureSignerMatchesIssuer(suspendedByDid);
+        var effectivePrivateKey = suspendedByPrivateKey ?? blockchainOptions.Value.PrivateKey;
+        var effectiveSignerAddress = NormalizeAddress(new Account(effectivePrivateKey).Address);
+        var effectiveSuspenderDid = suspendedByPrivateKey is not null
+            ? ToDid(effectiveSignerAddress)
+            : suspendedByDid;
+
+        EnsureSignerMatchesIssuer(effectiveSuspenderDid, effectiveSignerAddress);
 
         var onChain = await GetOnChainCredentialAsync(credentialId);
         if (onChain is null || !onChain.Exists)
             return false;
 
         var txHash = await blockchain.SubmitTransactionAsync<object>(
+            effectivePrivateKey,
             "CredentialRegistry",
             "suspendCredential",
-            HexToBytes32(credentialId));
+            HexToBytes32(credentialId),
+            reason);
 
         await blockchain.WaitForConfirmationAsync(txHash, ct);
 
@@ -275,6 +312,7 @@ public class CredentialService(
     private async Task<string> FindIssuedCredentialIdAsync(
         string issuerAddress,
         string holderAddress,
+        byte[] credentialHashBytes,
         string credentialType,
         byte[] accreditationBytes)
     {
@@ -299,6 +337,9 @@ public class CredentialService(
             if (!string.Equals(NormalizeAddress(candidate.Holder), holderAddress, StringComparison.OrdinalIgnoreCase))
                 continue;
 
+            if (!candidate.CredentialHash.SequenceEqual(credentialHashBytes))
+                continue;
+
             if (!string.Equals(candidate.CredentialType, credentialType, StringComparison.Ordinal))
                 continue;
 
@@ -311,13 +352,13 @@ public class CredentialService(
         throw new InvalidOperationException("Unable to locate the newly issued credential on-chain");
     }
 
-    private void EnsureSignerMatchesIssuer(string issuerDid)
+    private static void EnsureSignerMatchesIssuer(string issuerDid, string effectiveSignerAddress)
     {
         var issuerAddress = ExtractAddress(issuerDid);
-        if (!string.Equals(issuerAddress, signerAddress, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(issuerAddress, effectiveSignerAddress, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"Issuer {issuerDid} does not match configured blockchain signer {ToDid(signerAddress)}");
+                $"Issuer {issuerDid} does not match configured blockchain signer {ToDid(effectiveSignerAddress)}");
         }
     }
 
@@ -367,11 +408,7 @@ public class CredentialService(
             ? Bytes32ToHex(credential.IssuerAccreditationId)
             : null;
 
-        var status = credential.Revoked
-            ? CredentialStatus.Revoked.ToString()
-            : credential.Suspended
-                ? CredentialStatus.Suspended.ToString()
-                : CredentialStatus.Active.ToString();
+        var status = MapStatus(credential.Status).ToString();
 
         return new CredentialDto(
             CredentialId: Bytes32ToHex(credential.Id),
@@ -389,4 +426,13 @@ public class CredentialService(
             SuspendedAt: null,
             SuspendedByDID: null);
     }
+
+    private static CredentialStatus MapStatus(int status) => status switch
+    {
+        (int)OnChainCredentialStatus.Active => CredentialStatus.Active,
+        (int)OnChainCredentialStatus.Revoked => CredentialStatus.Revoked,
+        (int)OnChainCredentialStatus.Suspended => CredentialStatus.Suspended,
+        (int)OnChainCredentialStatus.Expired => CredentialStatus.Expired,
+        _ => throw new InvalidOperationException($"Unsupported on-chain credential status: {status}")
+    };
 }

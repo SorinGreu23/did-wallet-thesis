@@ -8,6 +8,8 @@ public class SuspendCredentialRequest
 {
     public string CredentialId { get; set; } = string.Empty;
     public string SuspendedByDID { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+    public string? SuspendedByPrivateKey { get; set; }
 }
 
 public class SuspendCredentialEndpoint(CredentialService service)
@@ -21,7 +23,7 @@ public class SuspendCredentialEndpoint(CredentialService service)
 
     public override async Task HandleAsync(SuspendCredentialRequest req, CancellationToken ct)
     {
-        var found = await service.SuspendAsync(req.CredentialId, req.SuspendedByDID, ct);
+        var found = await service.SuspendAsync(req.CredentialId, req.SuspendedByDID, req.Reason, req.SuspendedByPrivateKey, ct);
         if (!found)
             await Send.NotFoundAsync(ct);
         else

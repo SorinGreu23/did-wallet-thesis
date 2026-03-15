@@ -191,8 +191,9 @@ contract AccreditationRegistry {
 
         // Walk up the chain
         if (accred.scope == AccreditationScope.MemberState) {
-            // Member state must be validated by root authority
-            return rootAuthority.isMemberState(accred.subject);
+            // Member states are trusted when issued directly by the EU root signer.
+            // The subject does not need to already exist in EURootAuthority membership.
+            return accred.parentAccreditationId == bytes32(0) && accred.issuer == owner;
         } else if (accred.scope == AccreditationScope.Ministry) {
             // Ministry's trust chain is valid if its issuer is a member state
             return rootAuthority.isMemberState(accred.issuer);

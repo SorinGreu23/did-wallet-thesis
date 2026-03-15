@@ -2,7 +2,7 @@ using DID.Shared.Domain;
 
 namespace DID.Credential.Domain;
 
-public enum CredentialStatus { Active, Revoked, Suspended }
+public enum CredentialStatus { Active, Revoked, Suspended, Expired }
 
 public class Credential : Entity
 {

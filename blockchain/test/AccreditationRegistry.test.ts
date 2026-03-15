@@ -43,6 +43,29 @@ describe("AccreditationRegistry", function () {
         await rootAuthority.getAddress()
       );
     });
+
+    it("Should validate member state accreditations issued by the root signer", async function () {
+      const permissionsHash = ethers.keccak256(ethers.toUtf8Bytes("MEMBER_STATE_PERMISSIONS"));
+
+      const tx = await accreditationRegistry.issueAccreditation(
+        otherAccount.address,
+        1, // AccreditationScope.MemberState
+        ethers.ZeroHash,
+        permissionsHash,
+        0
+      );
+
+      const receipt = await tx.wait();
+      const event = receipt?.logs.find((log: any) => log.fragment?.name === "AccreditationIssued");
+
+      let accreditationId: string | undefined;
+      if (event && "args" in event) {
+        accreditationId = event.args[0];
+      }
+
+      expect(accreditationId).to.not.equal(undefined);
+      expect(await accreditationRegistry.validateTrustChain(accreditationId!)).to.equal(true);
+    });
   });
 
   describe("Ministry Accreditation", function () {

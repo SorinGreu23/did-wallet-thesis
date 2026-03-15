@@ -8,16 +8,15 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import credentialService, {
-  StoredCredential,
-} from "../services/credentialService";
-import didService from "../services/didService";
+import { StoredCredential } from "../services/credentialService";
+import walletService from "../services/walletService";
 import { COLORS } from "../constants/config";
 
 export default function CredentialsScreen() {
   const [credentials, setCredentials] = useState<StoredCredential[]>([]);
   const [loading, setLoading] = useState(false);
   const [issuing, setIssuing] = useState(false);
+  const [activeDid, setActiveDid] = useState<string | null>(null);
 
   useEffect(() => {
     loadCredentials();
@@ -26,8 +25,10 @@ export default function CredentialsScreen() {
   const loadCredentials = async () => {
     setLoading(true);
     try {
-      const creds = await credentialService.listCredentials();
+      const creds = await walletService.listCredentials();
       setCredentials(creds);
+      const active = await walletService.getActiveDid();
+      setActiveDid(active?.did ?? null);
     } catch (error) {
       console.error("Error loading credentials:", error);
     } finally {
@@ -38,33 +39,26 @@ export default function CredentialsScreen() {
   const issueSampleCredential = async () => {
     setIssuing(true);
     try {
-      // Get first DID as issuer and subject (self-issued for demo)
-      const dids = await didService.listDIDs();
+      const currentDid = await walletService.getActiveDid();
 
-      if (dids.length === 0) {
-        Alert.alert("No DIDs", "Please create a DID first");
+      if (!currentDid) {
+        Alert.alert("No active DID", "Please create a DID and set it as active first");
         return;
       }
 
-      const myDID = dids[0].did;
-
       // Issue a sample credential
-      const credential = await credentialService.issueCredential(
-        myDID, // issuer
-        myDID, // subject (self-issued)
-        {
-          type: ["VerifiableCredential", "ProfileCredential"],
-          credentialSubject: {
-            name: "Sorin Greu",
-            role: "Software Developer",
-            company: "UAIC",
-            skills: ["React Native", "TypeScript", ".NET", "Angular"],
-          },
-          expirationDate: new Date(
-            Date.now() + 365 * 24 * 60 * 60 * 1000,
-          ).toISOString(), // 1 year
+      const credential = await walletService.issueCredentialWithActiveDid({
+        type: ["VerifiableCredential", "ProfileCredential"],
+        credentialSubject: {
+          name: "Sorin Greu",
+          role: "Software Developer",
+          company: "UAIC",
+          skills: ["React Native", "TypeScript", ".NET", "Angular"],
         },
-      );
+        expirationDate: new Date(
+          Date.now() + 365 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
+      });
 
       console.log("Issued credential:", credential);
       Alert.alert("Success", "Credential issued successfully!");
@@ -79,10 +73,10 @@ export default function CredentialsScreen() {
 
   const verifyCredential = async (hash: string) => {
     try {
-      const credential = await credentialService.getCredential(hash);
+      const credential = await walletService.getCredential(hash);
       if (!credential) return;
 
-      const result = await credentialService.verifyCredential(credential);
+      const result = await walletService.verifyCredential(credential);
 
       if (result.verified) {
         Alert.alert("✅ Valid", "Credential signature is valid");
@@ -101,6 +95,12 @@ export default function CredentialsScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Credentials</Text>
       <Text style={styles.subtitle}>Your Verifiable Credentials</Text>
+      {activeDid && (
+        <View style={styles.activeDidBanner}>
+          <Text style={styles.activeDidLabel}>Active DID</Text>
+          <Text style={styles.activeDidValue} numberOfLines={1}>{activeDid}</Text>
+        </View>
+      )}
 
       <TouchableOpacity
         style={styles.issueButton}
@@ -199,6 +199,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#6b7280",
     marginBottom: 24,
+  },
+  activeDidBanner: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  activeDidLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1d4ed8',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  activeDidValue: {
+    fontSize: 12,
+    color: COLORS.text,
   },
   issueButton: {
     backgroundColor: COLORS.primary,

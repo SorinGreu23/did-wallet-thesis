@@ -5,6 +5,7 @@ public record CredentialIssuedEvent(
     string IssuerDID,
     string HolderDID,
     string CredentialType,
+    string? IssuerAccreditationId,
     string? HolderEmail,
     long BlockNumber,
     string TransactionHash,
