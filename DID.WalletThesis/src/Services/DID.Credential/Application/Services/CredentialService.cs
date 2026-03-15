@@ -45,9 +45,9 @@ public class CredentialService(
         IEnumerable<Domain.Credential> entities;
 
         if (issuerDid is not null)
-            entities = await repository.GetByIssuerDIDAsync(issuerDid, ct);
+            entities = await repository.GetByIssuerDIDAsync(ToDid(issuerDid), ct);
         else if (holderDid is not null)
-            entities = await repository.GetByHolderDIDAsync(holderDid, ct);
+            entities = await repository.GetByHolderDIDAsync(ToDid(holderDid), ct);
         else
             entities = await repository.GetAllAsync(ct);
 

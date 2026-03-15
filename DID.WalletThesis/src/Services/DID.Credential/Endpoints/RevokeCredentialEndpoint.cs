@@ -17,7 +17,7 @@ public class RevokeCredentialEndpoint(CredentialService service)
 {
     public override void Configure()
     {
-        Delete("/api/credentials/{credentialId}");
+        Post("/api/credentials/{credentialId}/revoke");
         AllowAnonymous();
     }
 

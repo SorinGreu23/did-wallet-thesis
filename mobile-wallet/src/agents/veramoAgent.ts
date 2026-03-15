@@ -13,8 +13,8 @@ import { KeyManager } from "@veramo/key-manager";
 import { KeyManagementSystem, SecretBox } from "@veramo/kms-local";
 import { DIDResolverPlugin } from "@veramo/did-resolver";
 import { Resolver } from "did-resolver";
-import { getResolver as keyDidResolver } from "key-did-resolver";
-import { KeyDIDProvider } from "@veramo/did-provider-key";
+import { EthrDIDProvider } from "@veramo/did-provider-ethr";
+import { getResolver as ethrDidResolver } from "ethr-did-resolver";
 import {
   DataStore,
   DataStoreORM,
@@ -25,6 +25,7 @@ import {
   PrivateKeyStore,
 } from "@veramo/data-store";
 import { DataSource } from "typeorm";
+import { CONFIG } from "../constants/config";
 
 import "react-native-get-random-values";
 import "@ethersproject/shims";
@@ -32,9 +33,18 @@ import "@ethersproject/shims";
 const SECRET_KEY =
   "29739248cad1bd1a0fc4d9b75cd4d2990de535baf5caadfdf8d8f86664aa830c";
 
+const NETWORKS = [
+  {
+    name: "sepolia",
+    chainId: CONFIG.HARDHAT_CHAIN_ID,
+    rpcUrl: CONFIG.HARDHAT_RPC_URL,
+  },
+];
+
 export type VeramoAgent = TAgent<
-  IDIDManager & IKeyManager & IResolver & IDataStore
+  IDIDManager & IKeyManager & IResolver & IDataStore & ICredentialPlugin
 >;
+
 let agentInstance: VeramoAgent | null = null;
 
 export const initializeAgent = async (): Promise<VeramoAgent> => {
@@ -58,27 +68,28 @@ export const initializeAgent = async (): Promise<VeramoAgent> => {
         store: new KeyStore(dbConnection),
         kms: {
           local: new KeyManagementSystem(
-            new PrivateKeyStore(dbConnection, new SecretBox(SECRET_KEY)),
+            new PrivateKeyStore(dbConnection, new SecretBox(SECRET_KEY))
           ),
         },
       }),
       new DIDManager({
         store: new DIDStore(dbConnection),
-        defaultProvider: "did:key",
+        defaultProvider: "did:ethr:sepolia",
         providers: {
-          "did:key": new KeyDIDProvider({
+          "did:ethr:sepolia": new EthrDIDProvider({
             defaultKms: "local",
+            networks: NETWORKS,
           }),
         },
       }),
       new DIDResolverPlugin({
         resolver: new Resolver({
-          ...keyDidResolver(),
+          ...ethrDidResolver({ networks: NETWORKS }),
         }),
       }),
       new DataStore(dbConnection),
       new DataStoreORM(dbConnection),
-      new CredentialPlugin()
+      new CredentialPlugin(),
     ],
   });
 

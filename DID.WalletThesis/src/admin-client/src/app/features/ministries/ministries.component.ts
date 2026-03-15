@@ -46,6 +46,7 @@ export class MinistriesComponent implements OnInit {
   readonly form = this.fb.group({
     name: ['', [Validators.required, Validators.minLength(2)]],
     ethereumAddress: ['', [Validators.required, Validators.pattern(/^0x[0-9a-fA-F]{40}$/)]],
+    issuerPrivateKey: ['', [Validators.required, Validators.pattern(/^0x[0-9a-fA-F]{64}$/)]],
   });
 
   ngOnInit(): void {
@@ -62,7 +63,7 @@ export class MinistriesComponent implements OnInit {
     if (!ms) return;
     this.loading.set(true);
     this.error.set(null);
-    this.accreditationService.list(this.navState.euRootDid, undefined, 'Ministry').subscribe({
+    this.accreditationService.list(ms.did, undefined, 'Ministry').subscribe({
       next: (data) => {
         this.ministries.set(data.filter(m => m.parentAccreditationId === ms.accreditationId));
         this.loading.set(false);
@@ -93,16 +94,17 @@ export class MinistriesComponent implements OnInit {
     const ms = this.navState.memberState();
     if (!ms) return;
     this.submitting.set(true);
-    const { name, ethereumAddress } = this.form.getRawValue();
+    const { name, ethereumAddress, issuerPrivateKey } = this.form.getRawValue();
     const subjectDID = `did:ethr:sepolia:${ethereumAddress}`;
 
     this.accreditationService
       .issue({
-        issuerDID: this.navState.euRootDid,
+        issuerDID: ms.did,
         subjectDID,
         scope: 'Ministry',
         name: name!,
         parentAccreditationId: ms.accreditationId,
+        issuerPrivateKey: issuerPrivateKey!,
       })
       .subscribe({
         next: (result) => {

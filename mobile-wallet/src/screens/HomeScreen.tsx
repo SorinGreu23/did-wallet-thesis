@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -7,75 +7,42 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-} from 'react-native';
-import { DIDInfo } from '../services/didService';
-import walletService from '../services/walletService';
-import { COLORS } from '../constants/config';
-import DIDDetailScreen from './DIDDetailScreen';
-import CredentialsScreen from './CredentialsScreen';
+  Clipboard,
+} from "react-native";
+import { DIDInfo } from "../services/didService";
+import walletService from "../services/walletService";
+import { COLORS } from "../constants/config";
+import CredentialsScreen from "./CredentialsScreen";
 
 export default function HomeScreen() {
-  const [dids, setDids] = useState<DIDInfo[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [selectedDID, setSelectedDID] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'dids' | 'credentials'>('dids');
-  const [activeDid, setActiveDid] = useState<string | null>(null);
+  const [identity, setIdentity] = useState<DIDInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"identity" | "credentials">(
+    "identity"
+  );
 
   useEffect(() => {
-    void loadDIDs();
+    void loadIdentity();
   }, []);
 
-  const loadDIDs = async () => {
+  const loadIdentity = async () => {
     setLoading(true);
     try {
-      const didList = await walletService.listDIDs();
-      setDids(didList);
-      const selected = await walletService.getActiveDid();
-      setActiveDid(selected?.did ?? null);
+      const id = await walletService.getIdentity();
+      setIdentity(id);
     } catch (error) {
-      console.error('Error loading DIDs:', error);
+      console.error("Error loading identity:", error);
+      Alert.alert("Error", "Failed to load wallet identity.");
     } finally {
       setLoading(false);
     }
   };
 
-  const createNewDID = async () => {
-    setCreating(true);
-    try {
-      const newDID = await walletService.createDID();
-      console.log('Created DID:', newDID);
-      await loadDIDs();
-    } catch (error) {
-      console.error('Error creating DID:', error);
-      Alert.alert('Error', 'Failed to create DID.');
-    } finally {
-      setCreating(false);
-    }
+  const copyToClipboard = (value: string, label: string) => {
+    Clipboard.setString(value);
+    Alert.alert("Copied", `${label} copied to clipboard.`);
   };
 
-  const setAsActiveDid = async (did: string) => {
-    try {
-      await walletService.setActiveDid(did);
-      setActiveDid(did);
-      Alert.alert('Active DID updated', 'This DID will be used by default for wallet actions.');
-    } catch (error) {
-      console.error('Error setting active DID:', error);
-      Alert.alert('Error', 'Failed to set active DID.');
-    }
-  };
-
-  if (selectedDID) {
-    return (
-      <DIDDetailScreen
-        did={selectedDID}
-        onBack={() => {
-          setSelectedDID(null);
-          void loadDIDs();
-        }}
-      />
-    );
-  }
 
   return (
     <View style={styles.container}>
@@ -84,79 +51,86 @@ export default function HomeScreen() {
 
       <View style={styles.tabs}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'dids' && styles.activeTab]}
-          onPress={() => setActiveTab('dids')}
+          style={[styles.tab, activeTab === "identity" && styles.activeTab]}
+          onPress={() => setActiveTab("identity")}
         >
-          <Text style={[styles.tabText, activeTab === 'dids' && styles.activeTabText]}>
-            DIDs
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "identity" && styles.activeTabText,
+            ]}
+          >
+            Identity
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'credentials' && styles.activeTab]}
-          onPress={() => setActiveTab('credentials')}
+          style={[
+            styles.tab,
+            activeTab === "credentials" && styles.activeTab,
+          ]}
+          onPress={() => setActiveTab("credentials")}
         >
-          <Text style={[styles.tabText, activeTab === 'credentials' && styles.activeTabText]}>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "credentials" && styles.activeTabText,
+            ]}
+          >
             Credentials
           </Text>
         </TouchableOpacity>
       </View>
 
-      {activeTab === 'dids' ? (
-        <>
-          <TouchableOpacity
-            style={styles.createButton}
-            onPress={createNewDID}
-            disabled={creating}
-          >
-            {creating ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Create New DID</Text>
-            )}
-          </TouchableOpacity>
+      {activeTab === "identity" ? (
+        loading ? (
+          <ActivityIndicator
+            size="large"
+            color={COLORS.primary}
+            style={{ marginTop: 40 }}
+          />
+        ) : identity ? (
+          <ScrollView style={styles.content}>
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>DID</Text>
+              <Text style={styles.didText} numberOfLines={2}>
+                {identity.did}
+              </Text>
+              <TouchableOpacity
+                style={styles.copyButton}
+                onPress={() => copyToClipboard(identity.did, "DID")}
+              >
+                <Text style={styles.copyButtonText}>Copy DID</Text>
+              </TouchableOpacity>
+            </View>
 
-          {loading ? (
-            <ActivityIndicator size="large" color={COLORS.primary} />
-          ) : (
-            <ScrollView style={styles.didList}>
-              {dids.length === 0 ? (
-                <Text style={styles.emptyText}>No DIDs yet. Create your first one!</Text>
-              ) : (
-                dids.map((did, index) => (
-                  <TouchableOpacity
-                    key={did.did}
-                    style={styles.didCard}
-                    onPress={() => setSelectedDID(did.did)}
-                  >
-                    <View style={styles.didHeaderRow}>
-                      <Text style={styles.didLabel}>DID #{index + 1}</Text>
-                      {activeDid === did.did && <Text style={styles.activeBadge}>Active</Text>}
-                    </View>
-                    <Text style={styles.didText} numberOfLines={1}>
-                      {did.did}
-                    </Text>
-                    <Text style={styles.didAlias}>Alias: {did.alias || 'N/A'}</Text>
-                    <Text style={styles.didKeys}>Keys: {did.keys.length}</Text>
-                    <View style={styles.cardActionsRow}>
-                      <Text style={styles.tapHint}>Tap for details →</Text>
-                      {activeDid !== did.did && (
-                        <TouchableOpacity
-                          style={styles.activeButton}
-                          onPress={(event) => {
-                            event.stopPropagation();
-                            void setAsActiveDid(did.did);
-                          }}
-                        >
-                          <Text style={styles.activeButtonText}>Set Active</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                ))
-              )}
-            </ScrollView>
-          )}
-        </>
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>Ethereum Address</Text>
+              <Text style={styles.addressText}>
+                {identity.ethereumAddress}
+              </Text>
+              <TouchableOpacity
+                style={styles.copyButton}
+                onPress={() =>
+                  copyToClipboard(identity.ethereumAddress, "Address")
+                }
+              >
+                <Text style={styles.copyButtonText}>Copy Address</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>Keys</Text>
+              {identity.keys.map((key) => (
+                <View key={key.kid} style={styles.keyRow}>
+                  <Text style={styles.keyType}>{key.type}</Text>
+                  <Text style={styles.keyHex} numberOfLines={1}>
+                    {key.publicKeyHex.slice(0, 20)}…
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+        ) : null
       ) : (
         <CredentialsScreen />
       )}
@@ -173,17 +147,17 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 32,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: COLORS.text,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#6b7280',
+    color: "#6b7280",
     marginBottom: 24,
   },
   tabs: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginBottom: 24,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
@@ -191,7 +165,7 @@ const styles = StyleSheet.create({
   tab: {
     flex: 1,
     paddingVertical: 12,
-    alignItems: 'center',
+    alignItems: "center",
   },
   activeTab: {
     borderBottomWidth: 2,
@@ -199,95 +173,72 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 16,
-    color: '#6b7280',
+    color: "#6b7280",
   },
   activeTabText: {
     color: COLORS.primary,
-    fontWeight: '600',
+    fontWeight: "600",
   },
-  createButton: {
-    backgroundColor: COLORS.primary,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  didList: {
+  content: {
     flex: 1,
   },
-  emptyText: {
-    textAlign: 'center',
-    color: '#9ca3af',
-    fontSize: 16,
-    marginTop: 40,
-  },
-  didCard: {
-    backgroundColor: '#f9fafb',
-    padding: 16,
+  card: {
+    backgroundColor: "#f9fafb",
     borderRadius: 12,
+    padding: 16,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  didHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  didLabel: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  activeBadge: {
+  cardLabel: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#065f46',
-    backgroundColor: '#d1fae5',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-  },
-  didText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
+    fontWeight: "700",
+    color: "#6b7280",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
     marginBottom: 8,
   },
-  didAlias: {
-    fontSize: 12,
-    color: '#6b7280',
+  didText: {
+    fontSize: 13,
+    fontFamily: "monospace",
+    color: COLORS.text,
+    marginBottom: 12,
   },
-  didKeys: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 4,
+  addressText: {
+    fontSize: 14,
+    fontFamily: "monospace",
+    fontWeight: "600",
+    color: COLORS.text,
+    marginBottom: 12,
   },
-  cardActionsRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  tapHint: {
-    fontSize: 12,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  activeButton: {
-    backgroundColor: '#e0e7ff',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  copyButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     borderRadius: 8,
+    alignSelf: "flex-start",
   },
-  activeButtonText: {
-    color: COLORS.primary,
+  copyButtonText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  keyRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  keyType: {
     fontSize: 12,
-    fontWeight: '700',
+    color: "#6b7280",
+    fontWeight: "600",
+  },
+  keyHex: {
+    fontSize: 12,
+    fontFamily: "monospace",
+    color: "#9ca3af",
+    flex: 1,
+    textAlign: "right",
   },
 });
