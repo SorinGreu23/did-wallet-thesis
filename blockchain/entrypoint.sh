@@ -1,11 +1,12 @@
 #!/bin/sh
 
+STATE_FILE=/data/hardhat-state.json
 DEPLOYED_FLAG=/data/deployed
 
 mkdir -p /data
 
 echo "Starting Hardhat node..."
-npx hardhat node --hostname 0.0.0.0 &
+npx hardhat node --hostname 0.0.0.0 --state "$STATE_FILE" &
 NODE_PID=$!
 
 # Forward SIGTERM/SIGINT to the node process for clean container stop
@@ -28,13 +29,21 @@ until node -e "
   sleep 2
 done
 
-echo "Node ready. Deploying contracts..."
-if ! npx hardhat run scripts/deploy.ts --network localhost; then
-  echo "ERROR: Contract deployment failed"
-  kill $NODE_PID 2>/dev/null
-  exit 1
+if [ -f "$DEPLOYED_FLAG" ]; then
+  echo "Chain state restored from $STATE_FILE — skipping deployment."
+  mkdir -p /app/deployments
+  cp /data/latest.json /app/deployments/latest.json
+else
+  echo "Node ready. Deploying contracts..."
+  if ! npx hardhat run scripts/deploy.ts --network localhost; then
+    echo "ERROR: Contract deployment failed"
+    kill $NODE_PID 2>/dev/null
+    exit 1
+  fi
+  cp /app/deployments/latest.json /data/latest.json
+  touch "$DEPLOYED_FLAG"
+  echo "Contracts deployed."
 fi
-echo "Contracts deployed."
 
 echo "Node is running."
 wait $NODE_PID

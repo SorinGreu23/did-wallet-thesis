@@ -54,10 +54,12 @@ services:
     container_name: did-hardhat
     ports:
       - "8545:8545"
+    volumes:
+      - hardhat_data:/data
     networks:
       - did-infra
     healthcheck:
-      test: ["CMD-SHELL", "test -f /app/deployments/latest.json"]
+      test: ["CMD-SHELL", "test -f /data/deployed"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -66,6 +68,7 @@ services:
 volumes:
   postgres_data:
   rabbitmq_data:
+  hardhat_data:
 
 networks:
   did-infra:
