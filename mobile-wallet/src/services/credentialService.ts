@@ -3,6 +3,7 @@ import {
   VerifiablePresentation,
 } from "@veramo/core-types";
 import { getAgent, initializeAgent } from "../agents/veramoAgent";
+import authService from "./authService";
 
 export interface CredentialData {
   type: string[];
@@ -21,7 +22,9 @@ class CredentialService {
 
   async initialize() {
     if (!this.initialized) {
-      await initializeAgent();
+      const secretKey = await authService.getSecretKey();
+      if (!secretKey) throw new Error("Wallet not created. No secret key found.");
+      await initializeAgent(secretKey);
       this.initialized = true;
     }
   }

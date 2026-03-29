@@ -1,3 +1,4 @@
+using DID.Accreditation.Application.Auth;
 using DID.Accreditation.Application.Services;
 using DID.Accreditation.Domain.Interfaces;
 using DID.Accreditation.Infrastructure.Consumers;
@@ -8,7 +9,9 @@ using DID.Shared.Infrastructure.Options;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using MassTransit;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -52,6 +55,31 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod());
 });
 
+builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection(AuthOptions.SectionName));
+builder.Services.AddSingleton<AuthService>();
+
+var jwtSecret = builder.Configuration["Auth:JwtSecret"] ?? "THIS_IS_A_DEV_SECRET_CHANGE_IN_PRODUCTION_MIN_32_CHARS!!";
+var keyBytes = System.Text.Encoding.UTF8.GetBytes(jwtSecret);
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ClockSkew = TimeSpan.Zero,
+        };
+    });
+
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("EURoot", p => p.RequireClaim("scope", "EURoot"))
+    .AddPolicy("MemberState", p => p.RequireClaim("scope", "EURoot", "MemberState"))
+    .AddPolicy("Ministry", p => p.RequireClaim("scope", "EURoot", "MemberState", "Ministry"))
+    .AddPolicy("Institution", p => p.RequireClaim("scope", "EURoot", "MemberState", "Ministry", "Institution"));
+
 builder.Services.AddFastEndpoints();
 builder.Services.SwaggerDocument(o =>
 {
@@ -74,6 +102,8 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseCors();
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseHttpsRedirection();
 app.UseFastEndpoints();
 await app.RunAsync();

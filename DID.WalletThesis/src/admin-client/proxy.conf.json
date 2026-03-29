@@ -1,4 +1,10 @@
 {
+  "/api/auth": {
+    "target": "http://localhost:5211",
+    "secure": false,
+    "changeOrigin": true,
+    "logLevel": "info"
+  },
   "/api/accreditations": {
     "target": "http://localhost:5211",
     "secure": false,

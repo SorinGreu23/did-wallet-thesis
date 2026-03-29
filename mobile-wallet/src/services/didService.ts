@@ -3,6 +3,7 @@ import { arrayify } from "@ethersproject/bytes";
 import { keccak256 } from "@ethersproject/keccak256";
 import { computePublicKey } from "@ethersproject/signing-key";
 import { getAgent, initializeAgent } from "../agents/veramoAgent";
+import authService from "./authService";
 
 export interface DIDInfo {
   did: string;
@@ -31,7 +32,9 @@ class DIDService {
 
   async initialize() {
     if (!this.initialized) {
-      await initializeAgent();
+      const secretKey = await authService.getSecretKey();
+      if (!secretKey) throw new Error("Wallet not created. No secret key found.");
+      await initializeAgent(secretKey);
       this.initialized = true;
     }
   }

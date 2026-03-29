@@ -1,15 +1,32 @@
-import 'react-native-get-random-values';
-import '@ethersproject/shims';
-import { StatusBar } from 'expo-status-bar';
-import { ThemeProvider, useTheme } from './src/context/ThemeContext';
-import HomeScreen from './src/screens/HomeScreen';
+import "react-native-get-random-values";
+import "@ethersproject/shims";
+import { StatusBar } from "expo-status-bar";
+import { ActivityIndicator, View, StyleSheet } from "react-native";
+import { ThemeProvider, useTheme } from "./src/context/ThemeContext";
+import { AuthProvider, useAuth } from "./src/context/AuthContext";
+import HomeScreen from "./src/screens/HomeScreen";
+import WelcomeScreen from "./src/screens/WelcomeScreen";
 
-function Root() {
-  const { isDark } = useTheme();
+function AppNavigator() {
+  const { isDark, colors } = useTheme();
+  const { state, onAuthenticated } = useAuth();
+
+  if (state === "loading") {
+    return (
+      <View style={[styles.centered, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <>
-      <HomeScreen />
-      <StatusBar style={isDark ? 'light' : 'dark'} />
+      {state === "authenticated" ? (
+        <HomeScreen />
+      ) : (
+        <WelcomeScreen onAuthenticated={onAuthenticated} />
+      )}
+      <StatusBar style={isDark ? "light" : "dark"} />
     </>
   );
 }
@@ -17,7 +34,17 @@ function Root() {
 export default function App() {
   return (
     <ThemeProvider>
-      <Root />
+      <AuthProvider>
+        <AppNavigator />
+      </AuthProvider>
     </ThemeProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  centered: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});

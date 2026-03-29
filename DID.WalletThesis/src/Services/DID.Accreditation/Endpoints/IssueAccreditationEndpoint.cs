@@ -10,7 +10,7 @@ public class IssueAccreditationEndpoint(AccreditationService service)
     public override void Configure()
     {
         Post("/api/accreditations");
-        AllowAnonymous();
+        Policies("MemberState");
     }
 
     public override async Task HandleAsync(IssueAccreditationRequest req, CancellationToken ct)

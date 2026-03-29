@@ -1,314 +1,214 @@
-# EU Digital Identity Research Prototype
+# EU Decentralized Digital Identity System
 
 Bachelor's Thesis — Computer Science, Alexandru Ioan Cuza University, Iasi
 
-This repository is being reshaped into a blockchain-anchored, privacy-preserving digital identity prototype with 3 main platforms:
+A blockchain-anchored, privacy-preserving digital identity prototype demonstrating hierarchical trust chains, DID-based authentication, and W3C Verifiable Credentials across three platforms.
 
-1. Accreditation Platform
-2. Mobile Wallet App
-3. Verifier Platform
+## Architecture
 
-The goal is not to reproduce the full future EUDI ecosystem. The goal is to build and evaluate a focused prototype that:
+```
+                        ┌──────────────────────────┐
+                        │   Ethereum (Hardhat /     │
+                        │       Sepolia)            │
+                        │                           │
+                        │  EURootAuthority.sol      │
+                        │  AccreditationRegistry.sol│
+                        │  CredentialRegistry.sol   │
+                        └────────────┬──────────────┘
+                                     │
+                    Source of truth for all
+                    trust & authorization
+                                     │
+              ┌──────────────────────┼──────────────────────┐
+              │                      │                      │
+   ┌──────────▼─────────┐ ┌─────────▼──────────┐ ┌────────▼────────┐
+   │ Accreditation       │ │ Mobile Wallet      │ │ Verifier        │
+   │ Platform            │ │                    │ │ Platform        │
+   │                     │ │ React Native/Expo  │ │ (planned)       │
+   │ Angular 21 + .NET 10│ │ Veramo + SQLite    │ │                 │
+   │ DID-Auth + RBAC     │ │ expo-secure-store  │ │                 │
+   └─────────────────────┘ └────────────────────┘ └─────────────────┘
+```
 
-- enforces institutional trust and credential status on-chain
-- keeps keys under wallet control
-- uses zero-knowledge proofs as a mandatory privacy mechanism
-- aligns wallet-facing flows with EUDI-style issuance and presentation standards
-- uses off-chain services only as helpers for UX, communication, indexing, or proof execution
+### Core Principle
 
-## System Vision
+**Blockchain is the source of truth — not microservices.**
+
+- Smart contracts enforce all authorization on-chain
+- Microservices are convenience wrappers only (indexing, relaying, UI helpers)
+- The mobile wallet can verify credentials independently by reading the blockchain
+- No centralized identity provider — authentication uses DID-Auth (challenge-response with DID key signatures)
+
+### Trust Hierarchy
+
+Every arrow is enforced by smart contract logic:
+
+```
+EU Root Authority (EURootAuthority.sol — multi-sig governance, 66% approval)
+  → Member State (AccreditationRegistry.sol — checks isMemberState())
+    → Ministry (AccreditationRegistry.sol — validates parent chain)
+      → Institution (AccreditationRegistry.sol — validates parent chain)
+        → Credential (CredentialRegistry.sol — validates issuer accreditation)
+```
+
+## Platforms
 
 ### 1. Accreditation Platform
 
-The accreditation platform is the institutional control plane.
+The institutional control plane. Used by EU Root, member states, ministries, and universities.
 
-It is used by:
+| Feature | Status |
+|---------|--------|
+| Hierarchical accreditation issuance (on-chain) | Done |
+| Trust chain verification via `validateTrustChain()` | Done |
+| Revocation and inspection | Done |
+| DID-Auth login (challenge-response, no passwords) | Done |
+| Role-based access control derived from on-chain scope | Done |
+| Admin UI with scope-filtered navigation | Done |
 
-- EU root demo authority
-- member states
-- ministries
-- institutions
+**Stack:** Angular 21, Tailwind CSS, .NET 10 (FastEndpoints), Nethereum, PostgreSQL, RabbitMQ + MassTransit.
 
-It manages a hierarchical trust model:
+### 2. Mobile Wallet
 
-```text
-EU Root
-  -> Member State
-      -> Ministry
-          -> Institution
-              -> Credential issuance authority
-```
+The citizen-controlled component. Holds keys locally, manages DIDs and credentials.
 
-What it must do:
+| Feature | Status |
+|---------|--------|
+| DID creation and management (`did:ethr:sepolia`) | Done |
+| Key storage in iOS Keychain (expo-secure-store) | Done |
+| W3C Verifiable Credential storage and display | Done |
+| Biometric-gated identity view (Face ID / Touch ID) | Done |
+| Wallet creation flow with secure key generation | Done |
+| Auto-login bypass for returning users | Done |
+| ZKP-backed selective disclosure | Planned |
+| QR-based credential presentation | Planned |
 
-- register the demo member states used in the thesis scenario
-- issue scoped accreditations on-chain
-- revoke and inspect accreditations
-- show trust-chain hierarchy, status, expiry, and transaction references
-- act as an issuer/admin operator UI, not as the source of trust
+**Stack:** React Native, Expo, Veramo Framework, SQLite (TypeORM), expo-secure-store.
 
-### 2. Mobile Wallet App
+### 3. Verifier Platform (planned)
 
-The wallet is the citizen-controlled component.
+The relying-party interface for banks, employers, and academic institutions. Validates credentials, trust chains, and ZKP proofs directly against the blockchain.
 
-What it must do:
+## Smart Contracts
 
-- hold keys locally
-- receive and store credentials
-- create privacy-preserving presentations
-- generate mandatory ZKP-backed proofs
-- share proofs through QR or time-limited request flows
-- avoid disclosing unnecessary personal data
+Deployed on local Hardhat (deterministic addresses):
 
-### 3. Verifier Platform
+| Contract | Address | Purpose |
+|----------|---------|---------|
+| `EURootAuthority.sol` | `0x5FbDB2315678afecb367f032d93F642f64180aa3` | Root of trust, deployment ceremony, multi-sig governance |
+| `AccreditationRegistry.sol` | `0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0` | Hierarchical trust chain, `validateTrustChain(bytes32)` |
+| `CredentialRegistry.sol` | `0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9` | Credential status, issuer accreditation validation |
 
-The verifier platform is the relying-party UI for banks, employers, and academic institutions.
+## Authentication
 
-What it must do:
+### Admin Client — DID-Auth + RBAC
 
-- request a presentation for a specific purpose
-- validate credential signatures and proof artifacts
-- validate credential status on-chain
-- validate issuer trust through the accreditation chain
-- return an eligibility decision without unnecessary data exposure
+No passwords. Users authenticate by signing a cryptographic challenge with their Ethereum private key:
 
-## Trust Model
+1. Client requests a nonce from `POST /api/auth/challenge`
+2. Signs the nonce locally with ethers.js (private key never leaves the browser)
+3. Submits signature to `POST /api/auth/verify`
+4. Backend recovers the signer address, queries on-chain accreditation scope, issues a JWT
 
-The blockchain is the trust anchor.
+The JWT contains the DID's on-chain scope (`EURoot`, `MemberState`, `Ministry`, `Institution`), which drives:
+- **Route guards** — each route requires a minimum scope
+- **Sidebar filtering** — users only see routes they're authorized for
+- **Backend policies** — endpoints enforce scope via `[Authorize]` policies
 
-Smart contracts are responsible for:
+### Mobile Wallet — Secure Storage
 
-- trust hierarchy
-- issuer authorization
-- credential status
-- revocation and suspension
-- trust-chain validation
-- event emission
-
-Wallets and clients are responsible for:
-
-- key custody
-- DID and credential ownership
-- transaction signing
-- presentation creation
-- proof generation or proof-orchestration
-- direct verification reads when correctness matters
-
-Helper services are allowed only for:
-
-- indexing
-- relaying
-- presentation brokering
-- notification
-- proof execution assistance
-
-Helper services are not allowed to be:
-
-- key custodians
-- trust authorities
-- authorization gates
-- the only source of verification truth
-
-## EUDI Alignment
-
-This project is a research prototype aligned with the direction of the EUDI ecosystem, not a full EUDI implementation.
-
-Target alignment:
-
-- OpenID4VCI for issuance interactions
-- OpenID4VP for presentation interactions
-- EUDI-compatible credential/presentation modeling
-- minimal disclosure
-- holder-controlled consent
-- mandatory privacy-preserving proof flow
-
-Important constraint:
-
-- blockchain is the internal trust and status infrastructure
-- EUDI-style issuance and presentation protocols are the interoperability layer exposed to wallets and verifiers
-
-## Current Direction
-
-The previous repository direction emphasized many domain microservices. The new direction is:
-
-- keep the smart contracts as the center of trust
-- keep or refactor the admin client into the accreditation platform
-- refactor the mobile wallet into a real holder wallet
-- add a verifier-facing platform
-- downgrade most backend services into optional helpers
-- extract reusable client-side chain and verification logic into a shared SDK
+- Secret key generated at wallet creation, stored in iOS Keychain via `expo-secure-store`
+- Returning users bypass the welcome screen automatically
+- Biometric authentication (Face ID / Touch ID) gates sensitive operations
 
 ## Repository Layout
 
-```text
+```
 did-wallet-thesis/
-├── blockchain/                    # authoritative on-chain trust logic
+├── blockchain/                         # Smart contracts, deploy scripts, ABIs
+│   ├── contracts/                      # Solidity sources
+│   ├── scripts/deploy.ts              # Deployment + bootstrap
+│   └── abis/                          # Exported ABIs for services
 ├── DID.WalletThesis/
 │   └── src/
-│       ├── admin-client/          # accreditation platform UI
-│       ├── Services/              # current helper/backend services, to be reduced in authority
-│       └── Shared/
-├── mobile-wallet/                 # holder wallet
-├── zkp-service/                   # proof-generation / verification helper
-├── IMPLEMENTATION_PLAN.md         # architecture and migration strategy
-├── TASKS.md                       # execution backlog and weekly plan
-└── PROJECT_ANALYSIS_v2.md         # code-based assessment and feasibility analysis
+│       ├── admin-client/              # Angular 21 accreditation platform
+│       │   └── src/app/
+│       │       ├── core/auth/         # DID-Auth service, guards, interceptor
+│       │       ├── features/          # member-states, ministries, universities, login
+│       │       └── shared/            # Reusable components
+│       ├── Services/
+│       │   ├── DID.Accreditation/     # Accreditation API + auth endpoints
+│       │   ├── DID.BlockchainSync/    # Event polling + RabbitMQ publisher
+│       │   ├── DID.Identity/          # DID generation service
+│       │   └── DID.Credential/        # Credential API (stub)
+│       ├── Shared/
+│       │   ├── DID.Shared.Domain/     # DDD base classes
+│       │   ├── DID.Shared.Application/# Interfaces (IBlockchainService, IEventBus)
+│       │   └── DID.Shared.Infrastructure/ # Nethereum, MassTransit, EF Core
+│       └── Contracts/DID.Contracts/   # RabbitMQ event DTOs
+├── mobile-wallet/                     # React Native/Expo mobile app
+│   └── src/
+│       ├── agents/veramoAgent.ts      # Veramo agent (DID, keys, credentials)
+│       ├── context/AuthContext.tsx     # Auth state + wallet creation
+│       ├── screens/                   # WelcomeScreen, HomeScreen, etc.
+│       └── services/                  # DID, credential, auth, wallet services
+├── docker-compose.infra.yml           # PostgreSQL, RabbitMQ, Hardhat
+├── docker-compose.services.yml        # Microservice containers
+├── TESTING_GUIDE.md                   # Step-by-step testing instructions
+└── CLAUDE.md                          # AI coding assistant instructions
 ```
 
-## Current Status Snapshot
+## Quick Start
 
-Implemented foundations:
+### Prerequisites
 
-- Solidity contracts for root authority, accreditations, and credential status
-- Hardhat project with tests and deployment scripts
-- Angular admin client scaffold with accreditation-oriented UI direction
-- React Native wallet scaffold with Veramo-based DID/VC groundwork
-- ZKP service with proof generation and verification
-- .NET services that currently expose blockchain-backed APIs, but must be demoted from trust authorities to helper roles over time
+- Docker Desktop
+- Node.js 18+
+- .NET 10 SDK
+- Xcode (for iOS Simulator)
 
-Main architectural gaps still to close:
+### 1. Infrastructure
 
-- contract / service mismatch in the credential flow
-- incomplete EUDI-compatible issuance and presentation flows
-- mobile wallet not yet aligned with the final identity and privacy model
-- verifier platform not yet implemented as a coherent product
-- backend still too authoritative in several places
+```bash
+docker compose -f docker-compose.infra.yml up -d
+cd blockchain && npx hardhat run scripts/deploy.ts --network localhost
+docker exec did-postgres psql -U did_user -d postgres -c "CREATE DATABASE did_accreditation;"
+```
 
-## This Week's Goal
+### 2. Accreditation Platform
 
-The immediate milestone is not the whole thesis platform. It is a finished accreditation-platform vertical slice plus mobile-wallet refactoring groundwork.
+```bash
+# Backend
+cd DID.WalletThesis && dotnet run --project src/Services/DID.Accreditation
 
-By the end of this week, the target is:
+# Frontend (separate terminal)
+cd DID.WalletThesis/src/admin-client && npm install && npm start
+```
 
-- a presentable accreditation platform demo
-- stable on-chain issuance, listing, revocation, and verification for accreditations
-- trust-chain visualization in the admin UI
-- a refactored mobile-wallet foundation prepared for real holder credentials and ZKP-backed presentations
+Open `http://localhost:4200` and sign in with a Hardhat account private key.
 
-## Week-by-Week Roadmap
+### 3. Mobile Wallet
 
-### Week 1 — March 9 to March 15
+```bash
+cd mobile-wallet && npm install && npx expo start --ios
+```
 
-Focus:
+See [TESTING_GUIDE.md](TESTING_GUIDE.md) for detailed end-to-end testing instructions with test accounts and expected behaviors.
 
-- finish the accreditation platform
-- refactor the mobile wallet foundation
+## Technical Details
 
-Expected deliverables:
+- **DID method:** `did:ethr:sepolia` with Secp256k1 keys
+- **Credential format:** W3C Verifiable Credentials with JWT proofs
+- **Mobile storage:** SQLite via expo-sqlite + TypeORM, keys in expo-secure-store
+- **Event bus:** RabbitMQ + MassTransit
+- **Blockchain interaction:** Nethereum (.NET), ethers.js (Angular/Wallet)
 
-- admin UI for actor selection, accreditation issuance, list, detail, revoke, and verify
-- stable accreditation service and contract path for the demo
-- trust-chain display in the UI
-- mobile-wallet refactor plan started or partially executed
-- wallet code cleaned up around DID, credential, and storage boundaries
+## Standards Alignment
 
-### Week 2 — March 16 to March 22
+**Implemented:** W3C DID Core 1.0, W3C VC Data Model 1.1, did:ethr Method Specification, EIP-1056.
 
-Focus:
+**Planned:** OpenID4VP, OpenID4VCI, SD-JWT, eIDAS 2.0 / EBSI Trust Framework.
 
-- stabilize credential path and remove contract/service drift
-- define the final identity model and credential format strategy
+## License
 
-Expected deliverables:
-
-- credential contract/API compatibility fixed
-- final DID / identifier strategy documented
-- shared client SDK structure started
-- mobile wallet ready to receive real thesis credentials instead of demo-only self-issued ones
-
-### Week 3 — March 23 to March 29
-
-Focus:
-
-- wallet-first credential issuance flow
-- start EUDI-aligned issuance orchestration
-
-Expected deliverables:
-
-- institution-side issuance flow clarified
-- wallet receives and stores thesis credentials
-- shared SDK handles contract reads and normalization
-- OpenID4VCI-aligned flow design documented or partially implemented
-
-### Week 4 — March 30 to April 5
-
-Focus:
-
-- verifier platform foundation
-- presentation request and response flow
-
-Expected deliverables:
-
-- verifier UI scaffold
-- verifier request model
-- QR or challenge-based flow between verifier and wallet
-- initial on-chain verification path for credentials and issuer trust
-
-### Week 5 — April 6 to April 12
-
-Focus:
-
-- mandatory ZKP integration in the holder-to-verifier flow
-
-Expected deliverables:
-
-- wallet prepares ZKP-backed disclosure
-- verifier validates proof and on-chain status together
-- at least one real scenario works end to end
-
-### Week 6 — April 13 to April 19
-
-Focus:
-
-- end-to-end scenario hardening
-- reduce backend authority
-
-Expected deliverables:
-
-- services re-scoped as indexer, broker, relay, or helper only
-- clearer trust boundaries in code and docs
-- demo path works with minimal backend trust assumptions
-
-### Week 7 — April 20 to April 26
-
-Focus:
-
-- thesis demo polishing
-- documentation and architecture hardening
-
-Expected deliverables:
-
-- stable 3-platform narrative
-- polished accreditation platform
-- stable wallet flow
-- stable verifier flow
-- updated diagrams, README, plan, and thesis notes
-
-### Week 8 — April 27 to May 3
-
-Focus:
-
-- buffer, bug fixing, presentation preparation
-
-Expected deliverables:
-
-- rehearsable demo
-- stable screenshots and architecture explanation
-- explicit limitations and future-work framing
-
-## What “Done” Means for the Thesis
-
-The thesis is in a good state if these are true:
-
-1. Accreditation hierarchy works and is demonstrable.
-2. Wallet stores and presents real thesis credentials.
-3. Verifier checks trust and eligibility without depending on a trusted backend answer.
-4. ZKP is part of the live privacy story, not a side experiment.
-5. EUDI alignment is visible in the issuance and presentation design.
-6. Off-chain services are helpers, not trust anchors.
-
-## Where to Look Next
-
-- [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the target architecture and migration strategy
-- [TASKS.md](TASKS.md) for the execution backlog and weekly breakdown
-- [PROJECT_ANALYSIS_v2.md](PROJECT_ANALYSIS_v2.md) for the feasibility and risk analysis
+Bachelor's thesis project. Academic use.

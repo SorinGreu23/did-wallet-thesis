@@ -30,9 +30,6 @@ import { CONFIG } from "../constants/config";
 import "react-native-get-random-values";
 import "@ethersproject/shims";
 
-const SECRET_KEY =
-  "29739248cad1bd1a0fc4d9b75cd4d2990de535baf5caadfdf8d8f86664aa830c";
-
 const NETWORKS = [
   {
     name: "sepolia",
@@ -47,8 +44,12 @@ export type VeramoAgent = TAgent<
 
 let agentInstance: VeramoAgent | null = null;
 
-export const initializeAgent = async (): Promise<VeramoAgent> => {
+export const initializeAgent = async (secretKey: string): Promise<VeramoAgent> => {
   if (agentInstance) return agentInstance;
+
+  if (!secretKey || secretKey.length !== 64) {
+    throw new Error("A valid 64-character hex secret key is required.");
+  }
 
   const dbConnection = await new DataSource({
     type: "expo",
@@ -68,7 +69,7 @@ export const initializeAgent = async (): Promise<VeramoAgent> => {
         store: new KeyStore(dbConnection),
         kms: {
           local: new KeyManagementSystem(
-            new PrivateKeyStore(dbConnection, new SecretBox(SECRET_KEY))
+            new PrivateKeyStore(dbConnection, new SecretBox(secretKey))
           ),
         },
       }),
