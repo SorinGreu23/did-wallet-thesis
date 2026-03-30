@@ -21,7 +21,6 @@ import {
   DIDStore,
   Entities,
   KeyStore,
-  migrations,
   PrivateKeyStore,
 } from "@veramo/data-store";
 import { DataSource } from "typeorm";
@@ -29,6 +28,50 @@ import { CONFIG } from "../constants/config";
 
 import "react-native-get-random-values";
 import "@ethersproject/shims";
+
+const TX_CONTROL = new Set([
+  "BEGIN TRANSACTION",
+  "COMMIT",
+  "ROLLBACK",
+]);
+
+function isTxControl(sql: string): boolean {
+  const upper = sql.trim().toUpperCase();
+  return (
+    TX_CONTROL.has(upper) ||
+    upper.startsWith("SAVEPOINT") ||
+    upper.startsWith("RELEASE SAVEPOINT")
+  );
+}
+
+/**
+ * expo-sqlite v16 wraps every prepareAsync call in an implicit transaction.
+ * TypeORM issues explicit BEGIN/COMMIT/ROLLBACK through prepareAsync, which
+ * causes "cannot start a transaction within a transaction".
+ *
+ * Fix: wrap DataSource.createQueryRunner so every runner it hands out has
+ * transaction-control SQL silently no-opped.
+ */
+function patchDataSource(ds: DataSource): void {
+  const origCreate = ds.createQueryRunner.bind(ds);
+  (ds as any).createQueryRunner = function (...args: any[]) {
+    const qr = origCreate(...args);
+    const origQuery = qr.query.bind(qr);
+    qr.query = async function (
+      query: string,
+      parameters?: any[],
+      useStructuredResult?: boolean,
+    ) {
+      if (isTxControl(query)) {
+        return useStructuredResult
+          ? { records: [], affected: 0, raw: [] }
+          : [];
+      }
+      return origQuery(query, parameters, useStructuredResult);
+    };
+    return qr;
+  };
+}
 
 const NETWORKS = [
   {
@@ -43,58 +86,77 @@ export type VeramoAgent = TAgent<
 >;
 
 let agentInstance: VeramoAgent | null = null;
+let agentInitializationPromise: Promise<VeramoAgent> | null = null;
 
 export const initializeAgent = async (secretKey: string): Promise<VeramoAgent> => {
   if (agentInstance) return agentInstance;
+  if (agentInitializationPromise) return agentInitializationPromise;
 
   if (!secretKey || secretKey.length !== 64) {
     throw new Error("A valid 64-character hex secret key is required.");
   }
 
-  const dbConnection = await new DataSource({
-    type: "expo",
-    driver: require("expo-sqlite"),
-    database: "veramo.db",
-    migrations,
-    migrationsRun: true,
-    logging: ["error", "info", "warn"],
-    entities: Entities,
-  }).initialize();
+  agentInitializationPromise = (async () => {
+    const dbConnection = new DataSource({
+      type: "expo",
+      driver: require("expo-sqlite"),
+      database: "veramo.db",
+      synchronize: true,
+      logging: ["error", "info", "warn"],
+      entities: Entities,
+    });
 
-  agentInstance = createAgent<
-    IDIDManager & IKeyManager & IResolver & IDataStore & ICredentialPlugin
-  >({
-    plugins: [
-      new KeyManager({
-        store: new KeyStore(dbConnection),
-        kms: {
-          local: new KeyManagementSystem(
-            new PrivateKeyStore(dbConnection, new SecretBox(secretKey))
-          ),
-        },
-      }),
-      new DIDManager({
-        store: new DIDStore(dbConnection),
-        defaultProvider: "did:ethr:sepolia",
-        providers: {
-          "did:ethr:sepolia": new EthrDIDProvider({
-            defaultKms: "local",
-            networks: NETWORKS,
-          }),
-        },
-      }),
-      new DIDResolverPlugin({
-        resolver: new Resolver({
-          ...ethrDidResolver({ networks: NETWORKS }),
+    // Patch BEFORE initialize() — synchronize uses createQueryRunner()
+    // and would otherwise fail with nested transaction errors.
+    patchDataSource(dbConnection);
+
+    await dbConnection.initialize();
+
+    agentInstance = createAgent<
+      IDIDManager & IKeyManager & IResolver & IDataStore & ICredentialPlugin
+    >({
+      plugins: [
+        new KeyManager({
+          store: new KeyStore(dbConnection),
+          kms: {
+            local: new KeyManagementSystem(
+              new PrivateKeyStore(dbConnection, new SecretBox(secretKey))
+            ),
+          },
         }),
-      }),
-      new DataStore(dbConnection),
-      new DataStoreORM(dbConnection),
-      new CredentialPlugin(),
-    ],
-  });
+        new DIDManager({
+          store: new DIDStore(dbConnection),
+          defaultProvider: "did:ethr:sepolia",
+          providers: {
+            "did:ethr:sepolia": new EthrDIDProvider({
+              defaultKms: "local",
+              networks: NETWORKS,
+            }),
+          },
+        }),
+        new DIDResolverPlugin({
+          resolver: new Resolver({
+            ...ethrDidResolver({ networks: NETWORKS }),
+          }),
+        }),
+        new DataStore(dbConnection),
+        new DataStoreORM(dbConnection),
+        new CredentialPlugin(),
+      ],
+    });
 
-  return agentInstance;
+    return agentInstance;
+  })();
+
+  try {
+    const agent = await agentInitializationPromise;
+    agentInitializationPromise = null;
+    return agent;
+  } catch (error) {
+    agentInitializationPromise = null;
+    agentInstance = null;
+    throw error;
+  }
 };
 
 export const getAgent = () => {

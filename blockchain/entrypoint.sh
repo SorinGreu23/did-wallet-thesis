@@ -6,7 +6,7 @@ DEPLOYED_FLAG=/data/deployed
 mkdir -p /data
 
 echo "Starting Hardhat node..."
-npx hardhat node --hostname 0.0.0.0 --state "$STATE_FILE" &
+npx hardhat node --hostname 0.0.0.0 &
 NODE_PID=$!
 
 # Forward SIGTERM/SIGINT to the node process for clean container stop

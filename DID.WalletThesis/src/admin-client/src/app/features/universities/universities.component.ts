@@ -2,9 +2,11 @@ import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@ang
 import { Router, RouterLink } from '@angular/router';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { DatePipe } from '@angular/common';
+import { firstValueFrom } from 'rxjs';
 import { AccreditationService } from '../../core/services/accreditation.service';
 import { Accreditation } from '../../core/models/accreditation.model';
 import { NavigationStateService } from '../../core/services/navigation-state.service';
+import { AuthService } from '../../core/auth/auth.service';
 import { BreadcrumbComponent } from '../../shared/components/breadcrumb/breadcrumb.component';
 import { EmptyStateComponent } from '../../shared/components/empty-state/empty-state.component';
 import { TxBadgeComponent } from '../../shared/components/tx-badge/tx-badge.component';
@@ -32,12 +34,15 @@ import { IssueCredentialRequest } from '../../core/models/credential.model';
 })
 export class UniversitiesComponent implements OnInit {
   private readonly accreditationService = inject(AccreditationService);
+  private readonly auth = inject(AuthService);
   readonly navState = inject(NavigationStateService);
   private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
   private readonly credentialService = inject(CredentialService);
 
   readonly universities = signal<Accreditation[]>([]);
+  readonly authenticatedUniversity = signal<Accreditation | null>(null);
+  readonly contextLoading = signal(true);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly showForm = signal(false);
@@ -73,17 +78,120 @@ export class UniversitiesComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    const ministry = this.navState.ministry();
-    if (!ministry) {
-      this.router.navigate(['/ministries']);
+    void this.initialize();
+  }
+
+  private async initialize(): Promise<void> {
+    const hasContext = await this.ensurePageContext();
+    this.contextLoading.set(false);
+
+    if (!hasContext) {
       return;
     }
-    this.load();
+
+    const university = this.authenticatedUniversity();
+    if (university) {
+      this.diplomaUniversity.set(university);
+      this.loadDiplomas(university);
+    } else {
+      this.load();
+    }
+  }
+
+  private async ensurePageContext(): Promise<boolean> {
+    const session = this.auth.session();
+
+    if (session?.scope === 'Institution' && session.accreditationId) {
+      try {
+        this.navState.resetToRoot();
+
+        const university = await firstValueFrom(
+          this.accreditationService.get(session.accreditationId),
+        );
+        this.authenticatedUniversity.set(university);
+
+        if (university.parentAccreditationId) {
+          const ministry = await firstValueFrom(
+            this.accreditationService.get(university.parentAccreditationId),
+          );
+
+          if (ministry.parentAccreditationId) {
+            const memberState = await firstValueFrom(
+              this.accreditationService.get(ministry.parentAccreditationId),
+            );
+
+            this.navState.selectMemberState({
+              did: memberState.subjectDID,
+              label: memberState.name || memberState.scope,
+              accreditationId: memberState.accreditationId,
+            });
+          }
+
+          this.navState.selectMinistry({
+            did: ministry.subjectDID,
+            label: ministry.name || ministry.scope,
+            accreditationId: ministry.accreditationId,
+          });
+        }
+
+        return true;
+      } catch (err: any) {
+        this.error.set(
+          err?.error?.message ?? err?.message ?? 'Failed to resolve university context',
+        );
+        return false;
+      }
+    }
+
+    this.authenticatedUniversity.set(null);
+    return this.ensureMinistryContext();
+  }
+
+  private async ensureMinistryContext(): Promise<boolean> {
+    const session = this.auth.session();
+
+    if (session?.scope === 'Ministry' && session.accreditationId) {
+      try {
+        this.navState.resetToRoot();
+
+        const ministry = await firstValueFrom(
+          this.accreditationService.get(session.accreditationId),
+        );
+
+        if (ministry.parentAccreditationId) {
+          const memberState = await firstValueFrom(
+            this.accreditationService.get(ministry.parentAccreditationId),
+          );
+
+          this.navState.selectMemberState({
+            did: memberState.subjectDID,
+            label: memberState.name || memberState.scope,
+            accreditationId: memberState.accreditationId,
+          });
+        }
+
+        this.navState.selectMinistry({
+          did: ministry.subjectDID,
+          label: ministry.name || ministry.scope,
+          accreditationId: ministry.accreditationId,
+        });
+
+        return true;
+      } catch (err: any) {
+        this.error.set(
+          err?.error?.message ?? err?.message ?? 'Failed to resolve ministry context',
+        );
+        return false;
+      }
+    }
+
+    return this.navState.ministry() !== null;
   }
 
   load(): void {
     const ministry = this.navState.ministry();
     if (!ministry) return;
+    this.authenticatedUniversity.set(null);
     this.loading.set(true);
     this.error.set(null);
     this.accreditationService.list(ministry.did, undefined, 'Institution').subscribe({
@@ -185,12 +293,18 @@ export class UniversitiesComponent implements OnInit {
   openDiplomaForm(university: Accreditation): void {
     this.diplomaUniversity.set(university);
     this.lastIssuedDiploma.set(null);
+    this.revokingCredentialId.set(null);
+    this.revokeKey.set('');
     this.diplomaForm.reset();
     this.loadDiplomas(university);
   }
 
   closeDiplomaForm(): void {
+    this.lastIssuedDiploma.set(null);
     this.diplomaUniversity.set(null);
+    this.diplomas.set([]);
+    this.revokingCredentialId.set(null);
+    this.revokeKey.set('');
     this.diplomaForm.reset();
   }
 
@@ -261,6 +375,10 @@ export class UniversitiesComponent implements OnInit {
     return `${hash.slice(0, 8)}…${hash.slice(-6)}`;
   }
 
+  isInstitutionSession(): boolean {
+    return this.auth.scope() === 'Institution';
+  }
+
   issueDiploma(): void {
     if (this.diplomaForm.invalid) {
       this.diplomaForm.markAllAsTouched();
@@ -297,6 +415,7 @@ export class UniversitiesComponent implements OnInit {
       next: (result) => {
         this.lastIssuedDiploma.set(result);
         this.issuingDiploma.set(false);
+        this.loadDiplomas(university);
         this.diplomaForm.reset({ issuerPrivateKey: this.diplomaForm.value.issuerPrivateKey });
       },
       error: (err) => {

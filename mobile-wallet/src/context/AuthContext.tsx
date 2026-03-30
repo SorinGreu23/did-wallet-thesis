@@ -30,8 +30,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setHasWallet(walletExists);
 
       if (walletExists) {
-        const sessionActive = await authService.isSessionActive();
-        setState(sessionActive ? "authenticated" : "unauthenticated");
+        // Returning users always land on the biometric splash first.
+        setState("unauthenticated");
       } else {
         setState("unauthenticated");
       }

@@ -37,7 +37,7 @@
   }
 
   <!-- No context warning -->
-  @if (!navState.memberState()) {
+  @if (!contextLoading() && !navState.memberState()) {
     <div class="rounded-xl border border-amber-200 bg-amber-50 p-5 text-amber-700 text-sm">
       No member state selected. <a routerLink="/member-states" class="underline font-medium">Go back to Member States</a> and click a row to continue.
     </div>

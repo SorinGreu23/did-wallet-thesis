@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { ethers } from 'ethers';
 
 import { AuthService } from '../../core/auth/auth.service';
 import { SignerService } from '../../core/auth/signer.service';
@@ -15,6 +16,7 @@ export class LoginComponent {
   private readonly auth = inject(AuthService);
   private readonly signer = inject(SignerService);
   private readonly router = inject(Router);
+  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly state = this.auth.state;
   readonly error = this.auth.error;
@@ -23,18 +25,25 @@ export class LoginComponent {
   derivedDid = signal<string | null>(null);
 
   onKeyInput(): void {
+    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+
     const key = this.privateKey.trim();
-    if (key.length === 64 || (key.startsWith('0x') && key.length === 66)) {
+    const isFullKey = key.length === 64 || (key.startsWith('0x') && key.length === 66);
+
+    if (!isFullKey) {
+      this.derivedDid.set(null);
+      return;
+    }
+
+    // Debounce to avoid creating ethers.Wallet on every keystroke during paste
+    this.debounceTimer = setTimeout(() => {
       try {
-        const address = this.signer.initialize(key);
+        const address = ethers.computeAddress(key.startsWith('0x') ? key : `0x${key}`);
         this.derivedDid.set(`did:ethr:sepolia:${address.toLowerCase()}`);
-        this.signer.clear();
       } catch {
         this.derivedDid.set(null);
       }
-    } else {
-      this.derivedDid.set(null);
-    }
+    }, 150);
   }
 
   async onSubmit(): Promise<void> {
@@ -44,21 +53,7 @@ export class LoginComponent {
     try {
       await this.auth.login(key);
 
-      const scope = this.auth.scope();
-      switch (scope) {
-        case 'EURoot':
-          this.router.navigate(['/member-states']);
-          break;
-        case 'MemberState':
-          this.router.navigate(['/ministries']);
-          break;
-        case 'Ministry':
-        case 'Institution':
-          this.router.navigate(['/universities']);
-          break;
-        default:
-          this.router.navigate(['/']);
-      }
+      await this.router.navigateByUrl(this.auth.getHomeRoute());
     } catch {
       // error is already captured in auth.error signal
     }

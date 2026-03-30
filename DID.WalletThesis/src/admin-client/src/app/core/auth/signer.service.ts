@@ -7,7 +7,10 @@ export class SignerService {
   readonly hasSigner = signal(false);
   readonly address = signal<string | null>(null);
 
-  initialize(privateKey: string): string {
+  /** Initialize asynchronously to avoid blocking the main thread */
+  async initialize(privateKey: string): Promise<string> {
+    // Yield to the browser before the heavy EC operation
+    await new Promise(resolve => setTimeout(resolve, 0));
     this.wallet = new ethers.Wallet(privateKey);
     const addr = this.wallet.address;
     this.address.set(addr);
@@ -17,6 +20,8 @@ export class SignerService {
 
   async signMessage(message: string): Promise<string> {
     if (!this.wallet) throw new Error('Signer not initialized');
+    // Yield before signing so UI can update
+    await new Promise(resolve => setTimeout(resolve, 0));
     return this.wallet.signMessage(message);
   }
 

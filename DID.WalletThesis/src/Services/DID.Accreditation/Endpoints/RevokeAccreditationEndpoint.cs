@@ -16,7 +16,7 @@ public class RevokeAccreditationEndpoint(AccreditationService service)
     public override void Configure()
     {
         Delete("/api/accreditations/{accreditationId}");
-        Policies("MemberState");
+        Policies("Ministry");
     }
 
     public override async Task HandleAsync(RevokeAccreditationRequest req, CancellationToken ct)

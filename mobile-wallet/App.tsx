@@ -5,11 +5,12 @@ import { ActivityIndicator, View, StyleSheet } from "react-native";
 import { ThemeProvider, useTheme } from "./src/context/ThemeContext";
 import { AuthProvider, useAuth } from "./src/context/AuthContext";
 import HomeScreen from "./src/screens/HomeScreen";
+import UnlockSplashScreen from "./src/screens/UnlockSplashScreen";
 import WelcomeScreen from "./src/screens/WelcomeScreen";
 
 function AppNavigator() {
   const { isDark, colors } = useTheme();
-  const { state, onAuthenticated } = useAuth();
+  const { state, hasWallet, onAuthenticated } = useAuth();
 
   if (state === "loading") {
     return (
@@ -23,6 +24,8 @@ function AppNavigator() {
     <>
       {state === "authenticated" ? (
         <HomeScreen />
+      ) : hasWallet ? (
+        <UnlockSplashScreen onAuthenticated={onAuthenticated} />
       ) : (
         <WelcomeScreen onAuthenticated={onAuthenticated} />
       )}

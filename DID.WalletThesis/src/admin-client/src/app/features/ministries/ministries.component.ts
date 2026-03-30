@@ -8,9 +8,11 @@ import {
 import { Router, RouterLink } from '@angular/router';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { DatePipe } from '@angular/common';
+import { firstValueFrom } from 'rxjs';
 import { AccreditationService } from '../../core/services/accreditation.service';
 import { Accreditation } from '../../core/models/accreditation.model';
 import { NavigationStateService } from '../../core/services/navigation-state.service';
+import { AuthService } from '../../core/auth/auth.service';
 import { BreadcrumbComponent } from '../../shared/components/breadcrumb/breadcrumb.component';
 import { EmptyStateComponent } from '../../shared/components/empty-state/empty-state.component';
 import { TxBadgeComponent } from '../../shared/components/tx-badge/tx-badge.component';
@@ -28,11 +30,13 @@ import { AccreditationVerification } from '../../core/models/accreditation.model
 })
 export class MinistriesComponent implements OnInit {
   private readonly accreditationService = inject(AccreditationService);
+  private readonly auth = inject(AuthService);
   readonly navState = inject(NavigationStateService);
   private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
 
   readonly ministries = signal<Accreditation[]>([]);
+  readonly contextLoading = signal(true);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly showForm = signal(false);
@@ -50,12 +54,49 @@ export class MinistriesComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    const ms = this.navState.memberState();
-    if (!ms) {
-      this.router.navigate(['/member-states']);
-      return;
+    void this.initialize();
+  }
+
+  private async initialize(): Promise<void> {
+    const hasContext = await this.ensureMemberStateContext();
+    this.contextLoading.set(false);
+
+    if (hasContext) {
+      this.load();
     }
-    this.load();
+  }
+
+  private async ensureMemberStateContext(): Promise<boolean> {
+    const session = this.auth.session();
+    const currentMemberState = this.navState.memberState();
+
+    if (session?.scope === 'MemberState' && session.accreditationId) {
+      if (currentMemberState?.accreditationId === session.accreditationId) {
+        return true;
+      }
+
+      try {
+        this.navState.resetToRoot();
+        const memberState = await firstValueFrom(
+          this.accreditationService.get(session.accreditationId),
+        );
+
+        this.navState.selectMemberState({
+          did: memberState.subjectDID,
+          label: memberState.name || memberState.scope,
+          accreditationId: memberState.accreditationId,
+        });
+
+        return true;
+      } catch (err: any) {
+        this.error.set(
+          err?.error?.message ?? err?.message ?? 'Failed to resolve member state context',
+        );
+        return false;
+      }
+    }
+
+    return currentMemberState !== null;
   }
 
   load(): void {

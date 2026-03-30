@@ -8,8 +8,11 @@ export const scopeGuard: CanActivateFn = (route) => {
   const router = inject(Router);
   const minimumScope = route.data?.['minimumScope'] as string;
 
+  if (!auth.isAuthenticated()) {
+    return router.parseUrl('/login');
+  }
+
   if (!minimumScope || auth.hasScope(minimumScope)) return true;
 
-  router.navigate(['/']);
-  return false;
+  return router.parseUrl(auth.getHomeRoute());
 };

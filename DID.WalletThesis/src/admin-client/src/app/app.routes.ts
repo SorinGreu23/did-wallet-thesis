@@ -41,7 +41,7 @@ export const routes: Routes = [
           import('./features/universities/universities.component').then(
             (m) => m.UniversitiesComponent,
           ),
-        data: { minimumScope: 'Ministry' },
+        data: { minimumScope: 'Institution' },
         canActivate: [scopeGuard],
       },
     ],

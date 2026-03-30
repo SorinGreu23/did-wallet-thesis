@@ -9,6 +9,9 @@ import {
   Platform,
   StatusBar,
   Dimensions,
+  TextInput,
+  KeyboardAvoidingView,
+  ScrollView,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import * as LocalAuthentication from "expo-local-authentication";
@@ -17,20 +20,33 @@ import authService from "../services/authService";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
+type Step = "landing" | "register";
+
 interface WelcomeScreenProps {
   onAuthenticated: () => void;
 }
 
 export default function WelcomeScreen({ onAuthenticated }: WelcomeScreenProps) {
   const { colors, themeAnim } = useTheme();
+  const [step, setStep] = useState<Step>("landing");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasWallet, setHasWallet] = useState<boolean | null>(null);
 
+  // Registration fields
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+
+  // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(40)).current;
   const cardScale = useRef(new Animated.Value(0.92)).current;
+  const formFade = useRef(new Animated.Value(0)).current;
+  const formSlide = useRef(new Animated.Value(30)).current;
 
   React.useEffect(() => {
+    authService.hasWallet().then(setHasWallet);
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -52,10 +68,47 @@ export default function WelcomeScreen({ onAuthenticated }: WelcomeScreenProps) {
     ]).start();
   }, []);
 
-  const handleCreateWallet = async () => {
+  const animateToRegister = () => {
+    setStep("register");
+    formFade.setValue(0);
+    formSlide.setValue(30);
+    Animated.parallel([
+      Animated.timing(formFade, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.spring(formSlide, {
+        toValue: 0,
+        damping: 18,
+        stiffness: 140,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleRegister = async () => {
+    const trimmedFirst = firstName.trim();
+    const trimmedLast = lastName.trim();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedFirst || !trimmedLast) {
+      setError("First and last name are required");
+      return;
+    }
+    if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setError("Please enter a valid email address");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
+      await authService.saveProfile({
+        firstName: trimmedFirst,
+        lastName: trimmedLast,
+        email: trimmedEmail,
+      });
       await authService.createWallet();
       await authService.setSessionActive();
       onAuthenticated();
@@ -66,7 +119,7 @@ export default function WelcomeScreen({ onAuthenticated }: WelcomeScreenProps) {
     }
   };
 
-  const handleUnlock = async () => {
+  const handleBiometricUnlock = async () => {
     setLoading(true);
     setError(null);
     try {
@@ -108,16 +161,70 @@ export default function WelcomeScreen({ onAuthenticated }: WelcomeScreenProps) {
         translucent
       />
 
+      {step === "landing" ? (
+        <LandingView
+          colors={colors}
+          fadeAnim={fadeAnim}
+          slideAnim={slideAnim}
+          cardScale={cardScale}
+          error={error}
+          loading={loading}
+          hasWallet={hasWallet}
+          onGetStarted={animateToRegister}
+          onUnlock={handleBiometricUnlock}
+        />
+      ) : (
+        <RegisterView
+          colors={colors}
+          formFade={formFade}
+          formSlide={formSlide}
+          firstName={firstName}
+          lastName={lastName}
+          email={email}
+          onFirstNameChange={setFirstName}
+          onLastNameChange={setLastName}
+          onEmailChange={setEmail}
+          error={error}
+          loading={loading}
+          onSubmit={handleRegister}
+          onBack={() => { setStep("landing"); setError(null); }}
+        />
+      )}
+    </Animated.View>
+  );
+}
+
+/* ─── Landing View ─── */
+
+function LandingView({
+  colors,
+  fadeAnim,
+  slideAnim,
+  cardScale,
+  error,
+  loading,
+  hasWallet,
+  onGetStarted,
+  onUnlock,
+}: {
+  colors: typeof LIGHT_COLORS;
+  fadeAnim: Animated.Value;
+  slideAnim: Animated.Value;
+  cardScale: Animated.Value;
+  error: string | null;
+  loading: boolean;
+  hasWallet: boolean | null;
+  onGetStarted: () => void;
+  onUnlock: () => void;
+}) {
+  return (
+    <>
       <Animated.View
         style={[
           styles.content,
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }],
-          },
+          { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
         ]}
       >
-        {/* EU Badge */}
         <View style={[styles.badge, { backgroundColor: colors.primary }]}>
           <Text style={styles.badgeStar}>★</Text>
         </View>
@@ -129,14 +236,10 @@ export default function WelcomeScreen({ onAuthenticated }: WelcomeScreenProps) {
           Decentralised digital identity{"\n"}powered by blockchain
         </Text>
 
-        {/* Preview card */}
         <Animated.View
           style={[
             styles.previewCard,
-            {
-              backgroundColor: colors.primary,
-              transform: [{ scale: cardScale }],
-            },
+            { backgroundColor: colors.primary, transform: [{ scale: cardScale }] },
           ]}
         >
           <View style={styles.previewCircle1} />
@@ -161,100 +264,236 @@ export default function WelcomeScreen({ onAuthenticated }: WelcomeScreenProps) {
           </View>
         </Animated.View>
 
-        {/* Features */}
         <View style={styles.features}>
-          <Feature
-            icon="shield"
-            text="Secure key storage"
-            colors={colors}
-          />
-          <Feature
-            icon="link"
-            text="Blockchain-verified"
-            colors={colors}
-          />
-          <Feature
-            icon="lock"
-            text="Biometric protection"
-            colors={colors}
-          />
+          <Feature icon="shield" text="Secure key storage" colors={colors} />
+          <Feature icon="link" text="Blockchain-verified" colors={colors} />
+          <Feature icon="lock" text="Biometric protection" colors={colors} />
         </View>
 
-        {error && (
-          <Text style={styles.error}>{error}</Text>
-        )}
+        {error && <Text style={styles.error}>{error}</Text>}
       </Animated.View>
 
-      {/* Action button */}
       <Animated.View style={[styles.bottom, { opacity: fadeAnim }]}>
-        <WalletButton
-          loading={loading}
-          colors={colors}
-          onCreateWallet={handleCreateWallet}
-          onUnlock={handleUnlock}
-        />
+        {hasWallet === null ? null : hasWallet ? (
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: colors.primary }]}
+            onPress={onUnlock}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Feather name="unlock" size={18} color="#fff" />
+                <Text style={styles.buttonText}>Unlock with Face ID</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: colors.primary }]}
+            onPress={onGetStarted}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            <Feather name="arrow-right" size={18} color="#fff" />
+            <Text style={styles.buttonText}>Get Started</Text>
+          </TouchableOpacity>
+        )}
       </Animated.View>
-    </Animated.View>
+    </>
   );
 }
 
-function WalletButton({
-  loading,
+/* ─── Registration View ─── */
+
+function RegisterView({
   colors,
-  onCreateWallet,
-  onUnlock,
+  formFade,
+  formSlide,
+  firstName,
+  lastName,
+  email,
+  onFirstNameChange,
+  onLastNameChange,
+  onEmailChange,
+  error,
+  loading,
+  onSubmit,
+  onBack,
 }: {
-  loading: boolean;
   colors: typeof LIGHT_COLORS;
-  onCreateWallet: () => void;
-  onUnlock: () => void;
+  formFade: Animated.Value;
+  formSlide: Animated.Value;
+  firstName: string;
+  lastName: string;
+  email: string;
+  onFirstNameChange: (v: string) => void;
+  onLastNameChange: (v: string) => void;
+  onEmailChange: (v: string) => void;
+  error: string | null;
+  loading: boolean;
+  onSubmit: () => void;
+  onBack: () => void;
 }) {
-  const [hasWallet, setHasWallet] = useState<boolean | null>(null);
+  const lastNameRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
 
-  React.useEffect(() => {
-    authService.hasWallet().then(setHasWallet);
-  }, []);
-
-  if (hasWallet === null) return null;
-
-  if (hasWallet) {
-    return (
-      <TouchableOpacity
-        style={[styles.button, { backgroundColor: colors.primary }]}
-        onPress={onUnlock}
-        disabled={loading}
-        activeOpacity={0.85}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <>
-            <Feather name="unlock" size={18} color="#fff" />
-            <Text style={styles.buttonText}>Unlock Wallet</Text>
-          </>
-        )}
-      </TouchableOpacity>
-    );
-  }
+  const canSubmit = firstName.trim().length > 0 && lastName.trim().length > 0;
 
   return (
-    <TouchableOpacity
-      style={[styles.button, { backgroundColor: colors.primary }]}
-      onPress={onCreateWallet}
-      disabled={loading}
-      activeOpacity={0.85}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      {loading ? (
-        <ActivityIndicator color="#fff" />
-      ) : (
-        <>
-          <Feather name="plus-circle" size={18} color="#fff" />
-          <Text style={styles.buttonText}>Create Wallet</Text>
-        </>
-      )}
-    </TouchableOpacity>
+      <ScrollView
+        contentContainerStyle={styles.registerScroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View
+          style={[
+            styles.registerContent,
+            { opacity: formFade, transform: [{ translateY: formSlide }] },
+          ]}
+        >
+          {/* Back button */}
+          <TouchableOpacity style={styles.backButton} onPress={onBack}>
+            <Feather name="arrow-left" size={20} color={colors.text} />
+          </TouchableOpacity>
+
+          {/* Header */}
+          <View style={[styles.registerBadge, { backgroundColor: colors.primaryLight }]}>
+            <Feather name="user-plus" size={24} color={colors.primary} />
+          </View>
+          <Text style={[styles.registerTitle, { color: colors.text }]}>
+            Create your account
+          </Text>
+          <Text style={[styles.registerSubtitle, { color: colors.textSecondary }]}>
+            Your identity wallet will be created{"\n"}securely on this device
+          </Text>
+
+          {/* Form */}
+          <View style={styles.form}>
+            <View style={styles.nameRow}>
+              <View style={styles.nameField}>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>
+                  First name *
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                      color: colors.text,
+                    },
+                  ]}
+                  value={firstName}
+                  onChangeText={onFirstNameChange}
+                  placeholder="John"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  onSubmitEditing={() => lastNameRef.current?.focus()}
+                />
+              </View>
+              <View style={styles.nameField}>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>
+                  Last name *
+                </Text>
+                <TextInput
+                  ref={lastNameRef}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                      color: colors.text,
+                    },
+                  ]}
+                  value={lastName}
+                  onChangeText={onLastNameChange}
+                  placeholder="Doe"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  onSubmitEditing={() => emailRef.current?.focus()}
+                />
+              </View>
+            </View>
+
+            <View>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>
+                Email
+              </Text>
+              <TextInput
+                ref={emailRef}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                    color: colors.text,
+                  },
+                ]}
+                value={email}
+                onChangeText={onEmailChange}
+                placeholder="john.doe@example.com"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="done"
+                onSubmitEditing={canSubmit ? onSubmit : undefined}
+              />
+            </View>
+          </View>
+
+          {/* Security note */}
+          <View style={[styles.securityNote, { backgroundColor: colors.primaryLight }]}>
+            <Feather name="shield" size={14} color={colors.primary} />
+            <Text style={[styles.securityText, { color: colors.textSecondary }]}>
+              Your data is stored locally on this device and protected by biometric authentication.
+              No data is sent to any server.
+            </Text>
+          </View>
+
+          {error && <Text style={styles.error}>{error}</Text>}
+        </Animated.View>
+      </ScrollView>
+
+      {/* Submit button */}
+      <Animated.View style={[styles.bottom, { opacity: formFade }]}>
+        <TouchableOpacity
+          style={[
+            styles.button,
+            {
+              backgroundColor: canSubmit ? colors.primary : colors.border,
+            },
+          ]}
+          onPress={onSubmit}
+          disabled={loading || !canSubmit}
+          activeOpacity={0.85}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Feather name="check-circle" size={18} color="#fff" />
+              <Text style={styles.buttonText}>Create Wallet</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </Animated.View>
+    </KeyboardAvoidingView>
   );
 }
+
+/* ─── Shared Components ─── */
 
 function Feature({
   icon,
@@ -276,6 +515,8 @@ function Feature({
     </View>
   );
 }
+
+/* ─── Styles ─── */
 
 const styles = StyleSheet.create({
   container: {
@@ -439,5 +680,81 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     letterSpacing: -0.2,
+  },
+
+  /* ─── Register step ─── */
+  registerScroll: {
+    flexGrow: 1,
+    paddingHorizontal: 32,
+    paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 20 : 60,
+    paddingBottom: 16,
+  },
+  registerContent: {
+    flex: 1,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  registerBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  registerTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    marginBottom: 6,
+  },
+  registerSubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 28,
+  },
+
+  form: {
+    gap: 16,
+    marginBottom: 20,
+  },
+  nameRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  nameField: {
+    flex: 1,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 6,
+  },
+  input: {
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    fontSize: 15,
+  },
+
+  securityNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  securityText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
   },
 });

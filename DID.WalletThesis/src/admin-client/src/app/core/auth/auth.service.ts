@@ -1,16 +1,22 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, PLATFORM_ID, computed, inject, signal } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import { AuthSession, AuthState, SCOPE_HIERARCHY } from './auth.models';
 import { SignerService } from './signer.service';
+import { NavigationStateService } from '../services/navigation-state.service';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
+  private static readonly STORAGE_KEY = 'auth_session';
+
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly signer = inject(SignerService);
+  private readonly navigationState = inject(NavigationStateService);
+  private readonly isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
 
   readonly session = signal<AuthSession | null>(null);
   readonly state = signal<AuthState>('idle');
@@ -18,13 +24,17 @@ export class AuthService {
 
   readonly scope = computed(() => this.session()?.scope ?? null);
 
+  constructor() {
+    this.restoreSession();
+  }
+
   async login(privateKey: string): Promise<void> {
     try {
       this.error.set(null);
 
       // Step 1 — derive address and DID
       this.state.set('challenging');
-      const address = this.signer.initialize(privateKey);
+      const address = await this.signer.initialize(privateKey);
       const did = `did:ethr:sepolia:${address.toLowerCase()}`;
 
       // Step 2 — request challenge nonce
@@ -48,14 +58,18 @@ export class AuthService {
       );
 
       // Step 5 — store session
-      this.session.set({
+      const authSession: AuthSession = {
         token: result.token,
         did,
         ethAddress: address,
         scope: result.scope,
         accreditationId: result.accreditationId,
         expiresAt: new Date(result.expiresAt),
-      });
+      };
+
+      this.navigationState.resetToRoot();
+      this.session.set(authSession);
+      this.saveSession(authSession);
 
       this.state.set('authenticated');
     } catch (err: any) {
@@ -78,6 +92,8 @@ export class AuthService {
     this.state.set('idle');
     this.error.set(null);
     this.signer.clear();
+    this.navigationState.resetToRoot();
+    this.clearSession();
     this.router.navigate(['/login']);
   }
 
@@ -94,5 +110,53 @@ export class AuthService {
     const currentScope = this.session()?.scope;
     if (!currentScope) return false;
     return (SCOPE_HIERARCHY[currentScope] ?? 0) >= (SCOPE_HIERARCHY[requiredScope] ?? 0);
+  }
+
+  getHomeRoute(): string {
+    switch (this.session()?.scope) {
+      case 'EURoot':
+        return '/member-states';
+      case 'MemberState':
+        return '/ministries';
+      case 'Ministry':
+      case 'Institution':
+        return '/universities';
+      default:
+        return '/login';
+    }
+  }
+
+  private saveSession(s: AuthSession): void {
+    if (!this.isBrowser) return;
+    localStorage.setItem(
+      AuthService.STORAGE_KEY,
+      JSON.stringify({ ...s, expiresAt: s.expiresAt.toISOString() }),
+    );
+  }
+
+  private clearSession(): void {
+    if (!this.isBrowser) return;
+    localStorage.removeItem(AuthService.STORAGE_KEY);
+  }
+
+  private restoreSession(): void {
+    if (!this.isBrowser) return;
+    try {
+      const raw = localStorage.getItem(AuthService.STORAGE_KEY);
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw);
+      const expiresAt = new Date(parsed.expiresAt);
+
+      if (expiresAt <= new Date()) {
+        this.clearSession();
+        return;
+      }
+
+      this.session.set({ ...parsed, expiresAt });
+      this.state.set('authenticated');
+    } catch {
+      this.clearSession();
+    }
   }
 }

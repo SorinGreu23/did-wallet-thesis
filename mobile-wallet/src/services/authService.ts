@@ -5,7 +5,16 @@ const KEYS = {
   secretKey: "wallet.secretKey",
   walletCreated: "wallet.created",
   sessionActive: "wallet.sessionActive",
+  profileFirstName: "profile.firstName",
+  profileLastName: "profile.lastName",
+  profileEmail: "profile.email",
 } as const;
+
+export interface UserProfile {
+  firstName: string;
+  lastName: string;
+  email: string;
+}
 
 /**
  * Manages wallet authentication state and secret key storage.
@@ -63,6 +72,22 @@ class AuthService {
   /** Clear the session (user logs out). */
   async clearSession(): Promise<void> {
     await SecureStore.deleteItemAsync(KEYS.sessionActive);
+  }
+
+  /** Save user profile during registration. */
+  async saveProfile(profile: UserProfile): Promise<void> {
+    await SecureStore.setItemAsync(KEYS.profileFirstName, profile.firstName);
+    await SecureStore.setItemAsync(KEYS.profileLastName, profile.lastName);
+    await SecureStore.setItemAsync(KEYS.profileEmail, profile.email);
+  }
+
+  /** Retrieve the stored user profile, or null if not registered. */
+  async getProfile(): Promise<UserProfile | null> {
+    const firstName = await SecureStore.getItemAsync(KEYS.profileFirstName);
+    const lastName = await SecureStore.getItemAsync(KEYS.profileLastName);
+    const email = await SecureStore.getItemAsync(KEYS.profileEmail);
+    if (!firstName || !lastName || !email) return null;
+    return { firstName, lastName, email };
   }
 }
 

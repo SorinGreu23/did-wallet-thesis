@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using DID.Accreditation.Domain;
 using DID.Accreditation.Domain.Interfaces;
+using DID.Shared.Application.Interfaces;
 using DID.Shared.Infrastructure.Options;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -16,6 +17,7 @@ namespace DID.Accreditation.Application.Auth;
 
 public partial class AuthService(
     IServiceScopeFactory scopeFactory,
+    IBlockchainService blockchain,
     IOptions<AuthOptions> authOptions,
     IOptions<BlockchainOptions> blockchainOptions,
     ILogger<AuthService> logger)
@@ -93,23 +95,75 @@ public partial class AuthService(
         if (string.Equals(address, _euRootAddress, StringComparison.OrdinalIgnoreCase))
             return ("EURoot", null);
 
-        // Query the repository for active accreditations where the subject matches this DID
+        // First try the local DB (fast path)
         var subjectDid = $"{DidPrefix}{address}";
 
         using var scope = scopeFactory.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<IAccreditationRepository>();
         var accreditations = await repository.GetBySubjectDIDAsync(subjectDid);
 
-        // Pick the highest-privilege (lowest numeric scope) active accreditation
         var bestAccreditation = accreditations
             .Where(a => a.Status == AccreditationStatus.Active)
             .OrderBy(a => ScopeRank(a.Scope))
             .FirstOrDefault();
 
-        if (bestAccreditation is null)
-            return (null, null);
+        if (bestAccreditation is not null)
+            return (bestAccreditation.Scope, bestAccreditation.AccreditationId);
 
-        return (bestAccreditation.Scope, bestAccreditation.AccreditationId);
+        // Fallback: query the blockchain directly (handles bootstrapped / externally-issued accreditations)
+        logger.LogInformation("No DB accreditation for {Address}, falling back to blockchain", address);
+        return await DetermineScopeFromBlockchainAsync(address);
+    }
+
+    private async Task<(string? Scope, string? AccreditationId)> DetermineScopeFromBlockchainAsync(string address)
+    {
+        try
+        {
+            // Check if the address is a member state via EURootAuthority.isMemberState()
+            var isMemberState = await blockchain.CallContractAsync<bool>(
+                "EURootAuthority", "isMemberState", address);
+            if (isMemberState)
+                return ("MemberState", null);
+
+            // Check accreditations on AccreditationRegistry
+            var accreditationIds = await blockchain.CallContractAsync<List<byte[]>>(
+                "AccreditationRegistry", "getAccreditationsBySubject", address);
+
+            if (accreditationIds is null || accreditationIds.Count == 0)
+                return (null, null);
+
+            // Check each accreditation to find the highest-scope active one
+            foreach (var idBytes in accreditationIds)
+            {
+                var accreditation = await blockchain.CallContractAsync<AccreditationOutput>(
+                    "AccreditationRegistry", "getAccreditation", idBytes);
+
+                if (accreditation is null || accreditation.Revoked || !accreditation.Exists)
+                    continue;
+
+                var scopeName = accreditation.Scope switch
+                {
+                    1 => "MemberState",
+                    2 => "Ministry",
+                    3 => "Institution",
+                    4 => "Department",
+                    _ => null
+                };
+
+                if (scopeName is not null)
+                {
+                    var hexId = "0x" + Convert.ToHexString(idBytes).ToLowerInvariant();
+                    return (scopeName, hexId);
+                }
+            }
+
+            return (null, null);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Blockchain fallback failed for {Address}", address);
+            return (null, null);
+        }
     }
 
     private static int ScopeRank(string scope) => scope switch
@@ -174,3 +228,38 @@ public partial class AuthService(
 }
 
 public class ForbiddenAccessException(string message) : Exception(message);
+
+/// <summary>Maps the Solidity Accreditation struct from AccreditationRegistry.getAccreditation()</summary>
+[Nethereum.ABI.FunctionEncoding.Attributes.FunctionOutput]
+public class AccreditationOutput
+{
+    [Nethereum.ABI.FunctionEncoding.Attributes.Parameter("bytes32", "id", 1)]
+    public byte[] Id { get; set; } = [];
+
+    [Nethereum.ABI.FunctionEncoding.Attributes.Parameter("address", "issuer", 2)]
+    public string Issuer { get; set; } = string.Empty;
+
+    [Nethereum.ABI.FunctionEncoding.Attributes.Parameter("address", "subject", 3)]
+    public string Subject { get; set; } = string.Empty;
+
+    [Nethereum.ABI.FunctionEncoding.Attributes.Parameter("bytes32", "parentAccreditationId", 4)]
+    public byte[] ParentAccreditationId { get; set; } = [];
+
+    [Nethereum.ABI.FunctionEncoding.Attributes.Parameter("uint8", "scope", 5)]
+    public int Scope { get; set; }
+
+    [Nethereum.ABI.FunctionEncoding.Attributes.Parameter("bytes32", "permissionsHash", 6)]
+    public byte[] PermissionsHash { get; set; } = [];
+
+    [Nethereum.ABI.FunctionEncoding.Attributes.Parameter("uint256", "issuedAt", 7)]
+    public System.Numerics.BigInteger IssuedAt { get; set; }
+
+    [Nethereum.ABI.FunctionEncoding.Attributes.Parameter("uint256", "expiresAt", 8)]
+    public System.Numerics.BigInteger ExpiresAt { get; set; }
+
+    [Nethereum.ABI.FunctionEncoding.Attributes.Parameter("bool", "revoked", 9)]
+    public bool Revoked { get; set; }
+
+    [Nethereum.ABI.FunctionEncoding.Attributes.Parameter("bool", "exists", 10)]
+    public bool Exists { get; set; }
+}
