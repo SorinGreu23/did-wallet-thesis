@@ -26,12 +26,8 @@ describe("CredentialRegistry", function () {
     );
     await rootAuthority.waitForDeployment();
 
-    // Bootstrap member state
-    await rootAuthority.bootstrapMemberStates(
-      [memberState.address],
-      ["RO"],
-      ["did:web:gov.ro"]
-    );
+    // Add member state
+    await rootAuthority.addMemberState(memberState.address, "RO", "did:web:gov.ro");
 
     // Deploy Accreditation Registry
     const AccreditationRegistry = await ethers.getContractFactory("AccreditationRegistry");

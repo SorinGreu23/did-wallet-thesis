@@ -2,6 +2,12 @@
 
 Date: March 9, 2026
 
+---
+
+**Updated: April 19, 2026.** Originally written March 9, 2026. Resolved findings have been removed. Only open issues remain documented below. EU member-state voting and governance flows are explicitly out of scope for the thesis demo.
+
+---
+
 This analysis is based on direct inspection of the repository, not on PROJECT_ANALYSIS.md. README.md and IMPLEMENTATION_PLAN.md were used only as supporting context and were cross-checked against the actual code.
 
 Scope note: full member-state voting for adherence to the EU is not treated here as a required thesis deliverable. Where governance is discussed below, it is evaluated as part of the broader trust-anchor design and contract correctness, not as a mandatory end-to-end feature for the thesis demo.
@@ -16,19 +22,20 @@ At a high level, the project has three real strengths:
 - It treats revocation and accreditation status as blockchain concerns rather than purely database concerns.
 - It already explores privacy-preserving claims with ZK proofs, which gives the thesis more depth than a standard DID wallet demo.
 
-However, the current implementation also has several structural weaknesses that materially limit how "decentralized" it is in practice:
+However, the current implementation has several remaining open issues:
 
-- Root trust and bootstrap logic are not enforced strongly enough on-chain.
-- The service layer still centralizes issuance and key control.
-- The mobile wallet currently uses a DID method and credential flow that are disconnected from the blockchain-backed architecture.
-- Some core .NET service calls are out of sync with the current smart contract interfaces, which creates a serious execution risk for the end-to-end credential flow.
-- Important parts of the intended architecture, especially Verification and Presentation, are still not implemented.
+- `revokeAccreditation` in `AccreditationRegistry` does not match the intended model: the EU Root deployer address cannot currently revoke directly, and any issuer at any scope level (including ministries and institutions) can revoke accreditations they issued.
+- `issuerPrivateKey` is passed as a request body field in both accreditation and credential issuance endpoints — private keys should not travel over HTTP.
+- `DID.Credential` and `DID.Identity` service endpoints are all `AllowAnonymous`.
+- `DID.Verification` and `DID.Presentation` are empty scaffolds.
+- The mobile wallet's credential verification is local Veramo only — no on-chain status check.
+- The ZKP service has no integration path into the wallet or verification flow.
 
 My overall judgment is:
 
 - As a thesis prototype: viable and promising.
-- As a correct blockchain-native DID architecture: partially aligned, but not yet coherent end-to-end.
-- As a production-grade or eIDAS-like platform: not currently feasible without major redesign in trust-anchor governance, key management, authentication, and interoperability.
+- As a correct blockchain-native DID architecture: largely aligned, with the remaining gaps above as the main open work.
+- As a production-grade or eIDAS-like platform: not currently feasible without major redesign in key management, authentication, and interoperability.
 
 ## 2. Scope and Method
 
@@ -62,13 +69,15 @@ The repository describes a hybrid architecture:
 
 This is a reasonable thesis architecture. It is not fully decentralized by design, but it does not need to be. A realistic DID system can still include centralized operational components as long as those components do not become the trust anchor.
 
-The key question is whether the blockchain remains the real trust anchor or whether the services quietly become one. Right now, the answer is mixed:
+The key question is whether the blockchain remains the real trust anchor or whether the services quietly become one. The answer is mostly yes:
 
-- The smart contracts do enforce meaningful parts of the trust chain.
-- The service layer still introduces centralized control in issuance and identity handling.
-- The wallet is currently not integrated with the same DID model as the blockchain-backed services.
+- The smart contracts enforce the trust chain, issuance authorization, and credential status.
+- The service layer acts as a persistence cache and API helper, not a trust authority.
+- The wallet uses the same `did:ethr:sepolia` identity model as the backend.
 
-So the project is best described as a blockchain-assisted identity platform with decentralized design intent, not yet a coherent decentralized identity system end-to-end.
+The remaining centralization is operational: private keys are managed through API parameters and backend configuration rather than hardware-secured wallets. This is a known and intentional demo compromise.
+
+So the project is best described as a blockchain-anchored identity platform with a hybrid architecture — decentralized for trust, operationally centralized as an accepted thesis-scope shortcut.
 
 ## 4. Strengths of the Project
 
@@ -151,9 +160,11 @@ The contracts are not merely decorative. They encode:
 
 That is a legitimate use of blockchain.
 
-#### Verification logic is intended to be chain-aware
+#### Verification logic is chain-aware in the backend
 
-The design intent is correct: verification should not trust a single service database, but should depend on on-chain state and on-chain trust relationships.
+`DID.Credential.VerifyAsync` calls `CredentialRegistry.verifyCredential` on-chain and decodes a three-field tuple (isValid, status, trustChainValid). The backend verification path is genuinely blockchain-backed.
+
+The gap is in the mobile wallet: `credentialService.ts` calls only `agent.verifyCredential` — a local Veramo signature check. It does not contact the blockchain or any backend service to check on-chain status, revocation, or issuer accreditation.
 
 #### Revocation and issuer authorization are on-chain concerns
 
@@ -161,78 +172,46 @@ That is stronger than many academic prototypes.
 
 ### 5.2 Where it breaks or weakens blockchain principles
 
-#### Root trust bootstrapping is too weak
+#### Deployment bootstrap lacks access control
 
-In EURootAuthority.sol, the deployment ceremony and initial member-state bootstrap are not robust enough to justify strong decentralization claims around the root trust anchor.
+The deploy script bootstraps initial member states and completes the deployment ceremony via `bootstrapMemberStates`. This function has no `msg.sender` access control — any address that calls it before the deployer can register arbitrary addresses as member states and mark the ceremony complete.
 
-Problems:
+In practice the deploy script calls it immediately after contract deployment, so the window is extremely small on a local Hardhat network. For the thesis demo this is an acknowledged design limitation, not a demo blocker.
 
-- addDeploymentWitness allows anyone to add an arbitrary witness address. It does not verify a real signature.
-- bootstrapMemberStates can be called externally and only checks whether it has already been done. There is no access control restricting who may perform the initial bootstrap.
-- deploymentCeremonyCompleted can be reached through bootstrap instead of through a verifiable governance ceremony.
+The `addDeploymentWitness` function (an alternative ceremony path requiring 18/27 witness signatures) also accepts any address as a witness without signature verification. This path is dormant in the thesis demo — `bootstrapMemberStates` is used instead. Full EU governance ceremony is out of scope.
 
-This means the root of trust is not cryptographically or institutionally strong enough yet.
+#### Revocation authorization in AccreditationRegistry is incorrect
 
-For your scope, this matters mainly because it weakens the credibility of the trust anchor, not because a full EU member-state admission voting workflow must be implemented in the thesis demo.
+`revokeAccreditation` uses:
 
-#### Governance membership is inconsistent
+```solidity
+require(msg.sender == accred.issuer || rootAuthority.isMemberState(msg.sender), "Unauthorized to revoke");
+```
 
-Proposal and voting logic in EURootAuthority uses memberStates[msg.sender] rather than checking the active flag through isMemberState.
+This has two problems relative to the intended rule (only active member states or the EU Root can revoke):
 
-That means a removed or inactive member state may still retain governance power if memberStates[msg.sender] remains true.
+1. `msg.sender == accred.issuer` allows any issuer level — including ministries and institutions — to revoke accreditations they issued. Per the intended model, only active member states and the EU Root should hold revocation authority.
 
-Also, proposal approval is calculated against memberStateList.length, which includes historical addresses and not necessarily only active members. That weakens governance semantics.
+2. The EU Root deployer address (`owner`) is not registered in the `memberStates` mapping, so `rootAuthority.isMemberState(owner)` returns `false`. The EU Root cannot currently revoke any accreditation directly.
 
-Because EU adherence voting is out of scope, I would classify this below accreditation, credential, verification, and DID-consistency issues in delivery priority. It still matters as contract-design correctness and should be documented honestly.
+Fix: replace the check with `msg.sender == owner || rootAuthority.isMemberState(msg.sender)`.
 
-#### The hierarchy is more centralized than the documentation suggests
+#### The database is not the sole operational source of truth
 
-In AccreditationRegistry.sol, the authorization logic is stricter and more centralized than the documentation narrative implies.
-
-Examples:
-
-- MemberState accreditations can only be issued by the contract owner.
-- Ministry accreditations can also only be issued by the contract owner.
-- Only lower levels like Institution and Department can be issued by the parent subject or root deployer.
-
-So while the README describes a hierarchy where member states accredit ministries, the actual contract logic centralizes more of the issuance flow at the contract owner level.
-
-#### Revocation authority is broader than intended
-
-AccreditationRegistry.sol comments say only issuer or root authority should revoke, but the implementation allows any active member state to revoke because it checks rootAuthority.isMemberState(msg.sender).
-
-That is a strong governance choice if intentional, but the code and stated model are not aligned. If it is unintentional, it is a significant logic bug.
-
-#### Smart-contract/service interface drift is a serious problem
-
-This is one of the most important findings in the whole repository.
-
-The current .NET Credential service appears to target a different contract interface than the current Solidity contract and ABI.
-
-Concrete examples:
-
-- CredentialService calls CredentialRegistry.issueCredential, but the contract exposes recordCredential.
-- CredentialService calls verifyCredential expecting a single bool, but the contract returns a tuple: isValid, status, trustChainValid.
-- OnChainCredentialDto expects revoked and suspended boolean fields, but the contract stores a status enum and a credentialHash field instead.
-- CredentialService calls suspendCredential without a reason argument, but the contract requires a reason string.
-
-This is not a minor issue. It suggests the service layer and contract layer have drifted apart. If left unresolved, the core credential issuance and verification demo may fail or decode values incorrectly.
-
-#### The blockchain is not yet the sole operational source of truth
-
-The architecture says blockchain is the source of truth, but some service paths write to the database immediately after transactions rather than waiting for sync-derived event confirmation.
-
-That is acceptable as a cache optimization only if carefully handled, but right now it weakens the neat conceptual boundary.
+Some service paths write to the database immediately after submitting a blockchain transaction, rather than waiting for the BlockchainSync event-driven confirmation. This is acceptable as a read-cache optimization, but the boundary should be clearly documented.
 
 ### 5.3 Verdict on blockchain correctness
 
-The project demonstrates real blockchain thinking, but not yet fully correct root trust-anchor design or execution integrity.
+The issuance authorization logic is correctly aligned with the intended hierarchy: MemberState accreditations require the EU Root; Ministry accreditations require the EU Root or the subject of a valid MemberState accreditation; lower scopes require their parent subject. The contract/service interface is fully aligned.
+
+The single concrete contract bug is the revocation authorization check. One-line fix.
 
 I would rate it:
 
-- good at modeling trust-chain data structures
-- moderate at using blockchain for issuer/credential state
-- weak at root bootstrap rigor and integration consistency
+- strong at modeling trust-chain data structures and enforcing issuance hierarchy
+- strong at on-chain credential status management (backend path)
+- acceptable at root bootstrap for a demo context
+- needs one small fix in `revokeAccreditation`
 
 ## 6. Does the Project Respect Decentralized Identity Principles Correctly?
 
@@ -263,49 +242,22 @@ The ZKP service reflects a correct DID/VC privacy principle: verifiers should of
 
 ### 6.2 Where DID alignment is weak
 
-#### DID method inconsistency is a major architectural problem
+#### The DID Identity service is a convenience cache, not a trust authority
 
-The backend and blockchain-side services assume did:ethr:sepolia identifiers.
+`DID.Identity` stores locally-derived DID documents in a database and exposes them via REST. This is correct by design: the service exists so the admin platform can look up and display DID information. The actual identity authority comes from the Ethereum address and from `did:ethr:sepolia` resolution rules, not from the database. The service can be rebuilt from on-chain events at any time.
 
-The mobile wallet creates and manages did:key identifiers.
+#### The wallet is not yet integrated into the on-chain credential flow
 
-That is not a small implementation detail. It means the wallet and the backend are currently participating in different identity ecosystems:
+The mobile wallet has the correct `did:ethr:sepolia` identity model and secure local key management via `expo-secure-store`. What is still missing:
 
-- backend identity model: Ethereum-address-based DID references
-- wallet identity model: locally generated key-based DIDs
-
-As a result, the current mobile wallet is not truly participating in the same trust model as the blockchain-backed services.
-
-#### The DID service is centralized and not strongly anchored
-
-The Identity service creates DID documents off-chain, stores them in a database, and returns them through REST endpoints.
-
-That may be acceptable for a demo, but it is not strong decentralized identity design by itself. It behaves more like an identity registry service than a decentralized resolver.
-
-The backend-generated DID documents are not meaningfully anchored to a decentralized resolution process beyond the address naming convention.
-
-#### The wallet is currently a local VC demo, not yet the on-chain thesis wallet
-
-The mobile wallet issues self-issued demo credentials locally through Veramo, verifies them locally, and stores them in a local SQLite-backed Veramo store.
-
-That is useful for UI and wallet experimentation, but it is not yet integrated with:
-
-- the accreditation chain
-- on-chain credential status
-- backend verification flows
-- QR/presentation workflows
-
-So the wallet currently demonstrates wallet capabilities in isolation, not the full thesis architecture.
-
-#### Hardcoded wallet encryption secret is a security weakness
-
-The Veramo agent uses a hardcoded SECRET_KEY in the mobile code. For a prototype this may be tolerable temporarily, but it is not acceptable as a stable design. It weakens the holder-control story and creates a security problem if the app is distributed.
+- Credentials issued by backend institutions (on-chain-recorded) cannot yet be received or stored by the wallet.
+- `verifyCredential` in `credentialService.ts` calls only `agent.verifyCredential` — a local Veramo JWT signature check. It does not contact the blockchain or `DID.Credential` service to check on-chain status, revocation, or issuer accreditation validity.
+- No presentation request/response flow (QR-code challenge).
+- No ZKP proof generation from wallet-held credentials.
 
 ### 6.3 Verdict on DID correctness
 
-The project is directionally aligned with DID/VC principles, but it is not yet a coherent DID system end-to-end.
-
-The biggest reason is that the wallet, backend, and blockchain are not all using the same identity model or issuance path.
+The project is now aligned on DID method across wallet, backend, and blockchain. The remaining gaps are in the wallet's integration depth (no on-chain status check, no backend-issued credential receipt, no ZKP presentation flow) and in the unimplemented Verification and Presentation services.
 
 ## 7. Component-by-Component Assessment
 
@@ -322,10 +274,9 @@ Positives:
 
 Main issues:
 
-- weak bootstrap ceremony
-- governance membership logic inconsistency in the root contract, though not on the main critical path for your scoped demo
-- broader-than-claimed revocation power
-- more centralized issuance than documentation suggests
+- `bootstrapMemberStates` has no `msg.sender` access control — any address can register arbitrary member states before the deployer does; accepted demo limitation
+- `addDeploymentWitness` accepts any address as a witness without signature verification; this path is dormant in the demo and the full governance ceremony is out of scope
+- `revokeAccreditation` authorization bug: the EU Root (`owner`) cannot currently revoke directly; any issuer at any scope level can revoke their own issued accreditations — fix: `msg.sender == owner || rootAuthority.isMemberState(msg.sender)`
 
 ### 7.2 .NET microservices
 
@@ -347,11 +298,12 @@ Services still effectively scaffolded or incomplete:
 
 Main issues:
 
-- anonymous HTTP endpoints on core operations
-- central signer model through configured private keys
-- optional raw issuer private key passed into issuance flow for accreditations
-- immediate DB writes in some paths before sync-confirmed convergence
-- service/contract ABI drift in credential flows
+- `DID.Credential` and `DID.Identity` endpoints are all `AllowAnonymous`; `DID.Accreditation` issue endpoint is protected by `Policies("Ministry")` but `DID.Credential` write endpoints are not
+- `issuerPrivateKey` field in both `IssueAccreditationRequest` and `IssueCredentialRequest` — raw private keys can be passed over HTTP; the primary remaining security concern
+- `DID.Verification` and `DID.Presentation` are empty ASP.NET scaffolds. Their intended roles:
+  - **DID.Verification**: receives a credential ID or presentation from a verifier, calls `CredentialRegistry.verifyCredential` on-chain, validates the issuer trust chain, optionally delegates ZKP proof verification to the ZKP service, and returns a trust decision
+  - **DID.Presentation**: manages the presentation protocol — receives a presentation request from a verifier, generates a challenge, relays it to the wallet, receives the presentation response, and routes it to DID.Verification for evaluation
+- immediate DB writes before blockchain-sync-confirmed convergence (minor; acceptable as a read cache)
 
 ### 7.3 Mobile wallet
 
@@ -365,11 +317,10 @@ Positives:
 
 Main issues:
 
-- uses did:key while the backend uses did:ethr:sepolia
-- issues self-signed sample credentials rather than chain-backed credentials
-- verifies only local VC signature validity, not blockchain revocation/accreditation state
-- hardcoded encryption secret
-- empty storageService.ts suggests unfinished wallet persistence abstraction
+- issues credentials locally via Veramo without recording them on-chain — wallet-held credentials are not backed by the accreditation chain
+- `verifyCredential` is a local Veramo signature check only; no on-chain status, revocation, or issuer accreditation validation
+- no ZKP proof generation from wallet-held credentials
+- no presentation request/response flow
 
 ### 7.4 ZKP service
 
@@ -403,156 +354,104 @@ These are the parts worth preserving and strengthening rather than redesigning a
 
 ## 9. Main Problems and Risks
 
-### 9.1 Critical risks
+### 9.1 Contract-level issues
 
-#### Critical risk 1: contract/service interface mismatch
+#### revokeAccreditation authorization bug
 
-This is the most urgent technical risk.
+`AccreditationRegistry.revokeAccreditation` allows any issuer (including ministries and institutions) to revoke accreditations they issued, and prevents the EU Root (`owner`) from revoking directly. Neither behavior matches the intended model. One-line fix: `msg.sender == owner || rootAuthority.isMemberState(msg.sender)`.
 
-If the Credential service is calling methods or decoding outputs that do not match the deployed ABI, the core credential flow may not work reliably at all.
+#### Bootstrap access control
 
-This must be treated as a release blocker for the thesis demo.
+`bootstrapMemberStates` has no `msg.sender` check. In a controlled local demo this is a negligible risk, but it is an acknowledged limitation for decentralization claims about the root trust anchor.
 
-#### Critical risk 2: inconsistent DID model
+### 9.2 Service and integration gaps
 
-The current wallet and backend are not aligned on DID method. Until that is fixed, the system is architecturally split.
+#### Raw private keys in request DTOs
 
-#### Critical risk 3: root trust-anchor design is not strong enough
+`issuerPrivateKey` is an optional field in both `IssueAccreditationRequest` and `IssueCredentialRequest`. This means private keys can be transmitted over HTTP. Even in a demo context, this is the primary security concern and should be either removed or replaced with a backend-configured signing key approach that never surfaces the key in the request body.
 
-The root trust anchor is central to the thesis claim. Right now, the root ceremony and governance logic are not strong enough to support strong decentralization claims.
+#### DID.Credential and DID.Identity have no JWT authentication
 
-Given your scope note, this should be framed less as a missing governance workflow and more as a limit on how strongly the current prototype can claim decentralized institutional bootstrapping.
+All endpoints in `DID.Credential` and `DID.Identity` use `AllowAnonymous`. `DID.Accreditation` issue endpoint is protected by `Policies("Ministry")`. The remaining services need JWT middleware added.
 
-### 9.2 High risks
+#### Verification and Presentation services are empty
 
-#### High risk 1: central private key dependence
+`DID.Verification` and `DID.Presentation` are both `dotnet new webapi` scaffolds (weatherforecast placeholder). These are the two services that complete the thesis trust story:
 
-The services rely heavily on configured private keys. That creates a central operational trust point.
+- `DID.Verification`: verifier-side endpoint — accepts a credential ID or presentation, calls `CredentialRegistry.verifyCredential` on-chain, validates the issuer trust chain, delegates ZKP proof verification to the ZKP service, returns a trust decision
+- `DID.Presentation`: presentation protocol handler — generates presentation challenges, receives wallet responses, routes to DID.Verification
 
-For a thesis demo this can be tolerated, but the analysis and presentation should explicitly state that this is a prototype compromise, not a final decentralized design.
+Without these, the system is issuance-only.
 
-#### High risk 2: verification and presentation services are missing
+#### Mobile wallet not integrated with on-chain verification
 
-The trust story of a DID platform is completed at verification time. Because the Verification and Presentation layers are still missing, the most important user-facing part of the architecture is still not implemented.
+`credentialService.ts` verifies credentials with a local Veramo call only. No on-chain status, revocation, or issuer accreditation check. Wallet-issued credentials are also not recorded on-chain.
 
-#### High risk 3: documentation and runtime behavior are not fully aligned
+#### ZKP service is isolated
 
-There are contradictions around Hardhat persistence and parts of the intended architecture. That is manageable, but it increases demo fragility.
-
-For example:
-
-- README claims Hardhat chain state persists across container restarts
-- DEMO.md says contract deployment must be rerun because the chain is ephemeral
-- docker-compose.infra.yml does not mount a volume for Hardhat state
-
-The compose file currently supports the DEMO.md interpretation more than the README interpretation.
+The ZKP service has working circuits for age and graduation-year predicates but no integration with the wallet, the presentation flow, or the verification services.
 
 ## 10. How the Project Should Be Improved
 
-### 10.1 Priority 0: fix the contract-service drift
+### 10.1 Priority 1: fix revokeAccreditation authorization
 
-Before anything else, make the smart contracts, ABIs, DTOs, and service calls consistent.
+Change the access control check in `AccreditationRegistry.revokeAccreditation` from:
 
-This includes:
+```solidity
+require(msg.sender == accred.issuer || rootAuthority.isMemberState(msg.sender), ...);
+```
 
-- regenerate ABIs from the current Solidity contracts
-- regenerate or fix all Nethereum DTO mappings
-- update CredentialService calls to match current function names and signatures
-- update verifyCredential handling to decode the tuple correctly
-- update status decoding to use the enum-based contract output
-- add automated compatibility tests so this drift cannot happen again silently
+to:
 
-Without this, the architectural discussion becomes less important because the demo itself is at risk.
+```solidity
+require(msg.sender == owner || rootAuthority.isMemberState(msg.sender), ...);
+```
 
-### 10.2 Priority 1: choose one DID strategy and make the whole system consistent
+This is the only contract-level correctness bug.
 
-You need a single coherent answer to this question:
+### 10.2 Priority 2: implement DID.Verification and DID.Presentation
 
-What is the authoritative DID method in this project?
-
-You currently have at least three identity notions:
-
-- did:ethr:sepolia in the backend
-- did:key in the wallet
-- did:web strings in root/member-state metadata
-
-A coherent thesis can still use multiple DID methods, but only if their roles are explicit.
-
-Recommended direction:
-
-- Use did:ethr for blockchain-controlled institutional actors if that is your core trust model.
-- Use did:key only for local holder-controlled identities if you clearly explain why.
-- If you keep did:web for public institutions such as europa.eu, define exactly how it relates to on-chain authority.
-
-Then implement real interoperability between those roles rather than leaving them as parallel concepts.
-
-### 10.3 Priority 2: tighten on-chain trust-anchor logic and authorization
-
-Fix the root authority model so the thesis can defend its decentralization claims without implying that full EU membership governance is part of the implemented scope.
-
-Recommended improvements:
-
-- restrict bootstrapMemberStates to a controlled bootstrap mechanism or remove it after deployment
-- replace pseudo-witness registration with actual signature verification or a simpler but honest bootstrap model
-- if the root-governance code remains part of the contract design, ensure only active member states can propose and vote
-- if the root-governance code remains part of the contract design, make thresholds based on active members, not historical entries
-- align revocation rights with the intended governance model
-- make issuance authority match the written institutional hierarchy
-
-### 10.4 Priority 3: stop exposing raw private keys in service workflows
-
-Passing issuer private keys through API request payloads is not a sound design, even for a prototype.
-
-Better options:
-
-- keep signing inside dedicated issuer services or wallets
-- use per-issuer service accounts only in a limited demo environment
-- document future migration to HSM or vault-backed signing
-
-If you cannot fully redesign this before thesis completion, at least clearly document that it is a demo compromise.
-
-### 10.5 Priority 4: implement the actual verification path
-
-The thesis needs a verifier story that demonstrates why the architecture matters.
+This is the most significant remaining gap in demonstrating why the architecture matters.
 
 Minimum viable verification flow:
 
-- holder presents credential or proof
-- verifier extracts credential identifier
-- verifier checks on-chain credential status
-- verifier checks issuer accreditation chain on-chain
-- verifier optionally validates a ZKP bound to the claim or presentation
-- verifier receives a final trust decision with explanation
+1. Verifier calls DID.Verification with a credential ID
+2. DID.Verification calls `CredentialRegistry.verifyCredential` on-chain
+3. DID.Verification calls `AccreditationRegistry.validateTrustChain` on-chain for the issuer
+4. If a ZKP proof is attached, delegate verification to the ZKP service
+5. Return a structured trust decision
 
-Without that, the system remains mostly an issuance and storage architecture.
+DID.Presentation wraps the above with a challenge/response protocol so the wallet can respond to presentation requests.
 
-### 10.6 Priority 5: align the wallet with the real architecture
+### 10.3 Priority 3: remove issuerPrivateKey from request DTOs
 
-The wallet should evolve from a local Veramo demo into a holder application for the actual thesis system.
+Private keys should not travel over HTTP. Options:
 
-That means:
+- Remove the field and always use the backend-configured key for demo purposes
+- If per-issuer signing is needed, use a server-side key vault lookup by issuer DID, not client-supplied keys
 
-- importing or receiving chain-backed credentials
-- checking remote/on-chain status, not just local JWT validity
-- supporting presentation requests
-- integrating ZKP generation from held claims or claim-derived data
-- removing hardcoded secrets
+At minimum, document this as a demo compromise and note the intended replacement approach.
 
-### 10.7 Priority 6: make the prototype honest about what is centralized
+### 10.4 Priority 4: add JWT authentication to DID.Credential and DID.Identity
 
-This is important academically.
+Apply the same `Policies("...")` pattern already implemented in `DID.Accreditation` to the write endpoints of `DID.Credential` and `DID.Identity`.
 
-You do not need to eliminate all centralization in a bachelor thesis. You do need to be precise about where it remains.
+### 10.5 Priority 5: integrate the wallet with on-chain verification and ZKP
 
-Be explicit about:
+- Add an on-chain status check call in `credentialService.ts` (call `DID.Credential`'s verify endpoint or call the blockchain directly)
+- Add a ZKP proof generation flow from wallet-held credential attributes
+- Add a presentation request handler so the wallet can respond to verifier challenges
 
-- central signer assumptions
-- service-hosted APIs
-- local Hardhat network limitations
-- demo-only shortcuts
-- missing multi-party governance infrastructure
+### 10.6 Priority 6: be explicit about what is centralized
 
-That honesty will make the thesis stronger, not weaker.
+You do not need to eliminate all centralization in a bachelor thesis. Be precise about where it remains:
+
+- backend-configured private keys for on-chain signing
+- service-hosted APIs as convenience helpers
+- local Hardhat network
+- demo-only `issuerPrivateKey` shortcut
+
+That honesty makes the thesis stronger, not weaker.
 
 ## 11. Feasibility Study
 
@@ -572,10 +471,9 @@ Why it is feasible:
 
 Why it is not yet easy:
 
-- contract/service drift must be fixed first
-- wallet/backend identity consistency must be resolved
 - verification/presentation flows still need real implementation
-- governance details need tightening if you want to make strong decentralization claims
+- wallet integration with on-chain status and ZKP is not done
+- one contract authorization bug needs fixing
 
 Conclusion:
 
@@ -604,10 +502,10 @@ Assuming a bachelor thesis timeline, the project remains feasible if you priorit
 
 Realistic scope for completion:
 
-1. Fix contract/service compatibility.
-2. Finalize one consistent DID flow.
-3. Implement one end-to-end verification scenario.
-4. Integrate one ZKP-backed claim verification scenario.
+1. Fix `revokeAccreditation` authorization (one-line contract change).
+2. Implement one end-to-end verification scenario (DID.Verification calling on-chain + ZKP service).
+3. Implement a minimal presentation protocol (wallet responds to a verifier challenge).
+4. Connect the wallet to receive and verify on-chain-backed credentials.
 5. Present the remaining services as future work if necessary.
 
 Unrealistic scope for the same timeline:
@@ -673,30 +571,29 @@ At the same time, the current system does not yet fully respect decentralized id
 
 The main reasons are:
 
-- weak root-governance enforcement
-- centralized key and service control
-- DID method inconsistency between wallet and backend
+- revocation authorization in `AccreditationRegistry` does not match the intended model
 - incomplete verification/presentation flows
-- contract/service interface drift in the credential path
+- mobile wallet not yet integrated with on-chain status or ZKP
 
 My final assessment is:
 
 - Concept quality: high
-- Current implementation coherence: medium
-- Decentralization fidelity: medium-low
-- Thesis feasibility: high if scope is narrowed and integration issues are fixed
+- Current implementation coherence: medium-high
+- Decentralization fidelity: medium (intentionally hybrid; honest about it)
+- Thesis feasibility: high if the above gaps are closed
 - Production feasibility: low in the current state
 
 ## 14. Priority Action List
 
 If you want the highest return on effort, do these in order:
 
-1. Fix the smart contract and .NET credential service mismatch.
-2. Decide and document the DID method strategy across wallet, backend, and institutions.
-3. Implement one real end-to-end verification flow.
-4. Tighten EURootAuthority governance and bootstrap logic.
-5. Remove or clearly isolate demo-only centralization shortcuts, especially raw private key handling.
-6. Integrate the wallet with chain-backed credential status checks and proof presentation.
-7. Present unsupported features as future work instead of partially implemented promises.
+1. Fix `revokeAccreditation` in `AccreditationRegistry.sol` — change `msg.sender == accred.issuer` to `msg.sender == owner`.
+2. Implement `DID.Verification` — on-chain credential status + trust chain validation + ZKP delegation.
+3. Implement `DID.Presentation` — presentation challenge/response protocol for the wallet.
+4. Connect the mobile wallet to `DID.Verification` for on-chain status checks instead of local Veramo only.
+5. Integrate ZKP proof generation in the wallet from held credential claims.
+6. Remove `issuerPrivateKey` from request DTOs; use backend-configured signing only.
+7. Add JWT authentication (`Policies("...")`) to `DID.Credential` and `DID.Identity` write endpoints.
+8. Present unimplemented features (full governance ceremony, production key management, eIDAS compliance) as explicit future work.
 
-If those seven items are handled, the project becomes much more coherent, much easier to defend in front of a committee, and much more convincing as a blockchain/DID thesis.
+Items 1–5 are the core thesis demo. Items 6–8 are cleanup and honesty.

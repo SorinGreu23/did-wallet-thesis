@@ -135,7 +135,7 @@ For thesis scope, the admin client uses a **paste-your-private-key-to-sign-in-me
 
 The same signing flow would work with MetaMask in production — only the `ethers.Signer` source changes. The plan notes this as a future extension.
 
----
+> **Implementation note:** The JWT is persisted to `localStorage` (not pure in-memory) to survive page reloads. This is a conscious trade-off: XSS could exfiltrate the token, but the short 1-hour expiry limits the damage window. The private key itself is never persisted — only the issued JWT is stored.
 
 ## 4. Client-Side Signing (Eliminate Private Key Transport)
 
@@ -325,7 +325,7 @@ export const routes: Routes = [
         path: 'universities',
         loadComponent: () => import('./features/universities/universities.component')
           .then(m => m.UniversitiesComponent),
-        data: { minimumScope: 'Ministry' },
+        data: { minimumScope: 'Institution' },
         canActivate: [ScopeGuard],
       },
     ],
@@ -504,33 +504,34 @@ During the JWT lifetime, the authenticated DID's accreditation could be revoked 
 
 ## 9. Implementation Phases
 
-### Phase 1: Foundation (Core Auth Plumbing)
+### Phase 1: Foundation (Core Auth Plumbing) ✅
 
 **Angular:**
-- [ ] `SignerService` — in-memory ethers.js Wallet, sign challenges, clear on logout
-- [ ] `AuthService` — challenge/verify flow, JWT storage in memory, `session` signal
-- [ ] `AuthInterceptor` — attach Bearer token, handle 401
-- [ ] `LoginComponent` — private key input, DID derivation, sign-in flow
+- [x] `SignerService` — in-memory ethers.js Wallet, sign challenges, clear on logout
+- [x] `AuthService` — challenge/verify flow, JWT storage in memory, `session` signal
+- [x] `AuthInterceptor` — attach Bearer token, handle 401
+- [x] `LoginComponent` — private key input, DID derivation, sign-in flow
 
 **Backend (.NET):**
-- [ ] `POST /api/auth/challenge` and `POST /api/auth/verify` endpoints
-- [ ] Signature recovery via Nethereum
-- [ ] JWT issuance with scope claim from on-chain accreditation lookup
-- [ ] JWT validation middleware on all existing endpoints
+- [x] `POST /api/auth/challenge` and `POST /api/auth/verify` endpoints
+- [x] Signature recovery via Nethereum
+- [x] JWT issuance with scope claim from on-chain accreditation lookup
+- [x] JWT validation middleware on all existing endpoints _(DID.Accreditation only — see Phase 2 note)_
 
-### Phase 2: Access Control (Guards & RBAC)
+### Phase 2: Access Control (Guards & RBAC) ✅ (Angular) / ⚠️ Partial (Backend)
 
 **Angular:**
-- [ ] `AuthGuard` — redirect to `/login` if unauthenticated
-- [ ] `ScopeGuard` — check `minimumScope` route data against session scope
-- [ ] Update `app.routes.ts` with guards and scope requirements
-- [ ] Adapt `ShellComponent` sidebar/navigation to show only permitted routes
-- [ ] Show current session info (DID, scope badge) in the shell header
+- [x] `AuthGuard` — redirect to `/login` if unauthenticated
+- [x] `ScopeGuard` — check `minimumScope` route data against session scope
+- [x] Update `app.routes.ts` with guards and scope requirements
+- [x] Adapt `ShellComponent` sidebar/navigation to show only permitted routes
+- [x] Show current session info (DID, scope badge) in the shell header
 
 **Backend (.NET):**
-- [ ] Authorization policies per scope (`EURoot`, `MemberState`, `Ministry`, `Institution`)
-- [ ] Apply `RequireAuthorization` to all FastEndpoints
+- [x] Authorization policies per scope (`EURoot`, `MemberState`, `Ministry`, `Institution`) — in `DID.Accreditation`
+- [x] Apply `RequireAuthorization` to all FastEndpoints — in `DID.Accreditation`
 - [ ] Scope-filtered data queries (e.g., Ministry user only sees own subtree)
+- [ ] JWT middleware + `RequireAuthorization` on `DID.Credential` service — **currently unprotected**
 
 ### Phase 3: Client-Side Signing (Remove Private Key Transport)
 

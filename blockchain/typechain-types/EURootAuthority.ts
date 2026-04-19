@@ -47,17 +47,10 @@ export declare namespace EURootAuthority {
 export interface EURootAuthorityInterface extends Interface {
   getFunction(
     nameOrSignature:
-      | "APPROVAL_THRESHOLD"
       | "DEPLOYMENT_BLOCK"
       | "GENESIS_BLOCK_HASH"
-      | "MIN_WITNESS_SIGNATURES"
       | "OFFICIAL_DID_DOCUMENT"
-      | "TOTAL_MEMBER_STATES"
-      | "addDeploymentWitness"
-      | "bootstrapMemberStates"
-      | "deploymentCeremonyCompleted"
-      | "deploymentWitnesses"
-      | "executeProposal"
+      | "addMemberState"
       | "getActiveMemberStateCount"
       | "getAllMemberStates"
       | "getMemberStateInfo"
@@ -65,30 +58,18 @@ export interface EURootAuthorityInterface extends Interface {
       | "memberStateInfo"
       | "memberStateList"
       | "memberStates"
-      | "proposalVotes"
-      | "proposals"
-      | "proposeAddMemberState"
-      | "verifyDeploymentCeremony"
-      | "voteOnProposal"
-      | "witnessCount"
+      | "owner"
+      | "removeMemberState"
+      | "updateMemberState"
   ): FunctionFragment;
 
   getEvent(
     nameOrSignatureOrTopic:
-      | "DeploymentCeremonyCompleted"
-      | "DeploymentWitnessAdded"
       | "MemberStateAdded"
       | "MemberStateRemoved"
       | "MemberStateUpdated"
-      | "ProposalCreated"
-      | "ProposalExecuted"
-      | "ProposalVoted"
   ): EventFragment;
 
-  encodeFunctionData(
-    functionFragment: "APPROVAL_THRESHOLD",
-    values?: undefined
-  ): string;
   encodeFunctionData(
     functionFragment: "DEPLOYMENT_BLOCK",
     values?: undefined
@@ -98,36 +79,12 @@ export interface EURootAuthorityInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "MIN_WITNESS_SIGNATURES",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
     functionFragment: "OFFICIAL_DID_DOCUMENT",
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "TOTAL_MEMBER_STATES",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "addDeploymentWitness",
-    values: [AddressLike]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "bootstrapMemberStates",
-    values: [AddressLike[], string[], string[]]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "deploymentCeremonyCompleted",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "deploymentWitnesses",
-    values: [AddressLike]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "executeProposal",
-    values: [BytesLike]
+    functionFragment: "addMemberState",
+    values: [AddressLike, string, string]
   ): string;
   encodeFunctionData(
     functionFragment: "getActiveMemberStateCount",
@@ -157,35 +114,16 @@ export interface EURootAuthorityInterface extends Interface {
     functionFragment: "memberStates",
     values: [AddressLike]
   ): string;
+  encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
-    functionFragment: "proposalVotes",
-    values: [BytesLike, AddressLike]
+    functionFragment: "removeMemberState",
+    values: [AddressLike]
   ): string;
   encodeFunctionData(
-    functionFragment: "proposals",
-    values: [BytesLike]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "proposeAddMemberState",
-    values: [AddressLike, string, string]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "verifyDeploymentCeremony",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "voteOnProposal",
-    values: [BytesLike, boolean]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "witnessCount",
-    values?: undefined
+    functionFragment: "updateMemberState",
+    values: [AddressLike, string]
   ): string;
 
-  decodeFunctionResult(
-    functionFragment: "APPROVAL_THRESHOLD",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(
     functionFragment: "DEPLOYMENT_BLOCK",
     data: BytesLike
@@ -195,35 +133,11 @@ export interface EURootAuthorityInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "MIN_WITNESS_SIGNATURES",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
     functionFragment: "OFFICIAL_DID_DOCUMENT",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "TOTAL_MEMBER_STATES",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "addDeploymentWitness",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "bootstrapMemberStates",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "deploymentCeremonyCompleted",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "deploymentWitnesses",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "executeProposal",
+    functionFragment: "addMemberState",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -254,56 +168,15 @@ export interface EURootAuthorityInterface extends Interface {
     functionFragment: "memberStates",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "proposalVotes",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(functionFragment: "proposals", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "proposeAddMemberState",
+    functionFragment: "removeMemberState",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "verifyDeploymentCeremony",
+    functionFragment: "updateMemberState",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(
-    functionFragment: "voteOnProposal",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "witnessCount",
-    data: BytesLike
-  ): Result;
-}
-
-export namespace DeploymentCeremonyCompletedEvent {
-  export type InputTuple = [
-    blockNumber: BigNumberish,
-    witnessCount: BigNumberish
-  ];
-  export type OutputTuple = [blockNumber: bigint, witnessCount: bigint];
-  export interface OutputObject {
-    blockNumber: bigint;
-    witnessCount: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace DeploymentWitnessAddedEvent {
-  export type InputTuple = [witness: AddressLike, totalWitnesses: BigNumberish];
-  export type OutputTuple = [witness: string, totalWitnesses: bigint];
-  export interface OutputObject {
-    witness: string;
-    totalWitnesses: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export namespace MemberStateAddedEvent {
@@ -354,63 +227,6 @@ export namespace MemberStateUpdatedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace ProposalCreatedEvent {
-  export type InputTuple = [
-    proposalId: BytesLike,
-    proposalType: BigNumberish,
-    target: AddressLike
-  ];
-  export type OutputTuple = [
-    proposalId: string,
-    proposalType: bigint,
-    target: string
-  ];
-  export interface OutputObject {
-    proposalId: string;
-    proposalType: bigint;
-    target: string;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace ProposalExecutedEvent {
-  export type InputTuple = [proposalId: BytesLike, executedAt: BigNumberish];
-  export type OutputTuple = [proposalId: string, executedAt: bigint];
-  export interface OutputObject {
-    proposalId: string;
-    executedAt: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace ProposalVotedEvent {
-  export type InputTuple = [
-    proposalId: BytesLike,
-    voter: AddressLike,
-    support: boolean
-  ];
-  export type OutputTuple = [
-    proposalId: string,
-    voter: string,
-    support: boolean
-  ];
-  export interface OutputObject {
-    proposalId: string;
-    voter: string;
-    support: boolean;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
 export interface EURootAuthority extends BaseContract {
   connect(runner?: ContractRunner | null): EURootAuthority;
   waitForDeployment(): Promise<this>;
@@ -454,44 +270,14 @@ export interface EURootAuthority extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  APPROVAL_THRESHOLD: TypedContractMethod<[], [bigint], "view">;
-
   DEPLOYMENT_BLOCK: TypedContractMethod<[], [bigint], "view">;
 
   GENESIS_BLOCK_HASH: TypedContractMethod<[], [string], "view">;
 
-  MIN_WITNESS_SIGNATURES: TypedContractMethod<[], [bigint], "view">;
-
   OFFICIAL_DID_DOCUMENT: TypedContractMethod<[], [string], "view">;
 
-  TOTAL_MEMBER_STATES: TypedContractMethod<[], [bigint], "view">;
-
-  addDeploymentWitness: TypedContractMethod<
-    [witness: AddressLike],
-    [void],
-    "nonpayable"
-  >;
-
-  bootstrapMemberStates: TypedContractMethod<
-    [
-      initialStates: AddressLike[],
-      countryCodes: string[],
-      didDocuments: string[]
-    ],
-    [void],
-    "nonpayable"
-  >;
-
-  deploymentCeremonyCompleted: TypedContractMethod<[], [boolean], "view">;
-
-  deploymentWitnesses: TypedContractMethod<
-    [arg0: AddressLike],
-    [boolean],
-    "view"
-  >;
-
-  executeProposal: TypedContractMethod<
-    [proposalId: BytesLike],
+  addMemberState: TypedContractMethod<
+    [stateAddress: AddressLike, countryCode: string, didDocument: string],
     [void],
     "nonpayable"
   >;
@@ -525,52 +311,24 @@ export interface EURootAuthority extends BaseContract {
 
   memberStates: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
 
-  proposalVotes: TypedContractMethod<
-    [arg0: BytesLike, arg1: AddressLike],
-    [boolean],
-    "view"
-  >;
+  owner: TypedContractMethod<[], [string], "view">;
 
-  proposals: TypedContractMethod<
-    [arg0: BytesLike],
-    [
-      [bigint, string, string, bigint, bigint, bigint, bigint, boolean] & {
-        proposalType: bigint;
-        target: string;
-        data: string;
-        votesFor: bigint;
-        votesAgainst: bigint;
-        createdAt: bigint;
-        executedAt: bigint;
-        executed: boolean;
-      }
-    ],
-    "view"
-  >;
-
-  proposeAddMemberState: TypedContractMethod<
-    [stateAddress: AddressLike, countryCode: string, didDocument: string],
-    [string],
-    "nonpayable"
-  >;
-
-  verifyDeploymentCeremony: TypedContractMethod<[], [boolean], "view">;
-
-  voteOnProposal: TypedContractMethod<
-    [proposalId: BytesLike, support: boolean],
+  removeMemberState: TypedContractMethod<
+    [stateAddress: AddressLike],
     [void],
     "nonpayable"
   >;
 
-  witnessCount: TypedContractMethod<[], [bigint], "view">;
+  updateMemberState: TypedContractMethod<
+    [stateAddress: AddressLike, didDocument: string],
+    [void],
+    "nonpayable"
+  >;
 
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
   ): T;
 
-  getFunction(
-    nameOrSignature: "APPROVAL_THRESHOLD"
-  ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "DEPLOYMENT_BLOCK"
   ): TypedContractMethod<[], [bigint], "view">;
@@ -578,37 +336,15 @@ export interface EURootAuthority extends BaseContract {
     nameOrSignature: "GENESIS_BLOCK_HASH"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
-    nameOrSignature: "MIN_WITNESS_SIGNATURES"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
     nameOrSignature: "OFFICIAL_DID_DOCUMENT"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
-    nameOrSignature: "TOTAL_MEMBER_STATES"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "addDeploymentWitness"
-  ): TypedContractMethod<[witness: AddressLike], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "bootstrapMemberStates"
+    nameOrSignature: "addMemberState"
   ): TypedContractMethod<
-    [
-      initialStates: AddressLike[],
-      countryCodes: string[],
-      didDocuments: string[]
-    ],
+    [stateAddress: AddressLike, countryCode: string, didDocument: string],
     [void],
     "nonpayable"
   >;
-  getFunction(
-    nameOrSignature: "deploymentCeremonyCompleted"
-  ): TypedContractMethod<[], [boolean], "view">;
-  getFunction(
-    nameOrSignature: "deploymentWitnesses"
-  ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
-  getFunction(
-    nameOrSignature: "executeProposal"
-  ): TypedContractMethod<[proposalId: BytesLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "getActiveMemberStateCount"
   ): TypedContractMethod<[], [bigint], "view">;
@@ -646,65 +382,19 @@ export interface EURootAuthority extends BaseContract {
     nameOrSignature: "memberStates"
   ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
   getFunction(
-    nameOrSignature: "proposalVotes"
-  ): TypedContractMethod<
-    [arg0: BytesLike, arg1: AddressLike],
-    [boolean],
-    "view"
-  >;
+    nameOrSignature: "owner"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
-    nameOrSignature: "proposals"
-  ): TypedContractMethod<
-    [arg0: BytesLike],
-    [
-      [bigint, string, string, bigint, bigint, bigint, bigint, boolean] & {
-        proposalType: bigint;
-        target: string;
-        data: string;
-        votesFor: bigint;
-        votesAgainst: bigint;
-        createdAt: bigint;
-        executedAt: bigint;
-        executed: boolean;
-      }
-    ],
-    "view"
-  >;
+    nameOrSignature: "removeMemberState"
+  ): TypedContractMethod<[stateAddress: AddressLike], [void], "nonpayable">;
   getFunction(
-    nameOrSignature: "proposeAddMemberState"
+    nameOrSignature: "updateMemberState"
   ): TypedContractMethod<
-    [stateAddress: AddressLike, countryCode: string, didDocument: string],
-    [string],
-    "nonpayable"
-  >;
-  getFunction(
-    nameOrSignature: "verifyDeploymentCeremony"
-  ): TypedContractMethod<[], [boolean], "view">;
-  getFunction(
-    nameOrSignature: "voteOnProposal"
-  ): TypedContractMethod<
-    [proposalId: BytesLike, support: boolean],
+    [stateAddress: AddressLike, didDocument: string],
     [void],
     "nonpayable"
   >;
-  getFunction(
-    nameOrSignature: "witnessCount"
-  ): TypedContractMethod<[], [bigint], "view">;
 
-  getEvent(
-    key: "DeploymentCeremonyCompleted"
-  ): TypedContractEvent<
-    DeploymentCeremonyCompletedEvent.InputTuple,
-    DeploymentCeremonyCompletedEvent.OutputTuple,
-    DeploymentCeremonyCompletedEvent.OutputObject
-  >;
-  getEvent(
-    key: "DeploymentWitnessAdded"
-  ): TypedContractEvent<
-    DeploymentWitnessAddedEvent.InputTuple,
-    DeploymentWitnessAddedEvent.OutputTuple,
-    DeploymentWitnessAddedEvent.OutputObject
-  >;
   getEvent(
     key: "MemberStateAdded"
   ): TypedContractEvent<
@@ -726,51 +416,8 @@ export interface EURootAuthority extends BaseContract {
     MemberStateUpdatedEvent.OutputTuple,
     MemberStateUpdatedEvent.OutputObject
   >;
-  getEvent(
-    key: "ProposalCreated"
-  ): TypedContractEvent<
-    ProposalCreatedEvent.InputTuple,
-    ProposalCreatedEvent.OutputTuple,
-    ProposalCreatedEvent.OutputObject
-  >;
-  getEvent(
-    key: "ProposalExecuted"
-  ): TypedContractEvent<
-    ProposalExecutedEvent.InputTuple,
-    ProposalExecutedEvent.OutputTuple,
-    ProposalExecutedEvent.OutputObject
-  >;
-  getEvent(
-    key: "ProposalVoted"
-  ): TypedContractEvent<
-    ProposalVotedEvent.InputTuple,
-    ProposalVotedEvent.OutputTuple,
-    ProposalVotedEvent.OutputObject
-  >;
 
   filters: {
-    "DeploymentCeremonyCompleted(uint256,uint256)": TypedContractEvent<
-      DeploymentCeremonyCompletedEvent.InputTuple,
-      DeploymentCeremonyCompletedEvent.OutputTuple,
-      DeploymentCeremonyCompletedEvent.OutputObject
-    >;
-    DeploymentCeremonyCompleted: TypedContractEvent<
-      DeploymentCeremonyCompletedEvent.InputTuple,
-      DeploymentCeremonyCompletedEvent.OutputTuple,
-      DeploymentCeremonyCompletedEvent.OutputObject
-    >;
-
-    "DeploymentWitnessAdded(address,uint256)": TypedContractEvent<
-      DeploymentWitnessAddedEvent.InputTuple,
-      DeploymentWitnessAddedEvent.OutputTuple,
-      DeploymentWitnessAddedEvent.OutputObject
-    >;
-    DeploymentWitnessAdded: TypedContractEvent<
-      DeploymentWitnessAddedEvent.InputTuple,
-      DeploymentWitnessAddedEvent.OutputTuple,
-      DeploymentWitnessAddedEvent.OutputObject
-    >;
-
     "MemberStateAdded(address,string,string)": TypedContractEvent<
       MemberStateAddedEvent.InputTuple,
       MemberStateAddedEvent.OutputTuple,
@@ -802,39 +449,6 @@ export interface EURootAuthority extends BaseContract {
       MemberStateUpdatedEvent.InputTuple,
       MemberStateUpdatedEvent.OutputTuple,
       MemberStateUpdatedEvent.OutputObject
-    >;
-
-    "ProposalCreated(bytes32,uint8,address)": TypedContractEvent<
-      ProposalCreatedEvent.InputTuple,
-      ProposalCreatedEvent.OutputTuple,
-      ProposalCreatedEvent.OutputObject
-    >;
-    ProposalCreated: TypedContractEvent<
-      ProposalCreatedEvent.InputTuple,
-      ProposalCreatedEvent.OutputTuple,
-      ProposalCreatedEvent.OutputObject
-    >;
-
-    "ProposalExecuted(bytes32,uint256)": TypedContractEvent<
-      ProposalExecutedEvent.InputTuple,
-      ProposalExecutedEvent.OutputTuple,
-      ProposalExecutedEvent.OutputObject
-    >;
-    ProposalExecuted: TypedContractEvent<
-      ProposalExecutedEvent.InputTuple,
-      ProposalExecutedEvent.OutputTuple,
-      ProposalExecutedEvent.OutputObject
-    >;
-
-    "ProposalVoted(bytes32,address,bool)": TypedContractEvent<
-      ProposalVotedEvent.InputTuple,
-      ProposalVotedEvent.OutputTuple,
-      ProposalVotedEvent.OutputObject
-    >;
-    ProposalVoted: TypedContractEvent<
-      ProposalVotedEvent.InputTuple,
-      ProposalVotedEvent.OutputTuple,
-      ProposalVotedEvent.OutputObject
     >;
   };
 }

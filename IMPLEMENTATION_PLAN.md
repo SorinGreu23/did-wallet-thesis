@@ -182,21 +182,16 @@ If holders use `did:key` or another non-address DID method, the plan must explic
 
 If simplicity is the priority for the demo, you may still use address-based blockchain identifiers internally, but the issuance and presentation layer should still be modeled around EUDI-compatible flows rather than raw custom REST endpoints.
 
-## 3.2 Remove Identity Service as an authority
+## 3.2 Identity Service role
 
-The current Identity Service should not remain a source of truth for DID creation.
+The Identity Service is not an identity authority. It exists as a convenience persistence layer for the admin accreditation platform: it stores known DID-to-address mappings so the admin client can query and display them without reading raw contract state on every page load.
 
-Replace it with one of these roles:
+This is already the correct helper role. The constraints are:
 
-- a thin DID helper API that formats DID Documents from public blockchain data only
-- a client SDK module inside the wallet and admin app
-- an optional resolver cache, never authoritative
-
-New rule:
-
-- DIDs are created by wallets or admin clients locally.
-- The backend does not mint identities for users.
-- The backend may expose convenience resolution, but resolution must be derivable without trusting it.
+- DIDs are created by wallets or admin clients locally, not by the backend.
+- The backend persists the result for UI convenience only.
+- Any DID record stored here is derivable from on-chain state — the backend copy is never authoritative.
+- `ResolveDIDEndpoint` is a resolver cache; `CreateDIDEndpoint` is a registration helper that stores a locally-derived DID, not a minting operation.
 
 ---
 
@@ -344,49 +339,54 @@ Constraints:
 
 ---
 
-## 6. What to Decommission or Downgrade
+## 6. Service Roles — Settled Design
 
-## 6.1 Services to remove as authorities
+## 6.1 Actual role of the .NET backend
 
-The following current services should no longer be treated as core domain authorities:
+The .NET services exist as the **persistence and query layer for the admin accreditation platform**. They are already operating in the helper role described by this plan. They are not being decommissioned; they are being held to the correct constraints.
 
-- Identity Service
-- Accreditation Service
-- Credential Service
-- Verification Service
+| Service | Actual role | Authority status |
+|---|---|---|
+| `DID.Identity` | Resolver cache + DID registration convenience store for admin UI | Not authoritative — derivable from chain |
+| `DID.Accreditation` | Persists accreditation records mirrored from on-chain events; backs admin CRUD UI | Not authoritative — blockchain is source of truth |
+| `DID.Credential` | Persists issued credential records; backs admin credential management UI | Not authoritative — credential validity is on-chain |
+| `DID.BlockchainSync` | Indexes contract events into queryable DB for fast UI reads | Pure indexer — already the correct role |
+| `DID.Verification` | Stub — not yet implemented | N/A |
+| `DID.Presentation` | Stub — not yet implemented | N/A |
+| `DID.Notification` | Optional operational alerts | Not authoritative |
+| `DID.Audit` | Audit log helper | Not authoritative |
 
-## 6.2 Their replacement role
+## 6.2 Constraints that must hold
 
-These may survive only as optional helper APIs:
+Because these services are helpers, not authorities, the following must remain true:
 
-- `Identity` -> resolver/cache/helper SDK or removed entirely
-- `Accreditation` -> indexer-backed query API only
-- `Credential` -> issuance delivery / OpenID helper / indexer-backed query API only
-- `Verification` -> reproducible helper API only, or removed in favor of client-side verification library
+- No service holds long-term issuer or holder private keys. The remaining `issuerPrivateKey` field in `DID.Credential` must be removed (tracked in `ADMIN_CLIENT_AUTH_PLAN.md` Phase 3).
+- No service is the mandatory path for verification. A verifier can check on-chain state directly.
+- No service decides accreditation validity. The smart contract decides.
+- If any service database is wiped, it can be rebuilt by replaying blockchain events.
 
-## 6.3 New preferred structure
+## 6.3 Current repository structure
 
 ```text
 did-wallet-thesis/
-├── blockchain/                 # authoritative trust logic
-├── client-sdk/                 # shared chain + VC + DID logic for apps
-├── mobile-wallet/              # holder wallet
-├── admin-client/               # issuer / admin wallet UI
-├── verifier-client/            # verifier UI or module
-├── helper-services/
-│   ├── indexer/
-│   ├── relay/
-│   ├── presentation-broker/
-│   ├── notifications/
-│   └── zkp-helper/
+├── blockchain/                 # authoritative trust logic (contracts + ABIs)
+├── mobile-wallet/              # holder wallet (Veramo, did:ethr:sepolia, local keys)
+├── zkp-service/                # ZKP proving helper (isolated — needs wallet integration)
+├── DID.WalletThesis/
+│   ├── admin-client/           # issuer / admin wallet UI (Angular)
+│   └── Services/               # persistence + query layer for admin platform (.NET)
+│       ├── DID.Accreditation/  # accreditation records + auth endpoints
+│       ├── DID.Credential/     # credential records
+│       ├── DID.Identity/       # DID resolver cache
+│       ├── DID.BlockchainSync/ # event indexer
+│       ├── DID.Notification/   # operational alerts
+│       ├── DID.Audit/          # audit log
+│       ├── DID.Verification/   # stub — not yet implemented
+│       └── DID.Presentation/   # stub — not yet implemented
 └── docs/
 ```
 
-The key architectural change is this:
-
-- move trust logic into contracts and shared client libraries
-- move key ownership into wallets
-- shrink services to optional infrastructure
+The folder restructure proposed in earlier drafts (to `helper-services/`) is not being executed for thesis delivery. The logical role separation described above is what matters, not a physical rename.
 
 ---
 
@@ -800,8 +800,8 @@ The implementation is successful if the following statements are true:
 
 1. If all helper services are turned off, the verifier can still validate a credential using the blockchain and the presented artifacts.
 2. If the indexer is stale, it affects convenience only, not correctness.
-3. No backend service holds the issuer's long-term private key.
-4. No backend service is required to create a DID.
+3. No backend service holds the issuer's long-term private key. _(Open: `issuerPrivateKey` still in `DID.Credential` DTO — see `ADMIN_CLIENT_AUTH_PLAN.md` Phase 3.)_
+4. No backend service is required to create a DID. _(The wallet creates DIDs locally; the backend only stores the result for UI convenience.)_
 5. The wallet, admin client, and verifier all use the same identity and credential model.
 6. The wallet, admin client, and verifier all use EUDI-aligned issuance and presentation flows.
 7. The demo can explain exactly where decentralization exists and where helper infrastructure still exists.
@@ -816,9 +816,10 @@ Based on the current codebase, the recommended migration path is:
 2. Keep `mobile-wallet/`, but align it to the same DID model and real chain-backed credentials.
 3. Keep `admin-client/`, but convert it into an issuer wallet UI instead of a backend-signing UI.
 4. Keep `zkp-service/` as a mandatory project component, but treat it as an implementation detail of proof generation and verification rather than as a trust anchor.
-5. Keep `DID.BlockchainSync/`, but rename or reframe it as an indexer.
-6. Stop expanding `DID.Identity/`, `DID.Accreditation/`, `DID.Credential/`, and `DID.Verification/` as domain authorities.
-7. Extract a shared client SDK so chain reads and verification are not trapped inside server code.
+5. Keep `DID.BlockchainSync/` as the event indexer — it already fulfils this role.
+6. Keep `DID.Identity/`, `DID.Accreditation/`, and `DID.Credential/` as the persistence/query layer for the admin platform. They are already operating in the helper role. The one remaining violation — `issuerPrivateKey` in `DID.Credential` — must be removed.
+7. Treat `DID.Verification/` and `DID.Presentation/` as stubs. Decide for Week 7 whether to implement them or route verification through the admin client directly.
+8. A shared client SDK remains aspirational for thesis scope. Chain reads needed for the demo can be implemented directly in the admin client and mobile wallet against the Hardhat RPC.
 
 ---
 

@@ -35,84 +35,53 @@ describe("EURootAuthority", function () {
       expect(deploymentBlock).to.be.gt(0);
     });
 
-    it("Should start with ceremony not completed", async function () {
-      expect(await rootAuthority.deploymentCeremonyCompleted()).to.be.false;
+    it("Should set the deployer as owner", async function () {
+      expect(await rootAuthority.owner()).to.equal(owner.address);
     });
   });
 
-  describe("Deployment Ceremony", function () {
-    it("Should allow adding deployment witnesses", async function () {
-      await expect(rootAuthority.addDeploymentWitness(memberState1.address))
-        .to.emit(rootAuthority, "DeploymentWitnessAdded")
-        .withArgs(memberState1.address, 1);
-
-      expect(await rootAuthority.witnessCount()).to.equal(1);
-      expect(await rootAuthority.deploymentWitnesses(memberState1.address)).to.be.true;
-    });
-
-    it("Should prevent adding the same witness twice", async function () {
-      await rootAuthority.addDeploymentWitness(memberState1.address);
-
-      await expect(
-        rootAuthority.addDeploymentWitness(memberState1.address)
-      ).to.be.revertedWithCustomError(rootAuthority, "AlreadyWitness");
-    });
-
-    it("Should auto-complete ceremony at MIN_WITNESS_SIGNATURES", async function () {
-      // Note: In production this requires 18 witnesses
-      // For testing, we'll check the logic works
-      const minWitnesses = await rootAuthority.MIN_WITNESS_SIGNATURES();
-      expect(minWitnesses).to.equal(18);
-    });
-
-    it("Should verify deployment ceremony", async function () {
-      expect(await rootAuthority.verifyDeploymentCeremony()).to.be.false;
-
-      // After adding sufficient witnesses, it should be true
-      // (This test is simplified; in production you'd add 18+ witnesses)
-    });
-  });
-
-  describe("Member State Bootstrap", function () {
-    it("Should bootstrap initial member states", async function () {
-      const addresses = [memberState1.address, memberState2.address];
-      const codes = ["RO", "DE"];
-      const dids = ["did:web:gov.ro", "did:web:bund.de"];
-
-      await expect(
-        rootAuthority.bootstrapMemberStates(addresses, codes, dids)
-      )
+  describe("Member State Management", function () {
+    it("Should allow owner to add a member state", async function () {
+      await expect(rootAuthority.addMemberState(memberState1.address, "RO", "did:web:gov.ro"))
         .to.emit(rootAuthority, "MemberStateAdded")
         .withArgs(memberState1.address, "RO", "did:web:gov.ro");
 
       expect(await rootAuthority.isMemberState(memberState1.address)).to.be.true;
-      expect(await rootAuthority.isMemberState(memberState2.address)).to.be.true;
     });
 
-    it("Should prevent bootstrapping after ceremony completed", async function () {
-      // First bootstrap
-      await rootAuthority.bootstrapMemberStates(
-        [memberState1.address],
-        ["RO"],
-        ["did:web:gov.ro"]
-      );
-
-      // Try to bootstrap again - should fail
+    it("Should prevent non-owner from adding a member state", async function () {
       await expect(
-        rootAuthority.bootstrapMemberStates(
-          [memberState2.address],
-          ["DE"],
-          ["did:web:bund.de"]
-        )
-      ).to.be.revertedWithCustomError(rootAuthority, "DeploymentCeremonyAlreadyCompleted");
+        rootAuthority.connect(otherAccount).addMemberState(memberState1.address, "RO", "did:web:gov.ro")
+      ).to.be.revertedWithCustomError(rootAuthority, "NotOwner");
+    });
+
+    it("Should prevent adding the same member state twice", async function () {
+      await rootAuthority.addMemberState(memberState1.address, "RO", "did:web:gov.ro");
+
+      await expect(
+        rootAuthority.addMemberState(memberState1.address, "RO", "did:web:gov.ro")
+      ).to.be.revertedWithCustomError(rootAuthority, "AlreadyMemberState");
+    });
+
+    it("Should allow owner to remove a member state", async function () {
+      await rootAuthority.addMemberState(memberState1.address, "RO", "did:web:gov.ro");
+
+      await expect(rootAuthority.removeMemberState(memberState1.address))
+        .to.emit(rootAuthority, "MemberStateRemoved");
+
+      expect(await rootAuthority.isMemberState(memberState1.address)).to.be.false;
+    });
+
+    it("Should allow owner to update a member state DID", async function () {
+      await rootAuthority.addMemberState(memberState1.address, "RO", "did:web:gov.ro");
+
+      await expect(rootAuthority.updateMemberState(memberState1.address, "did:web:new.gov.ro"))
+        .to.emit(rootAuthority, "MemberStateUpdated")
+        .withArgs(memberState1.address, "did:web:new.gov.ro");
     });
 
     it("Should get member state info", async function () {
-      await rootAuthority.bootstrapMemberStates(
-        [memberState1.address],
-        ["RO"],
-        ["did:web:gov.ro"]
-      );
+      await rootAuthority.addMemberState(memberState1.address, "RO", "did:web:gov.ro");
 
       const info = await rootAuthority.getMemberStateInfo(memberState1.address);
       expect(info.countryCode).to.equal("RO");
@@ -121,88 +90,28 @@ describe("EURootAuthority", function () {
     });
 
     it("Should get all member states", async function () {
-      await rootAuthority.bootstrapMemberStates(
-        [memberState1.address, memberState2.address],
-        ["RO", "DE"],
-        ["did:web:gov.ro", "did:web:bund.de"]
-      );
+      await rootAuthority.addMemberState(memberState1.address, "RO", "did:web:gov.ro");
+      await rootAuthority.addMemberState(memberState2.address, "DE", "did:web:bund.de");
 
       const allStates = await rootAuthority.getAllMemberStates();
       expect(allStates).to.have.lengthOf(2);
       expect(allStates).to.include(memberState1.address);
       expect(allStates).to.include(memberState2.address);
     });
-  });
 
-  describe("Governance", function () {
-    beforeEach(async function () {
-      // Bootstrap member states for governance tests
-      await rootAuthority.bootstrapMemberStates(
-        [memberState1.address, memberState2.address],
-        ["RO", "DE"],
-        ["did:web:gov.ro", "did:web:bund.de"]
-      );
-    });
+    it("Should return correct active member state count", async function () {
+      await rootAuthority.addMemberState(memberState1.address, "RO", "did:web:gov.ro");
+      await rootAuthority.addMemberState(memberState2.address, "DE", "did:web:bund.de");
 
-    it("Should allow member states to propose adding new members", async function () {
-      const tx = await rootAuthority
-        .connect(memberState1)
-        .proposeAddMemberState(otherAccount.address, "FR", "did:web:gouv.fr");
+      expect(await rootAuthority.getActiveMemberStateCount()).to.equal(2);
 
-      const receipt = await tx.wait();
-      const event = receipt?.logs.find(
-        (log: any) => log.fragment?.name === "ProposalCreated"
-      );
-
-      expect(event).to.not.be.undefined;
-    });
-
-    it("Should prevent non-member states from proposing", async function () {
-      await expect(
-        rootAuthority
-          .connect(otherAccount)
-          .proposeAddMemberState(otherAccount.address, "FR", "did:web:gouv.fr")
-      ).to.be.revertedWithCustomError(rootAuthority, "NotMemberState");
-    });
-
-    it("Should allow voting on proposals", async function () {
-      const tx = await rootAuthority
-        .connect(memberState1)
-        .proposeAddMemberState(otherAccount.address, "FR", "did:web:gouv.fr");
-
-      const receipt = await tx.wait();
-      const proposalId = receipt?.logs[0].topics[1];
-
-      if (proposalId) {
-        await expect(
-          rootAuthority.connect(memberState1).voteOnProposal(proposalId, true)
-        )
-          .to.emit(rootAuthority, "ProposalVoted")
-          .withArgs(proposalId, memberState1.address, true);
-      }
-    });
-
-    it("Should prevent double voting", async function () {
-      const tx = await rootAuthority
-        .connect(memberState1)
-        .proposeAddMemberState(otherAccount.address, "FR", "did:web:gouv.fr");
-
-      const receipt = await tx.wait();
-      const proposalId = receipt?.logs[0].topics[1];
-
-      if (proposalId) {
-        await rootAuthority.connect(memberState1).voteOnProposal(proposalId, true);
-
-        await expect(
-          rootAuthority.connect(memberState1).voteOnProposal(proposalId, true)
-        ).to.be.revertedWithCustomError(rootAuthority, "AlreadyVoted");
-      }
+      await rootAuthority.removeMemberState(memberState1.address);
+      expect(await rootAuthority.getActiveMemberStateCount()).to.equal(1);
     });
   });
 
   describe("Trust Anchors", function () {
     it("Should maintain immutable trust anchors", async function () {
-      // Trust anchors are immutable
       expect(await rootAuthority.GENESIS_BLOCK_HASH()).to.equal(genesisHash);
       expect(await rootAuthority.OFFICIAL_DID_DOCUMENT()).to.equal(officialDID);
 
@@ -211,3 +120,4 @@ describe("EURootAuthority", function () {
     });
   });
 });
+

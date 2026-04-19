@@ -25,28 +25,21 @@ async function main() {
   console.log("   Official DID:", officialDID);
   console.log("   Deployment Block:", await rootAuthority.DEPLOYMENT_BLOCK(), "\n");
 
-  // ============ 2. Bootstrap Initial Member States ============
-  console.log("🏛️  Bootstrapping initial member states...");
+  // ============ 2. Add Initial Member States ============
+  console.log("🏛️  Adding initial member states...");
 
   const initialMemberStates = [
     { address: deployer.address, code: "RO", did: "did:web:gov.ro" },
     // Add more member states as needed for testing
   ];
 
-  const addresses = initialMemberStates.map(ms => ms.address);
-  const codes = initialMemberStates.map(ms => ms.code);
-  const dids = initialMemberStates.map(ms => ms.did);
-
-  const bootstrapTx = await rootAuthority.bootstrapMemberStates(addresses, codes, dids);
-  await bootstrapTx.wait();
-
-  console.log("✅ Bootstrapped", initialMemberStates.length, "member state(s)");
   for (const ms of initialMemberStates) {
+    const tx = await rootAuthority.addMemberState(ms.address, ms.code, ms.did);
+    await tx.wait();
     console.log(`   ${ms.code}: ${ms.address}`);
   }
-  console.log();
 
-  console.log("✅ Ceremony completed:", await rootAuthority.deploymentCeremonyCompleted());
+  console.log("✅ Added", initialMemberStates.length, "member state(s)");
   console.log();
 
   // ============ 3. Deploy AccreditationRegistry ============

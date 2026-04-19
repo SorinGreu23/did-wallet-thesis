@@ -22,11 +22,11 @@ describe("AccreditationRegistry", function () {
     rootAuthority = await EURootAuthority.deploy(genesisHash, officialDID);
     await rootAuthority.waitForDeployment();
 
-    // Bootstrap member state
-    await rootAuthority.bootstrapMemberStates(
-      [memberState.address],
-      ["RO"],
-      ["did:web:gov.ro"]
+    // Add member state
+    await rootAuthority.addMemberState(
+      memberState.address,
+      "RO",
+      "did:web:gov.ro"
     );
 
     // Deploy Accreditation Registry
@@ -98,7 +98,7 @@ describe("AccreditationRegistry", function () {
             permissionsHash,
             0
           )
-      ).to.be.revertedWithCustomError(accreditationRegistry, "UnauthorizedIssuer");
+      ).to.be.revertedWithCustomError(accreditationRegistry, "InvalidParentAccreditation");
     });
   });
 

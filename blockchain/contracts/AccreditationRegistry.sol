@@ -195,9 +195,8 @@ contract AccreditationRegistry {
             // The subject does not need to already exist in EURootAuthority membership.
             return accred.parentAccreditationId == bytes32(0) && accred.issuer == owner;
         } else if (accred.scope == AccreditationScope.Ministry) {
-            // Ministry's trust chain is valid if its parent is a valid MemberState accreditation
-            // and the issuer of this ministry is the subject of that MemberState accreditation
-            if (accred.parentAccreditationId == bytes32(0)) return false;
+            // Ministry issued directly by the root signer (no parent) is trusted
+            if (accred.parentAccreditationId == bytes32(0)) return accred.issuer == owner;
             Accreditation memory parent = accreditations[accred.parentAccreditationId];
             if (!parent.exists || parent.revoked) return false;
             if (parent.scope != AccreditationScope.MemberState) return false;
