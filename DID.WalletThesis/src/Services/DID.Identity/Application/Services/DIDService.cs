@@ -2,14 +2,12 @@ using DID.Identity.Application.DTOs;
 using DID.Identity.Domain;
 using DID.Identity.Domain.Interfaces;
 using DID.Identity.Infrastructure.Cryptography;
-using DID.Shared.Application.Interfaces;
 
 namespace DID.Identity.Application.Services;
 
 public class DIDService(
     IDIDRepository repository,
     IKeyGenerator keyGen,
-    IEventBus eventBus,
     ILogger<DIDService> logger)
 {
     public async Task<DIDDocumentDto> CreateDIDAsync(string controllerAddress, CancellationToken ct = default)
@@ -38,13 +36,6 @@ public class DIDService(
 
         await repository.AddAsync(didEntity, ct);
         await repository.SaveChangesAsync(ct);
-
-        await eventBus.PublishAsync(new DIDCreatedEvent(
-            DID: did,
-            ControllerAddress: controllerAddress,
-            PublicKey: keyPair.PublicKey,
-            CreatedAt: didEntity.CreatedAt
-        ), ct);
 
         logger.LogInformation("Created DID {DID} for controller {Address}", did, controllerAddress);
 

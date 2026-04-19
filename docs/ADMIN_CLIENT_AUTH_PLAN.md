@@ -518,7 +518,7 @@ During the JWT lifetime, the authenticated DID's accreditation could be revoked 
 - [x] JWT issuance with scope claim from on-chain accreditation lookup
 - [x] JWT validation middleware on all existing endpoints _(DID.Accreditation only — see Phase 2 note)_
 
-### Phase 2: Access Control (Guards & RBAC) ✅ (Angular) / ⚠️ Partial (Backend)
+### Phase 2: Access Control (Guards & RBAC) ✅
 
 **Angular:**
 - [x] `AuthGuard` — redirect to `/login` if unauthenticated
@@ -530,22 +530,21 @@ During the JWT lifetime, the authenticated DID's accreditation could be revoked 
 **Backend (.NET):**
 - [x] Authorization policies per scope (`EURoot`, `MemberState`, `Ministry`, `Institution`) — in `DID.Accreditation`
 - [x] Apply `RequireAuthorization` to all FastEndpoints — in `DID.Accreditation`
-- [ ] Scope-filtered data queries (e.g., Ministry user only sees own subtree)
-- [ ] JWT middleware + `RequireAuthorization` on `DID.Credential` service — **currently unprotected**
+- [x] Scope-filtered data queries — accreditation list filtered by caller's subtree; credential list forced to caller's `issuerDid` for Institution scope
+- [x] JWT middleware + `RequireAuthorization` on `DID.Credential` service — write endpoints require `Institution` policy; credential list allows anonymous only when `holderDid` is provided (mobile wallet sync)
 
-### Phase 3: Client-Side Signing (Remove Private Key Transport)
+### Phase 3: Client-Side Signing (Remove Private Key Transport) ✅
 
 **Angular:**
-- [ ] `SignerService.signTransaction()` — sign populated transactions client-side
-- [ ] Update `AccreditationService.issue()` to send `signedTransaction` instead of `issuerPrivateKey`
-- [ ] Update `CredentialService.issue()` and `revoke()` similarly
-- [ ] Remove all `issuerPrivateKey` fields from request models
+- [x] `SignerService.signTransaction()` — sign populated transactions client-side
+- [x] Update `AccreditationService.issue()` to send `signedTransaction` instead of `issuerPrivateKey`
+- [x] Update `CredentialService.issue()` and `revoke()` similarly
+- [x] Remove all `issuerPrivateKey` fields from request models
 
 **Backend (.NET):**
-- [ ] New `POST /api/accreditations/relay` endpoint accepting signed raw tx
-- [ ] `eth_sendRawTransaction` relay via Nethereum
-- [ ] Remove `issuerPrivateKey` from all request DTOs
-- [ ] Keep server-side signing only for EU Root operations
+- [x] `POST /api/accreditations/record` endpoint accepting client-submitted tx hash
+- [x] Remove `issuerPrivateKey` from all request DTOs
+- [x] Server-side signing only for EU Root operations (backend-configured key)
 
 ### Phase 4: Hardening & Polish
 

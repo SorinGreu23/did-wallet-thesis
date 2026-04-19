@@ -136,8 +136,9 @@ curl -s -X POST http://localhost:5211/api/auth/challenge \
 
 # Returns: { "nonce": "...", "expiresAt": "..." }
 
-# 2. List accreditations (no auth required for reads)
-curl -s http://localhost:5211/api/accreditations?scope=MemberState | jq .
+# 2. List accreditations (requires auth — use a JWT from step 1's verify flow)
+# Without auth, only credential queries by holderDid are allowed (for mobile wallet sync)
+curl -s http://localhost:5214/api/credentials?holderDid=did:ethr:sepolia:0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266 | jq .
 
 # 3. Verify an accreditation on-chain
 curl -s http://localhost:5211/api/accreditations/{accreditationId}/verify | jq .

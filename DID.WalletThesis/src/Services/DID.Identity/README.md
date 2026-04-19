@@ -11,7 +11,6 @@ Manages DID document generation and secp256k1 key pair storage for the EU DID Wa
 - Generate `did:ethr:sepolia` identifiers from an Ethereum controller address
 - Generate and store secp256k1 key pairs (public key stored in plaintext, private key AES-256 encrypted)
 - Serve W3C-compatible DID documents
-- Publish `DIDCreatedEvent` to RabbitMQ on creation
 
 > **Authorization note:** This service does NOT gatekeep DID creation. Any Ethereum address can register a DID. Authorization happens at the accreditation level via smart contracts.
 
@@ -182,23 +181,6 @@ CREATE TABLE key_pairs (
     purpose VARCHAR(100) NOT NULL,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP
-);
-```
-
----
-
-## Events Published
-
-| Event | Exchange | Trigger |
-|---|---|---|
-| `DIDCreatedEvent` | MassTransit default | `POST /api/dids` success |
-
-```csharp
-public record DIDCreatedEvent(
-    string DID,
-    string ControllerAddress,
-    string PublicKey,
-    DateTime CreatedAt
 );
 ```
 
