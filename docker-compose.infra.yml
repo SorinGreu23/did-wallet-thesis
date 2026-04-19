@@ -1,11 +1,12 @@
-name: did-wallet-thesis
+name: did-wallet-infra
 
 # Infrastructure services — start once, leave running.
 # Hardhat chain state, Postgres data, and RabbitMQ state all persist via named volumes.
+# This is a standalone project (did-wallet-infra) — fully independent of the services layer.
 #
 # Start:   docker compose -f docker-compose.infra.yml up -d
 # Stop:    docker compose -f docker-compose.infra.yml stop   (keeps volumes intact)
-# Destroy: docker compose -f docker-compose.infra.yml down -v  (wipes everything)
+# Destroy: docker compose -f docker-compose.infra.yml down -v  (wipes volumes)
 
 services:
   postgres:

@@ -1,7 +1,8 @@
-name: did-wallet-thesis
+name: did-wallet-services
 
-# .NET services — rebuild and redeploy freely without touching infra.
-# Requires infra to be running first:
+# .NET application services — rebuild and redeploy freely without touching infra.
+# This is a standalone project (did-wallet-services) — fully independent of the infra layer.
+# Requires the infra project to be running first so the did-infra network exists:
 #   docker compose -f docker-compose.infra.yml up -d
 #
 # Rebuild all:        docker compose -f docker-compose.services.yml up -d --build

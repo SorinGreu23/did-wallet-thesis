@@ -30,7 +30,6 @@ public class CredentialEventHandler(
             HolderDID:       dto.Holder,
             CredentialType:  dto.CredentialType,
             IssuerAccreditationId: ToHex(dto.IssuerAccreditationId),
-            HolderEmail:     null,
             BlockNumber:     0,
             TransactionHash: string.Empty,
             Timestamp:       DateTime.UtcNow));

@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+# Catch malformed build-artifact dirs with literal backslashes (e.g. bin\Debug)
+**/bin\\*
+**/obj\\*
+src/admin-client/node_modules/
+src/admin-client/dist/
+**/*.user
+**/*.suo
+.vs/

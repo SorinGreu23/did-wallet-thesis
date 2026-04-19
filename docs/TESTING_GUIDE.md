@@ -22,13 +22,7 @@ cd blockchain && npx hardhat run scripts/deploy.ts --network localhost
 
 This deploys the three smart contracts and bootstraps Romania ("RO") as a member state.
 
-## 2. Create the Database (first time only)
-
-```bash
-docker exec did-postgres psql -U did_user -d postgres -c "CREATE DATABASE did_accreditation;"
-```
-
-## 3. Start the Accreditation Service
+## 2. Start the Accreditation Service
 
 ```bash
 cd DID.WalletThesis
@@ -37,7 +31,7 @@ dotnet run --project src/Services/DID.Accreditation
 
 Runs on `http://localhost:5211`. Auto-migrates the database on startup.
 
-## 4. Start the Admin Client
+## 3. Start the Admin Client
 
 ```bash
 cd DID.WalletThesis/src/admin-client
@@ -157,7 +151,7 @@ curl -s http://localhost:5211/api/accreditations/{accreditationId}/verify | jq .
 |---------|----------|
 | `Connection refused` on port 5211 | Accreditation service not running — check `dotnet run` output |
 | `eth_call` errors | Hardhat container not running — `docker compose -f docker-compose.infra.yml up -d` |
-| `relation does not exist` | Database not created — run the `CREATE DATABASE` command from step 2 |
+| `relation does not exist` | Postgres not initialised — destroy and recreate infra: `docker compose -f docker-compose.infra.yml down -v && docker compose -f docker-compose.infra.yml up -d` |
 | Login returns 403 | The DID has no on-chain accreditation — use an account that was accredited |
 | Angular shows blank page | Check browser console — likely a proxy or CORS issue |
 | Mobile wallet crashes on start | Run `npm install` again, then `npx expo start --clear` |

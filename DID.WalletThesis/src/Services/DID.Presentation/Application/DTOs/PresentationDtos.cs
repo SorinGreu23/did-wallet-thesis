@@ -5,11 +5,8 @@ namespace DID.Presentation.Application.DTOs;
 // ── Verifier creates a presentation request ─────────────────────────────────
 
 public record CreatePresentationRequestDto(
-    /// <summary>DID of the verifier issuing the challenge.</summary>
     string VerifierDid,
-    /// <summary>Credential types the verifier requires, e.g. "UniversityDegree".</summary>
     string[] RequiredCredentialTypes,
-    /// <summary>Whether the holder must include a ZKP proof alongside the presentation.</summary>
     bool ZkpRequired = false);
 
 public record PresentationChallengeDto(
@@ -24,12 +21,7 @@ public record PresentationChallengeDto(
 
 public record SubmitPresentationDto(
     string SessionId,
-    /// <summary>
-    /// The on-chain credential ID(s) being presented.
-    /// Used to perform on-chain status checks via DID.Verification.
-    /// </summary>
     string[] CredentialIds,
-    /// <summary>Optional ZKP proof accompanying the presentation.</summary>
     ZkpProofDto? ZkpProof = null);
 
 public record ZkpProofDto(

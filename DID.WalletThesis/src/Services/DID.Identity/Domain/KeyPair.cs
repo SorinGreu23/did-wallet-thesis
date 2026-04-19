@@ -11,5 +11,5 @@ public class KeyPair : Entity
   public string EncryptedPrivateKey { get; set; } = string.Empty;
   public string Purpose { get; set; } = string.Empty;
 
-  public DecentralizedIdentifier DecentralizedIdentifier { get; set; } = null;
+  public DecentralizedIdentifier DecentralizedIdentifier { get; set; }
 }

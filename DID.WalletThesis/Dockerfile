@@ -7,12 +7,27 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG SERVICE_NAME
 WORKDIR /src
 
-# Copy solution manifest and all source projects so dotnet restore can
-# resolve the full dependency graph (including shared projects).
+# Copy only project manifests first so the restore layer is cached
+# independently of source changes.
 COPY DID.WalletThesis.sln .
-COPY src/ src/
+COPY src/Services/Directory.Build.props src/Services/
+COPY src/Services/DID.Identity/DID.Identity.csproj           src/Services/DID.Identity/
+COPY src/Services/DID.Accreditation/DID.Accreditation.csproj src/Services/DID.Accreditation/
+COPY src/Services/DID.BlockchainSync/DID.BlockchainSync.csproj src/Services/DID.BlockchainSync/
+COPY src/Services/DID.Credential/DID.Credential.csproj       src/Services/DID.Credential/
+COPY src/Services/DID.Presentation/DID.Presentation.csproj   src/Services/DID.Presentation/
+COPY src/Services/DID.Verification/DID.Verification.csproj   src/Services/DID.Verification/
+COPY src/Services/DID.Notification/DID.Notification.csproj   src/Services/DID.Notification/
+COPY src/Services/DID.Audit/DID.Audit.csproj                  src/Services/DID.Audit/
+COPY src/Contracts/DID.Contracts/DID.Contracts.csproj                          src/Contracts/DID.Contracts/
+COPY src/Shared/DID.Shared.Domain/DID.Shared.Domain.csproj                    src/Shared/DID.Shared.Domain/
+COPY src/Shared/DID.Shared.Infrastructure/DID.Shared.Infrastructure.csproj    src/Shared/DID.Shared.Infrastructure/
+COPY src/Shared/DID.Shared.Application/DID.Shared.Application.csproj          src/Shared/DID.Shared.Application/
 
 RUN dotnet restore "src/Services/${SERVICE_NAME}/${SERVICE_NAME}.csproj"
+
+# Now copy the full source — cache miss here does NOT re-run restore.
+COPY src/ src/
 
 RUN dotnet publish "src/Services/${SERVICE_NAME}/${SERVICE_NAME}.csproj" \
     -c Release -o /app/publish --no-restore
@@ -32,11 +47,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgssapi-krb5-2 \
     && rm -rf /var/lib/apt/lists/*
 
-# Bake the DLL name into an env var so the shell-form ENTRYPOINT can expand it.
-ENV SERVICE_DLL="${SERVICE_NAME}.dll"
-
+# aspnet:10.0 ships with a built-in non-root 'app' user — use it directly.
 WORKDIR /app
-COPY --from=build /app/publish .
+COPY --from=build --chown=app:app /app/publish .
 
-# Use shell form so $SERVICE_DLL is expanded at container start time.
-ENTRYPOINT ["sh", "-c", "dotnet $SERVICE_DLL"]
+USER app
+
+# Bake the DLL name into an env var; use exec so dotnet is PID 1 and
+# receives SIGTERM directly on docker stop (graceful shutdown).
+ENV SERVICE_DLL="${SERVICE_NAME}.dll"
+ENTRYPOINT ["sh", "-c", "exec dotnet $SERVICE_DLL"]

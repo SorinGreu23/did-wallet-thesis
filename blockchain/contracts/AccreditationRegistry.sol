@@ -167,7 +167,7 @@ contract AccreditationRegistry {
 
         // Only issuer or root authority can revoke
         require(
-            msg.sender == owner() || rootAuthority.isMemberState(msg.sender),
+            msg.sender == owner || rootAuthority.isMemberState(msg.sender),
             "Unauthorized to revoke"
         );
 
