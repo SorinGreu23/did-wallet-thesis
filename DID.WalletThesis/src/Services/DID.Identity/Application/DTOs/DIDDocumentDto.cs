@@ -28,3 +28,18 @@ public record PublicKeyDto(
 );
 
 public record CreateDIDRequest(string ControllerAddress);
+
+public record RegisterIdentityRequest(
+  string DID,
+  string ControllerAddress,
+  string? DisplayName,
+  string? Email
+);
+
+public record RegisteredIdentityDto(
+  string DID,
+  string ControllerAddress,
+  string? DisplayName,
+  string? Email,
+  DateTime RegisteredAt
+);

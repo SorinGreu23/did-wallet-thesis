@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { CreateDIDRequest, DIDDocument } from '../models/did.model';
+import { CreateDIDRequest, DIDDocument, RegisteredIdentity } from '../models/did.model';
 
 @Injectable({ providedIn: 'root' })
 export class IdentityService {
@@ -14,5 +14,9 @@ export class IdentityService {
 
   resolve(did: string): Observable<DIDDocument> {
     return this.http.get<DIDDocument>(`${this.baseUrl}/${encodeURIComponent(did)}`);
+  }
+
+  listRegistered(): Observable<RegisteredIdentity[]> {
+    return this.http.get<RegisteredIdentity[]>('/api/identities');
   }
 }

@@ -4,6 +4,7 @@ export const CONFIG = {
   APP_NAME: 'EU Identity Wallet',
   HARDHAT_RPC_URL: 'http://localhost:8545',
   HARDHAT_CHAIN_ID: 31337,
+  IDENTITY_SERVICE_URL: 'http://localhost:5259',
   CREDENTIAL_SERVICE_URL: 'http://localhost:5214',
   VERIFICATION_SERVICE_URL: 'http://localhost:5216',
   PRESENTATION_SERVICE_URL: 'http://localhost:5217',

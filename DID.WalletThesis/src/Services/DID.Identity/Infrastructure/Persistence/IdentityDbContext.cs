@@ -17,6 +17,8 @@ public class IdentityDbContext(DbContextOptions<IdentityDbContext> options) : Db
             e.Property(x => x.DID).IsRequired().HasMaxLength(200);
             e.HasIndex(x => x.DID).IsUnique();
             e.Property(x => x.ControllerAddress).IsRequired().HasMaxLength(42);
+            e.Property(x => x.DisplayName).HasMaxLength(200);
+            e.Property(x => x.Email).HasMaxLength(200);
             e.HasMany(x => x.KeyPairs)
                 .WithOne(x => x.DecentralizedIdentifier)
                 .HasForeignKey(x => x.DIDId)

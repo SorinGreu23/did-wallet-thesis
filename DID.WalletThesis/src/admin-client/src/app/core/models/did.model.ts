@@ -17,3 +17,11 @@ export interface DIDDocument {
 export interface CreateDIDRequest {
   controllerAddress: string;
 }
+
+export interface RegisteredIdentity {
+  did: string;
+  controllerAddress: string;
+  displayName: string | null;
+  email: string | null;
+  registeredAt: string;
+}

@@ -16,6 +16,8 @@ import {
 } from '../../shared/components/accreditation-detail-panel/accreditation-detail-panel.component';
 import { AccreditationVerification } from '../../core/models/accreditation.model';
 import { CredentialService } from '../../core/services/credential.service';
+import { IdentityService } from '../../core/services/identity.service';
+import { RegisteredIdentity } from '../../core/models/did.model';
 
 @Component({
   selector: 'app-universities',
@@ -38,6 +40,7 @@ export class UniversitiesComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
   private readonly credentialService = inject(CredentialService);
+  private readonly identityService = inject(IdentityService);
 
   readonly universities = signal<Accreditation[]>([]);
   readonly authenticatedUniversity = signal<Accreditation | null>(null);
@@ -63,6 +66,9 @@ export class UniversitiesComponent implements OnInit {
   readonly revokingCredentialId = signal<string | null>(null);
   readonly revokeKey = signal('');
   readonly revokeReason = signal('Duplicate');
+
+  readonly registeredHolders = signal<RegisteredIdentity[]>([]);
+  readonly loadingHolders = signal(false);
 
   readonly diplomaForm = this.fb.group({
     holderAddress: ['', [Validators.required, Validators.pattern(/^0x[0-9a-fA-F]{40}$/)]],
@@ -90,6 +96,7 @@ export class UniversitiesComponent implements OnInit {
     if (university) {
       this.diplomaUniversity.set(university);
       this.loadDiplomas(university);
+      this.loadRegisteredHolders();
     } else {
       this.load();
     }
@@ -296,6 +303,7 @@ export class UniversitiesComponent implements OnInit {
     this.revokeKey.set('');
     this.diplomaForm.reset();
     this.loadDiplomas(university);
+    this.loadRegisteredHolders();
   }
 
   closeDiplomaForm(): void {
@@ -310,6 +318,24 @@ export class UniversitiesComponent implements OnInit {
   closeDetails(): void {
     this.selected.set(null);
     this.verification.set(null);
+  }
+
+  loadRegisteredHolders(): void {
+    this.loadingHolders.set(true);
+    this.identityService.listRegistered().subscribe({
+      next: (holders) => {
+        this.registeredHolders.set(holders);
+        this.loadingHolders.set(false);
+      },
+      error: () => this.loadingHolders.set(false),
+    });
+  }
+
+  selectHolder(holder: RegisteredIdentity): void {
+    this.diplomaForm.patchValue({
+      holderAddress: holder.controllerAddress,
+      studentName: holder.displayName ?? '',
+    });
   }
 
   verifySelected(): void {

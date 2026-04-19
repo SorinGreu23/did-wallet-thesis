@@ -1,4 +1,3 @@
-using DID.Contracts.Identity;
 using DID.Identity.Application.DTOs;
 using DID.Identity.Domain;
 using DID.Identity.Domain.Interfaces;
@@ -73,6 +72,45 @@ public class DIDService(
             Purpose: k.Purpose
         ));
     }
+
+    public async Task<RegisteredIdentityDto> RegisterExternalAsync(
+        string did, string controllerAddress, string? displayName, string? email,
+        CancellationToken ct = default)
+    {
+        var existing = await repository.GetByDIDAsync(did, ct);
+        if (existing is not null)
+        {
+            existing.DisplayName = displayName;
+            existing.Email = email;
+            await repository.UpdateAsync(existing, ct);
+            await repository.SaveChangesAsync(ct);
+            logger.LogInformation("Updated registration for DID {DID}", did);
+            return ToRegisteredDto(existing);
+        }
+
+        var entity = new DecentralizedIdentifier
+        {
+            DID = did,
+            ControllerAddress = controllerAddress,
+            DisplayName = displayName,
+            Email = email
+        };
+
+        await repository.AddAsync(entity, ct);
+        await repository.SaveChangesAsync(ct);
+
+        logger.LogInformation("Registered external DID {DID} for {Name}", did, displayName);
+        return ToRegisteredDto(entity);
+    }
+
+    public async Task<IEnumerable<RegisteredIdentityDto>> ListRegisteredAsync(CancellationToken ct = default)
+    {
+        var all = await repository.GetAllAsync(ct);
+        return all.Select(ToRegisteredDto);
+    }
+
+    private static RegisteredIdentityDto ToRegisteredDto(DecentralizedIdentifier entity)
+        => new(entity.DID, entity.ControllerAddress, entity.DisplayName, entity.Email, entity.CreatedAt);
 
     private static DIDDocumentDto BuildDocument(DecentralizedIdentifier entity)
     {

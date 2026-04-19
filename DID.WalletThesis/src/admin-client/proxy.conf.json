@@ -23,6 +23,12 @@
     "changeOrigin": true,
     "logLevel": "info"
   },
+  "/api/identities": {
+    "target": "http://localhost:5259",
+    "secure": false,
+    "changeOrigin": true,
+    "logLevel": "info"
+  },
   "/api/credentials": {
     "target": "http://localhost:5214",
     "secure": false,

@@ -17,6 +17,8 @@ import { Feather } from "@expo/vector-icons";
 import * as LocalAuthentication from "expo-local-authentication";
 import { useTheme, LIGHT_COLORS, DARK_COLORS } from "../context/ThemeContext";
 import authService from "../services/authService";
+import didService from "../services/didService";
+import { CONFIG } from "../constants/config";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
@@ -110,6 +112,24 @@ export default function WelcomeScreen({ onAuthenticated }: WelcomeScreenProps) {
         email: trimmedEmail,
       });
       await authService.createWallet();
+
+      // Create DID identity and register with the backend
+      const identity = await didService.getOrCreateIdentity();
+      try {
+        await fetch(`${CONFIG.IDENTITY_SERVICE_URL}/api/identities/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            did: identity.did,
+            controllerAddress: identity.ethereumAddress,
+            displayName: `${trimmedFirst} ${trimmedLast}`,
+            email: trimmedEmail || null,
+          }),
+        });
+      } catch {
+        // Registration is best-effort; wallet works offline
+      }
+
       await authService.setSessionActive();
       onAuthenticated();
     } catch (e: any) {

@@ -70,6 +70,7 @@ export class AuthService {
       this.navigationState.resetToRoot();
       this.session.set(authSession);
       this.saveSession(authSession);
+      this.saveSignerKey(privateKey);
 
       this.state.set('authenticated');
     } catch (err: any) {
@@ -94,6 +95,7 @@ export class AuthService {
     this.signer.clear();
     this.navigationState.resetToRoot();
     this.clearSession();
+    this.clearSignerKey();
     this.router.navigate(['/login']);
   }
 
@@ -139,6 +141,18 @@ export class AuthService {
     localStorage.removeItem(AuthService.STORAGE_KEY);
   }
 
+  private static readonly SIGNER_KEY = 'auth_signer';
+
+  private saveSignerKey(key: string): void {
+    if (!this.isBrowser) return;
+    sessionStorage.setItem(AuthService.SIGNER_KEY, key);
+  }
+
+  private clearSignerKey(): void {
+    if (!this.isBrowser) return;
+    sessionStorage.removeItem(AuthService.SIGNER_KEY);
+  }
+
   private restoreSession(): void {
     if (!this.isBrowser) return;
     try {
@@ -150,13 +164,21 @@ export class AuthService {
 
       if (expiresAt <= new Date()) {
         this.clearSession();
+        this.clearSignerKey();
         return;
       }
 
       this.session.set({ ...parsed, expiresAt });
       this.state.set('authenticated');
+
+      // Restore the in-memory signer from sessionStorage (survives refresh, not tab close)
+      const signerKey = sessionStorage.getItem(AuthService.SIGNER_KEY);
+      if (signerKey) {
+        void this.signer.initialize(signerKey);
+      }
     } catch {
       this.clearSession();
+      this.clearSignerKey();
     }
   }
 }
