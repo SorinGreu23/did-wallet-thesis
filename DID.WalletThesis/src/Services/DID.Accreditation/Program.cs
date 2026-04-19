@@ -32,7 +32,6 @@ builder.Services.AddScoped<AccreditationService>();
 
 builder.Services.AddMassTransit(x =>
 {
-    x.AddConsumer<AccreditationIssuedConsumer>();
     x.AddConsumer<AccreditationRevokedConsumer>();
 
     x.UsingRabbitMq((ctx, cfg) =>

@@ -16,7 +16,6 @@ import {
 } from '../../shared/components/accreditation-detail-panel/accreditation-detail-panel.component';
 import { AccreditationVerification } from '../../core/models/accreditation.model';
 import { CredentialService } from '../../core/services/credential.service';
-import { IssueCredentialRequest } from '../../core/models/credential.model';
 
 @Component({
   selector: 'app-universities',
@@ -68,13 +67,11 @@ export class UniversitiesComponent implements OnInit {
   readonly diplomaForm = this.fb.group({
     holderAddress: ['', [Validators.required, Validators.pattern(/^0x[0-9a-fA-F]{40}$/)]],
     studentName: ['', [Validators.required, Validators.minLength(2)]],
-    issuerPrivateKey: ['', [Validators.required, Validators.pattern(/^0x[0-9a-fA-F]{64}$/)]],
   });
 
   readonly form = this.fb.group({
     name: ['', [Validators.required, Validators.minLength(2)]],
     ethereumAddress: ['', [Validators.required, Validators.pattern(/^0x[0-9a-fA-F]{40}$/)]],
-    issuerPrivateKey: ['', [Validators.required, Validators.pattern(/^0x[0-9a-fA-F]{64}$/)]],
   });
 
   ngOnInit(): void {
@@ -227,18 +224,16 @@ export class UniversitiesComponent implements OnInit {
     const ministry = this.navState.ministry();
     if (!ministry) return;
     this.submitting.set(true);
-    const { name, ethereumAddress, issuerPrivateKey } = this.form.getRawValue();
-    const subjectDID = `did:ethr:sepolia:${ethereumAddress}`;
+    const { name, ethereumAddress } = this.form.getRawValue();
 
     this.accreditationService
-      .issue({
-        issuerDID: ministry.did,
-        subjectDID,
-        scope: 'Institution',
-        name: name!,
-        parentAccreditationId: ministry.accreditationId,
-        issuerPrivateKey: issuerPrivateKey!,
-      })
+      .issueViaClientWallet(
+        ministry.did,
+        ethereumAddress!,
+        'Institution',
+        name!,
+        ministry.accreditationId,
+      )
       .subscribe({
         next: (result) => {
           this.lastIssued.set(result);
@@ -247,6 +242,10 @@ export class UniversitiesComponent implements OnInit {
           this.load();
         },
         error: (err) => {
+          if (err?.message === 'SIGNER_LOST') {
+            this.auth.logout();
+            return;
+          }
           this.error.set(err?.error?.message ?? err?.message ?? 'Failed to issue accreditation');
           this.submitting.set(false);
         },
@@ -388,8 +387,7 @@ export class UniversitiesComponent implements OnInit {
     if (!university) return;
 
     this.issuingDiploma.set(true);
-    const { holderAddress, studentName, issuerPrivateKey } = this.diplomaForm.getRawValue();
-    const holderDID = `did:ethr:sepolia:${holderAddress}`;
+    const { holderAddress, studentName } = this.diplomaForm.getRawValue();
 
     // Deterministic credential hash from student name + university + timestamp
     const raw = `${studentName}|${university.accreditationId}|${Date.now()}`;
@@ -401,22 +399,19 @@ export class UniversitiesComponent implements OnInit {
         .padEnd(64, '0')
         .slice(0, 64);
 
-    const request: IssueCredentialRequest = {
-      issuerDID: university.subjectDID,
-      holderDID,
-      credentialType: 'DiplomaCredential',
+    this.credentialService.issueViaClientWallet(
+      university.subjectDID,
+      holderAddress!,
+      'DiplomaCredential',
       credentialHash,
-      issuerAccreditationId: university.accreditationId,
-      issuerName: university.name ?? null,
-      issuerPrivateKey: issuerPrivateKey!,
-    };
-
-    this.credentialService.issue(request).subscribe({
+      university.accreditationId,
+      university.name ?? null,
+    ).subscribe({
       next: (result) => {
         this.lastIssuedDiploma.set(result);
         this.issuingDiploma.set(false);
         this.loadDiplomas(university);
-        this.diplomaForm.reset({ issuerPrivateKey: this.diplomaForm.value.issuerPrivateKey });
+        this.diplomaForm.reset();
       },
       error: (err) => {
         this.error.set(err?.error?.message ?? err?.message ?? 'Failed to issue diploma');

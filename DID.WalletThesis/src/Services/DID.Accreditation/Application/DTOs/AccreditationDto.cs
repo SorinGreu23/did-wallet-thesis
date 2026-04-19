@@ -32,6 +32,15 @@ public record IssueAccreditationRequest(
     DateTime? ExpiresAt = null
 );
 
+public record RecordAccreditationRequest(
+    string TxHash,
+    string IssuerDID,
+    string SubjectDID,
+    string Scope,
+    string? Name,
+    string? ParentAccreditationId
+);
+
 public record RevokeAccreditationRequest(
     string RevokedByDID
 );

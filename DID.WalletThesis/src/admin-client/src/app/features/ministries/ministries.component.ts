@@ -50,7 +50,6 @@ export class MinistriesComponent implements OnInit {
   readonly form = this.fb.group({
     name: ['', [Validators.required, Validators.minLength(2)]],
     ethereumAddress: ['', [Validators.required, Validators.pattern(/^0x[0-9a-fA-F]{40}$/)]],
-    issuerPrivateKey: ['', [Validators.required, Validators.pattern(/^0x[0-9a-fA-F]{64}$/)]],
   });
 
   ngOnInit(): void {
@@ -135,18 +134,16 @@ export class MinistriesComponent implements OnInit {
     const ms = this.navState.memberState();
     if (!ms) return;
     this.submitting.set(true);
-    const { name, ethereumAddress, issuerPrivateKey } = this.form.getRawValue();
-    const subjectDID = `did:ethr:sepolia:${ethereumAddress}`;
+    const { name, ethereumAddress } = this.form.getRawValue();
 
     this.accreditationService
-      .issue({
-        issuerDID: ms.did,
-        subjectDID,
-        scope: 'Ministry',
-        name: name!,
-        parentAccreditationId: ms.accreditationId,
-        issuerPrivateKey: issuerPrivateKey!,
-      })
+      .issueViaClientWallet(
+        ms.did,
+        ethereumAddress!,
+        'Ministry',
+        name!,
+        ms.accreditationId,
+      )
       .subscribe({
         next: (result) => {
           this.lastIssued.set(result);
@@ -155,6 +152,10 @@ export class MinistriesComponent implements OnInit {
           this.load();
         },
         error: (err) => {
+          if (err?.message === 'SIGNER_LOST') {
+            this.auth.logout();
+            return;
+          }
           this.error.set(err?.error?.message ?? err?.message ?? 'Failed to issue accreditation');
           this.submitting.set(false);
         },

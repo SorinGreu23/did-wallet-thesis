@@ -28,5 +28,13 @@ export interface IssueAccreditationRequest {
   parentAccreditationId: string | null;
   permissionsHash?: string | null;
   expiresAt?: string | null;
-  issuerPrivateKey?: string | null;
+}
+
+export interface RecordAccreditationRequest {
+  txHash: string;
+  issuerDID: string;
+  subjectDID: string;
+  scope: string;
+  name: string | null;
+  parentAccreditationId: string | null;
 }

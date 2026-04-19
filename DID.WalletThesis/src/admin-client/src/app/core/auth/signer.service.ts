@@ -25,6 +25,12 @@ export class SignerService {
     return this.wallet.signMessage(message);
   }
 
+  /** Returns the wallet connected to the given provider for sending transactions. */
+  getConnectedWallet(provider: ethers.JsonRpcProvider): ethers.Wallet {
+    if (!this.wallet) throw new Error('Signer not initialized');
+    return this.wallet.connect(provider);
+  }
+
   clear(): void {
     this.wallet = null;
     this.hasSigner.set(false);

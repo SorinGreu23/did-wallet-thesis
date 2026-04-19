@@ -18,11 +18,17 @@ public class GetConfigEndpoint(IOptions<BlockchainOptions> blockchainOptions)
 
     public override Task HandleAsync(CancellationToken ct)
     {
-        var address = new Account(blockchainOptions.Value.PrivateKey).Address.ToLowerInvariant();
+        var opts = blockchainOptions.Value;
+        var address = new Account(opts.PrivateKey).Address.ToLowerInvariant();
         var euRootDid = $"{DidPrefix}{address}";
-        return Send.OkAsync(new GetConfigResponse(euRootDid), ct);
+        opts.Contracts.TryGetValue("AccreditationRegistry", out var registryAddress);
+        var browserRpcUrl = string.IsNullOrWhiteSpace(opts.BrowserRpcUrl) ? opts.RpcUrl : opts.BrowserRpcUrl;
+        return Send.OkAsync(new GetConfigResponse(euRootDid, browserRpcUrl, registryAddress ?? string.Empty), ct);
     }
 }
 
-public record GetConfigResponse(string EuRootDid);
+public record GetConfigResponse(
+    string EuRootDid,
+    string RpcUrl,
+    string AccreditationRegistryAddress);
 

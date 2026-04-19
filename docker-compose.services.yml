@@ -43,6 +43,7 @@ services:
       RabbitMQ__Username: did_user
       RabbitMQ__Password: did_password
       Blockchain__RpcUrl: "http://hardhat:8545"
+      Blockchain__BrowserRpcUrl: "http://localhost:8545"
       Blockchain__AbisDirectory: /app/abis
       Blockchain__Contracts__AccreditationRegistry: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
     ports:

@@ -156,6 +156,60 @@ public class CredentialService(
         return ToDto(onChain, txHash, 0, issuerName);
     }
 
+    /// <summary>
+    /// Records a credential that was issued on-chain by the caller's own wallet
+    /// (e.g. a university issuing a diploma). The private key never reaches the server.
+    /// </summary>
+    public async Task<CredentialDto> RecordFromClientTxAsync(
+        string txHash,
+        string issuerDid, string holderDid, string credentialType,
+        string credentialHash,
+        string? issuerAccreditationId,
+        string? issuerName,
+        CancellationToken ct = default)
+    {
+        await blockchain.WaitForConfirmationAsync(txHash, ct);
+
+        var issuerAddress = ExtractAddress(issuerDid);
+        var holderAddress = ExtractAddress(holderDid);
+        var credentialHashBytes = HexToBytes32(credentialHash);
+        var accreditationBytes = HexToBytes32(issuerAccreditationId);
+
+        var credentialId = await FindIssuedCredentialIdAsync(
+            issuerAddress, holderAddress, credentialHashBytes, credentialType, accreditationBytes);
+
+        var onChain = await GetRequiredOnChainCredentialAsync(credentialId);
+
+        if (!string.Equals(NormalizeAddress(onChain.Issuer), issuerAddress, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                $"On-chain issuer {onChain.Issuer} does not match claimed issuer {issuerDid}");
+
+        logger.LogInformation(
+            "Recording client-submitted credential {Id} from {Issuer} to {Holder} in tx {TxHash}",
+            credentialId, issuerAddress, holderAddress, txHash);
+
+        if (await repository.GetByCredentialIdAsync(credentialId, ct) is null)
+        {
+            var entity = new Domain.Credential
+            {
+                CredentialId = credentialId,
+                IssuerDID = ToDid(issuerAddress),
+                HolderDID = ToDid(holderAddress),
+                CredentialType = credentialType,
+                IssuerAccreditationId = issuerAccreditationId,
+                IssuerName = issuerName,
+                Status = CredentialStatus.Active,
+                BlockNumber = 0,
+                TransactionHash = txHash,
+                IssuedAt = DateTimeOffset.FromUnixTimeSeconds((long)onChain.IssuedAtUnix).UtcDateTime,
+            };
+            await repository.AddAsync(entity, ct);
+            await repository.SaveChangesAsync(ct);
+        }
+
+        return ToDto(onChain, txHash, 0, issuerName);
+    }
+
     public async Task<bool> RevokeAsync(
         string credentialId, string revokedByDid, string reason, string? revokedByPrivateKey = null, CancellationToken ct = default)
     {

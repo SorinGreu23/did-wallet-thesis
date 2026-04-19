@@ -31,7 +31,6 @@ builder.Services.AddScoped<CredentialService>();
 
 builder.Services.AddMassTransit(x =>
 {
-    x.AddConsumer<CredentialIssuedConsumer>();
     x.AddConsumer<CredentialRevokedConsumer>();
     x.AddConsumer<CredentialSuspendedConsumer>();
 

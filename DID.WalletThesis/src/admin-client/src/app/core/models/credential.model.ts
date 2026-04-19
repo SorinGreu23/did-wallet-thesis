@@ -20,5 +20,14 @@ export interface IssueCredentialRequest {
   issuerAccreditationId: string;
   issuerName?: string | null;
   expiresAt?: string | null;
-  issuerPrivateKey: string;
+}
+
+export interface RecordCredentialRequest {
+  txHash: string;
+  issuerDID: string;
+  holderDID: string;
+  credentialType: string;
+  credentialHash: string;
+  issuerAccreditationId: string | null;
+  issuerName: string | null;
 }

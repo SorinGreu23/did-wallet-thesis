@@ -81,7 +81,7 @@ public class AccreditationService(
         DateTime? expiresAt,
         CancellationToken ct = default)
     {
-        // Always use the backend-configured key for on-chain signing
+        // EU Root signs with the backend-configured key — private key never leaves the server
         var effectivePrivateKey = blockchainOptions.Value.PrivateKey;
         var effectiveAccount = new Account(effectivePrivateKey);
         var effectiveSignerAddress = NormalizeAddress(effectiveAccount.Address);
@@ -143,6 +143,49 @@ public class AccreditationService(
             await repository.AddAsync(entity, ct);
             await repository.SaveChangesAsync(ct);
         }
+
+        return ToDto(onChain, txHash, 0, name);
+    }
+
+    /// <summary>
+    /// Records an accreditation that was issued on-chain by the caller's own wallet
+    /// (e.g. a member state issuing to a ministry). The private key never reaches the server.
+    /// </summary>
+    public async Task<AccreditationDto> RecordFromClientTxAsync(
+        string txHash,
+        string issuerDid, string subjectDid, string scope,
+        string? name, string? parentAccreditationId,
+        CancellationToken ct = default)
+    {
+        // 1. Wait for the tx the client already submitted
+        await blockchain.WaitForConfirmationAsync(txHash, ct);
+
+        var issuerAddress = ExtractAddress(issuerDid);
+        var subjectAddress = ExtractAddress(subjectDid);
+        var scopeValue = ParseScope(scope);
+        var parentBytes = HexToBytes32(parentAccreditationId);
+        var permissionsBytes = HexToBytes32(null); // clients don't set permissions
+
+        // 2. Locate the resulting accreditation on-chain
+        var accreditationId = await FindIssuedAccreditationIdAsync(
+            issuerAddress, subjectAddress, scopeValue, parentBytes, permissionsBytes);
+
+        // 3. Read and verify the on-chain record
+        var onChain = await GetRequiredOnChainAccreditationAsync(accreditationId);
+
+        if (!string.Equals(NormalizeAddress(onChain.Issuer), issuerAddress, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                $"On-chain issuer {onChain.Issuer} does not match claimed issuer {issuerDid}");
+
+        logger.LogInformation(
+            "Recording client-submitted accreditation {Id} from {Issuer} to {Subject} in tx {TxHash}",
+            accreditationId, issuerAddress, subjectAddress, txHash);
+
+        // 4. Persist
+        await RecordIssuedAsync(
+            accreditationId, issuerAddress, subjectAddress,
+            parentAccreditationId, ScopeToString(scopeValue), name,
+            0, txHash, DateTime.UtcNow, ct);
 
         return ToDto(onChain, txHash, 0, name);
     }

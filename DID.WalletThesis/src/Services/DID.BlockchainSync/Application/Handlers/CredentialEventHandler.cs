@@ -15,26 +15,13 @@ public class CredentialEventHandler(
 {
     public async Task HandleIssuedAsync(CredentialIssuedEventDTO dto)
     {
-        var id = ToHex(dto.Id);
-        logger.LogInformation("CredentialIssued: {Id}", id);
+        logger.LogInformation("CredentialIssued: {Id}", ToHex(dto.Id));
 
         var syncedEvent = SyncedEvent.Create(
             "CredentialIssued", string.Empty, 0, string.Empty,
             JsonSerializer.Serialize(dto));
 
         await repository.SaveEventAsync(syncedEvent);
-
-        await eventBus.PublishAsync(new CredentialIssuedEvent(
-            CredentialId:    id,
-            IssuerDID:       dto.Issuer,
-            HolderDID:       dto.Holder,
-            CredentialType:  dto.CredentialType,
-            IssuerAccreditationId: ToHex(dto.IssuerAccreditationId),
-            BlockNumber:     0,
-            TransactionHash: string.Empty,
-            Timestamp:       DateTime.UtcNow));
-
-        await repository.MarkEventPublishedAsync(syncedEvent.Id);
     }
 
     public async Task HandleRevokedAsync(CredentialRevokedEventDTO dto)

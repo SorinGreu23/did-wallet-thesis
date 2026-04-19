@@ -46,3 +46,13 @@ public record SuspendCredentialRequest(
     string Reason,
     string? SuspendedByPrivateKey = null
 );
+
+public record RecordCredentialRequest(
+    string TxHash,
+    string IssuerDID,
+    string HolderDID,
+    string CredentialType,
+    string CredentialHash,
+    string? IssuerAccreditationId,
+    string? IssuerName
+);
