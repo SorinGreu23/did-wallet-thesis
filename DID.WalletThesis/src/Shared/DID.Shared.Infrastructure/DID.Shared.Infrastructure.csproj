@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\DID.Shared.Domain\DID.Shared.Domain.csproj" />
+    <ProjectReference Include="..\DID.Shared.Application\DID.Shared.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MassTransit" Version="8.3.5" />
+    <PackageReference Include="MassTransit.RabbitMQ" Version="8.3.5" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.3" />
+    <PackageReference Include="Nethereum.Web3" Version="5.8.0" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Blockchain/" />
+    <Folder Include="EventBus/" />
+    <Folder Include="Options/" />
+    <Folder Include="Persistence/" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

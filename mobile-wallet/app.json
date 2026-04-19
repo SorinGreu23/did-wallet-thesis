@@ -13,7 +13,10 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "EU Identity Wallet uses Face ID to protect your identity data."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -25,6 +28,9 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
   }
 }

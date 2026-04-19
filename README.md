@@ -1,200 +1,214 @@
-# DID Wallet - Mobile Application
+# EU Decentralized Digital Identity System
 
-A Decentralized Identity (DID) wallet built with React Native, Expo, and Veramo Framework for managing DIDs and Verifiable Credentials.
+Bachelor's Thesis — Computer Science, Alexandru Ioan Cuza University, Iasi
 
-**Bachelor's Thesis Project**  
-Computer Science, Alexandru Ioan Cuza University, Iași  
-Expected Graduation: July 2026
+A blockchain-anchored, privacy-preserving digital identity prototype demonstrating hierarchical trust chains, DID-based authentication, and W3C Verifiable Credentials across three platforms.
 
----
-
-## 📱 Features
-
-### ✅ Current Features (v0.2)
-
-**DID Management:**
-- Create decentralized identifiers using `did:key` method
-- Ed25519 cryptographic key generation and storage
-- DID Document resolution (W3C DID Core compliant)
-- Persistent storage in SQLite
-- View complete DID details including keys and metadata
-- Copy-to-clipboard functionality for DIDs and keys
-
-**Verifiable Credentials:**
-- Issue W3C Verifiable Credentials (VC-JWT format)
-- Self-issued credentials for demo/testing
-- Store credentials persistently
-- Cryptographic signature verification
-- Display credential details with type tags
-- Verify credential integrity
-
-**User Interface:**
-- Tab navigation (DIDs / Credentials)
-- Professional, clean UI design
-- Detail views for DIDs
-- Credential cards with verification buttons
-- Loading states and error handling
-- Native iOS experience
-
----
-
-## 🏗️ Architecture
+## Architecture
 
 ```
-mobile-wallet/
-├── src/
-│   ├── agents/
-│   │   └── veramoAgent.ts          # Veramo agent configuration
-│   ├── services/
-│   │   ├── didService.ts           # DID operations (CRUD)
-│   │   └── credentialService.ts    # Credential operations
-│   ├── screens/
-│   │   ├── HomeScreen.tsx          # Main screen with tabs
-│   │   ├── DIDDetailScreen.tsx     # DID details view
-│   │   └── CredentialsScreen.tsx   # Credentials list & management
-│   ├── constants/
-│   │   └── config.ts               # App configuration
-│   └── types/
-│       └── index.ts                # TypeScript interfaces
-├── App.tsx
-└── package.json
+                        ┌──────────────────────────┐
+                        │   Ethereum (Hardhat /     │
+                        │       Sepolia)            │
+                        │                           │
+                        │  EURootAuthority.sol      │
+                        │  AccreditationRegistry.sol│
+                        │  CredentialRegistry.sol   │
+                        └────────────┬──────────────┘
+                                     │
+                    Source of truth for all
+                    trust & authorization
+                                     │
+              ┌──────────────────────┼──────────────────────┐
+              │                      │                      │
+   ┌──────────▼─────────┐ ┌─────────▼──────────┐ ┌────────▼────────┐
+   │ Accreditation       │ │ Mobile Wallet      │ │ Verifier        │
+   │ Platform            │ │                    │ │ Platform        │
+   │                     │ │ React Native/Expo  │ │ (planned)       │
+   │ Angular 21 + .NET 10│ │ Veramo + SQLite    │ │                 │
+   │ DID-Auth + RBAC     │ │ expo-secure-store  │ │                 │
+   └─────────────────────┘ └────────────────────┘ └─────────────────┘
 ```
 
-### Technology Stack
+### Core Principle
 
-**Core:**
-- React Native (via Expo)
-- TypeScript
-- SQLite (expo-sqlite)
+**Blockchain is the source of truth — not microservices.**
 
-**Identity & Credentials:**
-- Veramo Framework
-  - `@veramo/core` - Core agent functionality
-  - `@veramo/did-manager` - DID management
-  - `@veramo/did-provider-key` - did:key method
-  - `@veramo/key-manager` - Cryptographic key management
-  - `@veramo/kms-local` - Local key management system
-  - `@veramo/credential-w3c` - W3C VC support
-  - `@veramo/data-store` - Persistent storage
-  - `@veramo/did-resolver` - DID resolution
+- Smart contracts enforce all authorization on-chain
+- Microservices are convenience wrappers only (indexing, relaying, UI helpers)
+- The mobile wallet can verify credentials independently by reading the blockchain
+- No centralized identity provider — authentication uses DID-Auth (challenge-response with DID key signatures)
 
-**Utilities:**
-- expo-clipboard - Copy to clipboard
-- react-native-get-random-values - Crypto polyfill
-- @ethersproject/shims - Ethereum shims for React Native
+### Trust Hierarchy
 
----
+Every arrow is enforced by smart contract logic:
 
-## 🚀 Getting Started
+```
+EU Root Authority (EURootAuthority.sol — multi-sig governance, 66% approval)
+  → Member State (AccreditationRegistry.sol — checks isMemberState())
+    → Ministry (AccreditationRegistry.sol — validates parent chain)
+      → Institution (AccreditationRegistry.sol — validates parent chain)
+        → Credential (CredentialRegistry.sol — validates issuer accreditation)
+```
+
+## Platforms
+
+### 1. Accreditation Platform
+
+The institutional control plane. Used by EU Root, member states, ministries, and universities.
+
+| Feature | Status |
+|---------|--------|
+| Hierarchical accreditation issuance (on-chain) | Done |
+| Trust chain verification via `validateTrustChain()` | Done |
+| Revocation and inspection | Done |
+| DID-Auth login (challenge-response, no passwords) | Done |
+| Role-based access control derived from on-chain scope | Done |
+| Admin UI with scope-filtered navigation | Done |
+
+**Stack:** Angular 21, Tailwind CSS, .NET 10 (FastEndpoints), Nethereum, PostgreSQL, RabbitMQ + MassTransit.
+
+### 2. Mobile Wallet
+
+The citizen-controlled component. Holds keys locally, manages DIDs and credentials.
+
+| Feature | Status |
+|---------|--------|
+| DID creation and management (`did:ethr:sepolia`) | Done |
+| Key storage in iOS Keychain (expo-secure-store) | Done |
+| W3C Verifiable Credential storage and display | Done |
+| Biometric-gated identity view (Face ID / Touch ID) | Done |
+| Wallet creation flow with secure key generation | Done |
+| Auto-login bypass for returning users | Done |
+| ZKP-backed selective disclosure | Planned |
+| QR-based credential presentation | Planned |
+
+**Stack:** React Native, Expo, Veramo Framework, SQLite (TypeORM), expo-secure-store.
+
+### 3. Verifier Platform (planned)
+
+The relying-party interface for banks, employers, and academic institutions. Validates credentials, trust chains, and ZKP proofs directly against the blockchain.
+
+## Smart Contracts
+
+Deployed on local Hardhat (deterministic addresses):
+
+| Contract | Address | Purpose |
+|----------|---------|---------|
+| `EURootAuthority.sol` | `0x5FbDB2315678afecb367f032d93F642f64180aa3` | Root of trust, deployment ceremony, multi-sig governance |
+| `AccreditationRegistry.sol` | `0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0` | Hierarchical trust chain, `validateTrustChain(bytes32)` |
+| `CredentialRegistry.sol` | `0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9` | Credential status, issuer accreditation validation |
+
+## Authentication
+
+### Admin Client — DID-Auth + RBAC
+
+No passwords. Users authenticate by signing a cryptographic challenge with their Ethereum private key:
+
+1. Client requests a nonce from `POST /api/auth/challenge`
+2. Signs the nonce locally with ethers.js (private key never leaves the browser)
+3. Submits signature to `POST /api/auth/verify`
+4. Backend recovers the signer address, queries on-chain accreditation scope, issues a JWT
+
+The JWT contains the DID's on-chain scope (`EURoot`, `MemberState`, `Ministry`, `Institution`), which drives:
+- **Route guards** — each route requires a minimum scope
+- **Sidebar filtering** — users only see routes they're authorized for
+- **Backend policies** — endpoints enforce scope via `[Authorize]` policies
+
+### Mobile Wallet — Secure Storage
+
+- Secret key generated at wallet creation, stored in iOS Keychain via `expo-secure-store`
+- Returning users bypass the welcome screen automatically
+- Biometric authentication (Face ID / Touch ID) gates sensitive operations
+
+## Repository Layout
+
+```
+did-wallet-thesis/
+├── blockchain/                         # Smart contracts, deploy scripts, ABIs
+│   ├── contracts/                      # Solidity sources
+│   ├── scripts/deploy.ts              # Deployment + bootstrap
+│   └── abis/                          # Exported ABIs for services
+├── DID.WalletThesis/
+│   └── src/
+│       ├── admin-client/              # Angular 21 accreditation platform
+│       │   └── src/app/
+│       │       ├── core/auth/         # DID-Auth service, guards, interceptor
+│       │       ├── features/          # member-states, ministries, universities, login
+│       │       └── shared/            # Reusable components
+│       ├── Services/
+│       │   ├── DID.Accreditation/     # Accreditation API + auth endpoints
+│       │   ├── DID.BlockchainSync/    # Event polling + RabbitMQ publisher
+│       │   ├── DID.Identity/          # DID generation service
+│       │   └── DID.Credential/        # Credential API (stub)
+│       ├── Shared/
+│       │   ├── DID.Shared.Domain/     # DDD base classes
+│       │   ├── DID.Shared.Application/# Interfaces (IBlockchainService, IEventBus)
+│       │   └── DID.Shared.Infrastructure/ # Nethereum, MassTransit, EF Core
+│       └── Contracts/DID.Contracts/   # RabbitMQ event DTOs
+├── mobile-wallet/                     # React Native/Expo mobile app
+│   └── src/
+│       ├── agents/veramoAgent.ts      # Veramo agent (DID, keys, credentials)
+│       ├── context/AuthContext.tsx     # Auth state + wallet creation
+│       ├── screens/                   # WelcomeScreen, HomeScreen, etc.
+│       └── services/                  # DID, credential, auth, wallet services
+├── docker-compose.infra.yml           # PostgreSQL, RabbitMQ, Hardhat
+├── docker-compose.services.yml        # Microservice containers
+├── TESTING_GUIDE.md                   # Step-by-step testing instructions
+└── CLAUDE.md                          # AI coding assistant instructions
+```
+
+## Quick Start
 
 ### Prerequisites
 
-- Node.js 18+ 
-- npm or yarn
-- iOS device or simulator (Android support TBD)
-- Expo Go app installed on device
+- Docker Desktop
+- Node.js 18+
+- .NET 10 SDK
+- Xcode (for iOS Simulator)
 
-### Installation
-
-```bash
-# Clone the repository
-git clone <repository-url>
-cd did-wallet-thesis/mobile-wallet
-
-# Install dependencies
-npm install
-
-# Start the development server
-npx expo start
-```
-
-### Running on Device
-
-1. Install **Expo Go** from the App Store
-2. Scan the QR code from terminal with your iPhone
-3. App will load automatically
-
-### Development
+### 1. Infrastructure
 
 ```bash
-# Start with cache clearing
-npx expo start -c
-
-# iOS simulator (requires Xcode)
-npx expo start --ios
-
-# Web version (limited functionality)
-npx expo start --web
+docker compose -f docker-compose.infra.yml up -d
+cd blockchain && npx hardhat run scripts/deploy.ts --network localhost
+docker exec did-postgres psql -U did_user -d postgres -c "CREATE DATABASE did_accreditation;"
 ```
 
----
+### 2. Accreditation Platform
 
-## 📖 Usage Guide
+```bash
+# Backend
+cd DID.WalletThesis && dotnet run --project src/Services/DID.Accreditation
 
-### Creating Your First DID
+# Frontend (separate terminal)
+cd DID.WalletThesis/src/admin-client && npm install && npm start
+```
 
-1. Open the app
-2. Navigate to "DIDs" tab
-3. Tap "Create New DID"
-4. Your DID will be generated with cryptographic keys
-5. Tap on the DID card to view full details
+Open `http://localhost:4200` and sign in with a Hardhat account private key.
 
-### Issuing a Credential
+### 3. Mobile Wallet
 
-1. Navigate to "Credentials" tab
-2. Ensure you have at least one DID created
-3. Tap "Issue Sample Credential"
-4. View your credential with personal information
-5. Tap "Verify ✓" to cryptographically verify the signature
+```bash
+cd mobile-wallet && npm install && npx expo start --ios
+```
 
-### Viewing DID Details
+See [TESTING_GUIDE.md](TESTING_GUIDE.md) for detailed end-to-end testing instructions with test accounts and expected behaviors.
 
-- Tap any DID card to see:
-  - Full DID string
-  - Provider information
-  - Cryptographic keys (public keys in hex)
-  - W3C DID Document (JSON format)
-- Tap any field to copy to clipboard
+## Technical Details
 
----
+- **DID method:** `did:ethr:sepolia` with Secp256k1 keys
+- **Credential format:** W3C Verifiable Credentials with JWT proofs
+- **Mobile storage:** SQLite via expo-sqlite + TypeORM, keys in expo-secure-store
+- **Event bus:** RabbitMQ + MassTransit
+- **Blockchain interaction:** Nethereum (.NET), ethers.js (Angular/Wallet)
 
-## 📚 Standards & Compliance
+## Standards Alignment
 
-### Implemented Standards
-- **W3C DID Core 1.0** - Decentralized Identifiers
-- **W3C Verifiable Credentials Data Model 1.1** - Credential format
-- **did:key Method Specification** - DID method
+**Implemented:** W3C DID Core 1.0, W3C VC Data Model 1.1, did:ethr Method Specification, EIP-1056.
 
-### Planned Standards (EU ARF Compliance)
-- **OpenID4VP** - Verifiable Presentation protocol
-- **OpenID4VCI** - Credential issuance protocol
-- **SD-JWT** - Selective Disclosure for JWT
-- **ISO/IEC 18013-5** - Mobile driving license (mdoc)
-- **eIDAS 2.0** - EU Digital Identity Regulation
+**Planned:** OpenID4VP, OpenID4VCI, SD-JWT, eIDAS 2.0 / EBSI Trust Framework.
 
----
+## License
 
----
-
-## 📄 License
-
-This project is part of academic research for educational purposes.
-
----
-
-## 👨‍💻 Author
-
-**Academic Project**  
-Alexandru Ioan Cuza University, Iași  
-Faculty of Computer Science  
-Expected Graduation: July 2026
-
----
-
-## 📞 Resources
-
-- **Veramo Documentation:** https://veramo.io/docs/
-- **W3C DID Spec:** https://www.w3.org/TR/did-core/
-- **W3C VC Spec:** https://www.w3.org/TR/vc-data-model/
-- **EU ARF:** https://github.com/eu-digital-identity-wallet/eudi-doc-architecture-and-reference-framework
-
+Bachelor's thesis project. Academic use.

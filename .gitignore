@@ -1,4 +1,49 @@
+# Dependencies
 node_modules
-.expo
+**/node_modules/
+
+# Build outputs
+**/dist/
+**/bin/
+**/obj/
+**/*.dll
+**/*.pdb
+**/*.exe
+**/*.nupkg
+
+# .NET
+*.user
+*.suo
+.vs/
+**/TestResults/
+bin
+obj
+
+# Environment / secrets
 .env
+.env.local
+**/.env
+
+# React Native / Expo
+.expo
+
+# Logs
 *.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.claude
+.copilot
+CLAUDE.md
+.idea/
+**/.idea/
+
+# EF Core — keep Migrations/ committed (source code)
+# Secrets — never commit
+**/appsettings.*.json
+!**/appsettings.json
+!**/appsettings.Development.json

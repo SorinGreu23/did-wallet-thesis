@@ -1,0 +1,129 @@
+<div class="flex h-screen overflow-hidden bg-gray-50">
+  <!-- Sidebar -->
+  <aside class="flex flex-col w-64 shrink-0 bg-[#003399] text-white shadow-xl">
+    <!-- Logo / Brand -->
+    <div class="flex items-center gap-3 px-5 py-5 border-b border-blue-700">
+      <div class="flex items-center justify-center w-9 h-9 rounded-lg bg-[#FFCC00] shrink-0">
+        <svg class="w-5 h-5 text-[#003399]" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+        </svg>
+      </div>
+      <div class="min-w-0">
+        <p class="font-bold text-sm leading-tight truncate">EU DID Admin</p>
+        <p class="text-blue-200 text-xs leading-tight">Accreditation Console</p>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto" aria-label="Main navigation">
+      <p class="px-3 py-1 text-xs font-semibold text-blue-300 uppercase tracking-wider mb-2">
+        Trust Chain
+      </p>
+
+      @if (canAccess('EURoot')) {
+        <a
+          routerLink="/member-states"
+          routerLinkActive="bg-white/15 text-white"
+          [routerLinkActiveOptions]="{ exact: true }"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-blue-100 hover:bg-white/10 hover:text-white transition-colors text-sm font-medium"
+          ariaCurrentWhenActive="page"
+        >
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/>
+          </svg>
+          Member States
+        </a>
+      }
+
+      @if (canAccess('MemberState')) {
+        <a
+          routerLink="/ministries"
+          routerLinkActive="bg-white/15 text-white"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-blue-100 hover:bg-white/10 hover:text-white transition-colors text-sm font-medium"
+          ariaCurrentWhenActive="page"
+        >
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+          </svg>
+          Ministries
+        </a>
+      }
+
+      @if (canAccess('Institution')) {
+        <a
+          routerLink="/universities"
+          routerLinkActive="bg-white/15 text-white"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-blue-100 hover:bg-white/10 hover:text-white transition-colors text-sm font-medium"
+          ariaCurrentWhenActive="page"
+        >
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5z M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"/>
+          </svg>
+          Universities
+        </a>
+      }
+    </nav>
+
+    <!-- Session Info -->
+    @if (auth.session()) {
+      <div class="px-4 py-3 border-t border-blue-700 space-y-2">
+        <div class="flex items-center gap-2">
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border {{ scopeBadgeClasses() }}">
+            {{ scopeLabel() }}
+          </span>
+        </div>
+        <p class="text-xs text-blue-300 font-mono truncate" [title]="auth.session()?.did ?? ''">
+          {{ truncatedDid }}
+        </p>
+        <button
+          (click)="logout()"
+          class="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-blue-200 hover:bg-white/10 hover:text-white transition-colors text-xs font-medium"
+        >
+          <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+          Sign Out
+        </button>
+      </div>
+    }
+
+    <!-- Footer -->
+    <div class="px-4 py-3 border-t border-blue-700">
+      <p class="text-xs text-blue-300 text-center">eIDAS 2.0 / EBSI Framework</p>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <div class="flex flex-col flex-1 min-w-0 overflow-hidden">
+    <!-- Top bar -->
+    <header class="flex items-center justify-between px-6 py-3 bg-white border-b border-gray-200 shadow-sm shrink-0">
+      <div class="flex items-center gap-2">
+        <!-- EU flag stars (decorative) -->
+        <div class="flex items-center gap-1 text-[#FFCC00]" aria-hidden="true">
+          @for (star of stars; track $index) {
+            <span class="text-xs">&#9733;</span>
+          }
+        </div>
+        <span class="text-xs font-medium text-gray-500 uppercase tracking-widest ml-1">
+          European Union &middot; Digital Identity Administration
+        </span>
+      </div>
+      <div class="flex items-center gap-3">
+        @if (auth.session()) {
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border {{ scopeBadgeClasses() }}">
+            {{ scopeLabel() }}
+          </span>
+        }
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-xs font-medium border border-green-200">
+          <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" aria-hidden="true"></span>
+          Services Online
+        </span>
+      </div>
+    </header>
+
+    <!-- Page content -->
+    <main class="flex-1 overflow-y-auto p-6">
+      <router-outlet />
+    </main>
+  </div>
+</div>

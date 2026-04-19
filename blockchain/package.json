@@ -1,0 +1,28 @@
+{
+  "name": "did-wallet-blockchain",
+  "version": "1.0.0",
+  "description": "Smart contracts for EU DID Wallet Thesis",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:local": "hardhat run scripts/deploy.ts --network localhost",
+    "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",
+    "node": "hardhat node",
+    "clean": "hardhat clean"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@typechain/hardhat": "^9.1.0",
+    "@types/chai": "^4.3.11",
+    "@types/mocha": "^10.0.6",
+    "chai": "^4.3.10",
+    "ethers": "^6.10.0",
+    "hardhat": "^2.28.6",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.1"
+  }
+}

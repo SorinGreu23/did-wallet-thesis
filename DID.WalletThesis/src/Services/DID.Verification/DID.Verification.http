@@ -1,0 +1,6 @@
+@DID.Verification_HostAddress = http://localhost:5002
+
+GET {{DID.Verification_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

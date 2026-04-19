@@ -1,0 +1,80 @@
+name: did-wallet-infra
+
+# Infrastructure services — start once, leave running.
+# Hardhat chain state, Postgres data, and RabbitMQ state all persist via named volumes.
+# This is a standalone project (did-wallet-infra) — fully independent of the services layer.
+#
+# Start:   docker compose -f docker-compose.infra.yml up -d
+# Stop:    docker compose -f docker-compose.infra.yml stop   (keeps volumes intact)
+# Destroy: docker compose -f docker-compose.infra.yml down -v  (wipes volumes)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: did-postgres
+    environment:
+      POSTGRES_USER: did_user
+      POSTGRES_PASSWORD: did_password
+      POSTGRES_DB: did_wallet
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - did-infra
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U did_user -d did_wallet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: did-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: did_user
+      RABBITMQ_DEFAULT_PASS: did_password
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - did-infra
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  hardhat:
+    build:
+      context: ./blockchain
+      dockerfile: Dockerfile
+    container_name: did-hardhat
+    ports:
+      - "8545:8545"
+    volumes:
+      - hardhat_data:/data
+    networks:
+      - did-infra
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /data/deployed"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  hardhat_data:
+
+networks:
+  did-infra:
+    driver: bridge
+    name: did-infra
+
+
+

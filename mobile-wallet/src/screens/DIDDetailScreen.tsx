@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import didService, { DIDInfo } from '../services/didService';
+import walletService from '../services/walletService';
 import { COLORS } from '../constants/config';
 
 interface Props {
@@ -21,6 +22,7 @@ export default function DIDDetailScreen({ did, onBack }: Props) {
   const [didInfo, setDidInfo] = useState<DIDInfo | null>(null);
   const [resolution, setResolution] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isActiveDid, setIsActiveDid] = useState(false);
 
   useEffect(() => {
     loadDIDDetails();
@@ -34,6 +36,7 @@ export default function DIDDetailScreen({ did, onBack }: Props) {
 
       const resolved = await didService.resolveDID(did);
       setResolution(resolved);
+      setIsActiveDid(await walletService.isActiveDid(did));
     } catch (error) {
       console.error('Error loading DID details:', error);
     } finally {
@@ -44,6 +47,17 @@ export default function DIDDetailScreen({ did, onBack }: Props) {
   const copyToClipboard = async (text: string, label: string) => {
     await Clipboard.setStringAsync(text);
     Alert.alert('Copied!', `${label} copied to clipboard`);
+  };
+
+  const setAsActiveDid = async () => {
+    try {
+      await walletService.setActiveDid(did);
+      setIsActiveDid(true);
+      Alert.alert('Active DID updated', 'This DID will be used by default for wallet actions.');
+    } catch (error) {
+      console.error('Error setting active DID:', error);
+      Alert.alert('Error', 'Failed to set active DID.');
+    }
   };
 
   if (loading) {
@@ -72,6 +86,13 @@ export default function DIDDetailScreen({ did, onBack }: Props) {
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>DID Details</Text>
+        {isActiveDid ? (
+          <Text style={styles.activeBadge}>Active DID</Text>
+        ) : (
+          <TouchableOpacity style={styles.activeButton} onPress={setAsActiveDid}>
+            <Text style={styles.activeButtonText}>Set as Active DID</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView style={styles.content}>
@@ -191,6 +212,30 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     color: COLORS.text,
+  },
+  activeBadge: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#065f46',
+    backgroundColor: '#d1fae5',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  activeButton: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    backgroundColor: '#e0e7ff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  activeButtonText: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: '700',
   },
   content: {
     flex: 1,

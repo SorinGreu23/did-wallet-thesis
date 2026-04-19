@@ -1,0 +1,10 @@
+<Project>
+  <!--
+    .NET 10 SDK throws MSB3552 when the default "**/*.resx" EmbeddedResource
+    glob finds no files, instead of silently resolving to nothing.
+    None of the services use .resx resource files, so disable the auto-include.
+  -->
+  <PropertyGroup>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+  </PropertyGroup>
+</Project>
