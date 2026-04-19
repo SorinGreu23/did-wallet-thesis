@@ -18,7 +18,7 @@ public class RevokeCredentialEndpoint(CredentialService service)
     public override void Configure()
     {
         Post("/api/credentials/{credentialId}/revoke");
-        AllowAnonymous();
+        Policies("Institution");
     }
 
     public override async Task HandleAsync(RevokeCredentialRequest req, CancellationToken ct)

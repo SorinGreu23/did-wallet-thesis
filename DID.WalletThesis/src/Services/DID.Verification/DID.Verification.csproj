@@ -7,7 +7,19 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="FastEndpoints" Version="8.0.1" />
+    <PackageReference Include="FastEndpoints.Swagger" Version="8.0.1" />
+    <PackageReference Include="MassTransit" Version="8.3.5" />
+    <PackageReference Include="MassTransit.RabbitMQ" Version="8.3.5" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3" />
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Contracts\DID.Contracts\DID.Contracts.csproj" />
+    <ProjectReference Include="..\..\Shared\DID.Shared.Application\DID.Shared.Application.csproj" />
+    <ProjectReference Include="..\..\Shared\DID.Shared.Infrastructure\DID.Shared.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

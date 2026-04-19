@@ -90,17 +90,13 @@ public class CredentialService(
         string? issuerAccreditationId,
         string? issuerName,
         DateTime? expiresAt,
-        string? issuerPrivateKey = null,
         CancellationToken ct = default)
     {
-        var effectivePrivateKey = issuerPrivateKey ?? blockchainOptions.Value.PrivateKey;
+        var effectivePrivateKey = blockchainOptions.Value.PrivateKey;
         var effectiveAccount = new Account(effectivePrivateKey);
         var effectiveSignerAddress = NormalizeAddress(effectiveAccount.Address);
-        var effectiveIssuerDid = issuerPrivateKey is not null
-            ? ToDid(effectiveSignerAddress)
-            : issuerDid;
 
-        EnsureSignerMatchesIssuer(effectiveIssuerDid, effectiveSignerAddress);
+        EnsureSignerMatchesIssuer(issuerDid, effectiveSignerAddress);
 
         var holderAddress = ExtractAddress(holderDid);
         var credentialHashBytes = HexToBytes32(credentialHash);

@@ -79,20 +79,14 @@ public class AccreditationService(
         string? parentAccreditationId,
         string? permissionsHash,
         DateTime? expiresAt,
-        string? issuerPrivateKey = null,
         CancellationToken ct = default)
     {
-        // Use a custom signer if provided, otherwise fall back to the configured root signer
-        var effectivePrivateKey = issuerPrivateKey ?? blockchainOptions.Value.PrivateKey;
+        // Always use the backend-configured key for on-chain signing
+        var effectivePrivateKey = blockchainOptions.Value.PrivateKey;
         var effectiveAccount = new Account(effectivePrivateKey);
         var effectiveSignerAddress = NormalizeAddress(effectiveAccount.Address);
 
-        // When a custom key is provided, derive the issuerDid from it — don't trust the client
-        var effectiveIssuerDid = issuerPrivateKey is not null
-            ? ToDid(effectiveSignerAddress)
-            : issuerDid;
-
-        EnsureSignerMatchesIssuer(effectiveIssuerDid, effectiveSignerAddress);
+        EnsureSignerMatchesIssuer(issuerDid, effectiveSignerAddress);
 
         var subjectAddress = ExtractAddress(subjectDid);
         var scopeValue = ParseScope(scope);
@@ -136,7 +130,7 @@ public class AccreditationService(
             var entity = new Domain.Accreditation
             {
                 AccreditationId = accreditationId,
-                IssuerDID = effectiveIssuerDid,
+                IssuerDID = issuerDid,
                 SubjectDID = ToDid(subjectAddress),
                 ParentAccreditationId = parentAccreditationId,
                 Scope = ScopeToString(scopeValue),

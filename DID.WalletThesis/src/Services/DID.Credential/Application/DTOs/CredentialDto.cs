@@ -32,8 +32,7 @@ public record IssueCredentialRequest(
     string CredentialHash,
     string? IssuerAccreditationId,
     string? IssuerName,
-    DateTime? ExpiresAt,
-    string? IssuerPrivateKey = null
+    DateTime? ExpiresAt
 );
 
 public record RevokeCredentialRequest(

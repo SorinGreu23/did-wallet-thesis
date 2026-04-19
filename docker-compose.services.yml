@@ -99,6 +99,60 @@ services:
       - did-infra
       - did-services
 
+  presentation:
+    build:
+      context: ./DID.WalletThesis
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: DID.Presentation
+    container_name: did-presentation
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      VerificationService__BaseUrl: "http://did-verification:8080"
+    ports:
+      - "5217:8080"
+    networks:
+      - did-services
+    depends_on:
+      - verification
+
+  zkp-service:
+    build:
+      context: ./zkp-service
+    container_name: did-zkp-service
+    environment:
+      PORT: "3000"
+    ports:
+      - "3001:3000"
+    networks:
+      - did-services
+
+  verification:
+    build:
+      context: ./DID.WalletThesis
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: DID.Verification
+    container_name: did-verification
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: did_user
+      RabbitMQ__Password: did_password
+      Blockchain__RpcUrl: "http://hardhat:8545"
+      Blockchain__AbisDirectory: /app/abis
+      Blockchain__Contracts__CredentialRegistry: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
+      ZkpService__BaseUrl: "http://did-zkp-service:3000"
+    ports:
+      - "5216:8080"
+    volumes:
+      - ./blockchain/abis:/app/abis:ro
+    networks:
+      - did-infra
+      - did-services
+    depends_on:
+      - zkp-service
+
 networks:
   did-infra:
     external: true

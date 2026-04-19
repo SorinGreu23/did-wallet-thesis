@@ -18,7 +18,7 @@ public class SuspendCredentialEndpoint(CredentialService service)
     public override void Configure()
     {
         Patch("/api/credentials/{credentialId}/suspend");
-        AllowAnonymous();
+        Policies("Institution");
     }
 
     public override async Task HandleAsync(SuspendCredentialRequest req, CancellationToken ct)

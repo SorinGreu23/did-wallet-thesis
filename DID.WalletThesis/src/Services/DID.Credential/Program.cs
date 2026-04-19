@@ -8,7 +8,9 @@ using DID.Shared.Infrastructure.Options;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using MassTransit;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -45,7 +47,34 @@ builder.Services.AddMassTransit(x =>
     });
 });
 
+builder.Services.AddCors(options =>
+    options.AddDefaultPolicy(policy =>
+        policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+
 builder.Services.AddFastEndpoints();
+
+var jwtSecret = builder.Configuration["Auth:JwtSecret"] ?? "THIS_IS_A_DEV_SECRET_CHANGE_IN_PRODUCTION_MIN_32_CHARS!!";
+var keyBytes = System.Text.Encoding.UTF8.GetBytes(jwtSecret);
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ClockSkew = TimeSpan.Zero,
+        };
+    });
+
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("EURoot", p => p.RequireClaim("scope", "EURoot"))
+    .AddPolicy("MemberState", p => p.RequireClaim("scope", "EURoot", "MemberState"))
+    .AddPolicy("Ministry", p => p.RequireClaim("scope", "EURoot", "MemberState", "Ministry"))
+    .AddPolicy("Institution", p => p.RequireClaim("scope", "EURoot", "MemberState", "Ministry", "Institution"));
+
 builder.Services.SwaggerDocument(o =>
 {
     o.DocumentSettings = s =>
@@ -66,6 +95,9 @@ using (var scope = app.Services.CreateScope())
     await db.Database.MigrateAsync();
 }
 
+app.UseCors();
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseFastEndpoints();
 await app.RunAsync();

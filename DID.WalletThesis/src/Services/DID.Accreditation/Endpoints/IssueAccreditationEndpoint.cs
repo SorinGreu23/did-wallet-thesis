@@ -25,7 +25,6 @@ public class IssueAccreditationEndpoint(AccreditationService service)
                 req.ParentAccreditationId,
                 req.PermissionsHash,
                 req.ExpiresAt,
-                req.IssuerPrivateKey,
                 ct);
             await Send.CreatedAtAsync<ResolveAccreditationEndpoint>(
                 new { accreditationId = result.AccreditationId }, result, cancellation: ct);

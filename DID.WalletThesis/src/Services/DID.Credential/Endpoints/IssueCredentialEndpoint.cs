@@ -10,7 +10,7 @@ public class IssueCredentialEndpoint(CredentialService service)
     public override void Configure()
     {
         Post("/api/credentials");
-        AllowAnonymous();
+        Policies("Institution");
     }
 
     public override async Task HandleAsync(IssueCredentialRequest req, CancellationToken ct)
@@ -23,7 +23,6 @@ public class IssueCredentialEndpoint(CredentialService service)
             req.IssuerAccreditationId,
             req.IssuerName,
             req.ExpiresAt,
-            req.IssuerPrivateKey,
             ct);
         await Send.CreatedAtAsync<ResolveCredentialEndpoint>(
             new { credentialId = result.CredentialId }, result, cancellation: ct);

@@ -1,41 +1,56 @@
+using DID.Shared.Application.Interfaces;
+using DID.Shared.Infrastructure.Blockchain;
+using DID.Shared.Infrastructure.Options;
+using DID.Verification.Application.Services;
+using FastEndpoints;
+using FastEndpoints.Swagger;
+using MassTransit;
+using Serilog;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddSerilog((_, lc) => lc
+    .ReadFrom.Configuration(builder.Configuration)
+    .WriteTo.Console());
+
+builder.Services.Configure<BlockchainOptions>(
+    builder.Configuration.GetSection(BlockchainOptions.SectionName));
+builder.Services.AddSingleton<IBlockchainService, BlockchainService>();
+
+builder.Services.AddHttpClient<ZkpServiceClient>(client =>
+    client.BaseAddress = new Uri(
+        builder.Configuration["ZkpService:BaseUrl"] ?? "http://localhost:3000"));
+
+builder.Services.AddScoped<VerificationService>();
+
+builder.Services.AddMassTransit(x =>
+{
+    x.UsingRabbitMq((ctx, cfg) =>
+    {
+        cfg.Host(builder.Configuration["RabbitMQ:Host"], h =>
+        {
+            h.Username(builder.Configuration["RabbitMQ:Username"]!);
+            h.Password(builder.Configuration["RabbitMQ:Password"]!);
+        });
+
+        cfg.ConfigureEndpoints(ctx);
+    });
+});
+
+builder.Services.AddFastEndpoints();
+builder.Services.SwaggerDocument(o =>
+{
+    o.DocumentSettings = s =>
+    {
+        s.Title = "DID Verification Service";
+        s.Version = "v1";
+        s.Description = "On-chain credential verification with optional ZKP proof delegation";
+    };
+});
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
-
+app.UseSwaggerGen();
 app.UseHttpsRedirection();
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
-
-app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
+app.UseFastEndpoints();
+await app.RunAsync();

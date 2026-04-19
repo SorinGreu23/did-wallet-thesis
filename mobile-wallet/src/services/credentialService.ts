@@ -3,6 +3,7 @@ import {
   VerifiablePresentation,
 } from "@veramo/core-types";
 import { getAgent, initializeAgent } from "../agents/veramoAgent";
+import { CONFIG } from "../constants/config";
 import authService from "./authService";
 
 export interface CredentialData {
@@ -15,6 +16,17 @@ export interface CredentialData {
 export interface StoredCredential {
   hash: string;
   verifiableCredential: VerifiableCredential;
+}
+
+export interface OnChainVerificationResult {
+  credentialId: string;
+  isValid: boolean;
+  credentialActive: boolean;
+  trustChainValid: boolean;
+  zkpValid: boolean | null;
+  status: string;
+  reason: string | null;
+  verifiedAt: string;
 }
 
 class CredentialService {
@@ -84,17 +96,43 @@ class CredentialService {
 
   async verifyCredential(
     credential: VerifiableCredential,
-  ): Promise<{ verified: boolean; error?: string }> {
+  ): Promise<{ verified: boolean; onChain?: OnChainVerificationResult; error?: string }> {
     await this.initialize();
     const agent = getAgent();
 
+    // 1. Local Veramo signature check
+    let localVerified = false;
     try {
-      const result = await agent.verifyCredential({
-        credential,
-      });
-      return { verified: result.verified };
+      const result = await agent.verifyCredential({ credential });
+      localVerified = result.verified;
     } catch (error: any) {
       return { verified: false, error: error.message };
+    }
+
+    // 2. On-chain status check via DID.Verification
+    // The credentialId is stored in credentialSubject.credentialId for on-chain-backed credentials.
+    const credentialId = (credential.credentialSubject as any)?.credentialId as string | undefined;
+    if (!credentialId) {
+      // Locally-issued credential only — no on-chain record to check
+      return { verified: localVerified };
+    }
+
+    try {
+      const response = await fetch(`${CONFIG.VERIFICATION_SERVICE_URL}/api/verify/credential`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credentialId }),
+      });
+
+      if (!response.ok) {
+        return { verified: false, error: `Verification service returned ${response.status}` };
+      }
+
+      const onChain: OnChainVerificationResult = await response.json();
+      return { verified: localVerified && onChain.isValid, onChain };
+    } catch (error: any) {
+      // Network error — fall back to local result and surface the warning
+      return { verified: localVerified, error: `On-chain check unavailable: ${error.message}` };
     }
   }
 

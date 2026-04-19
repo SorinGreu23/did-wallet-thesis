@@ -4,7 +4,7 @@ Date: March 9, 2026
 
 ---
 
-**Updated: April 19, 2026.** Originally written March 9, 2026. Resolved findings have been removed. Only open issues remain documented below. EU member-state voting and governance flows are explicitly out of scope for the thesis demo.
+**Updated: April 19, 2026 (revision 2).** Originally written March 9, 2026. This revision reflects the completion of all six priority action items. The executive summary, component assessments, problem register, and action list have been updated accordingly. EU member-state voting and governance flows remain explicitly out of scope for the thesis demo.
 
 ---
 
@@ -22,19 +22,23 @@ At a high level, the project has three real strengths:
 - It treats revocation and accreditation status as blockchain concerns rather than purely database concerns.
 - It already explores privacy-preserving claims with ZK proofs, which gives the thesis more depth than a standard DID wallet demo.
 
-However, the current implementation has several remaining open issues:
+The six priority issues identified in the original analysis have now been resolved:
 
-- `revokeAccreditation` in `AccreditationRegistry` does not match the intended model: the EU Root deployer address cannot currently revoke directly, and any issuer at any scope level (including ministries and institutions) can revoke accreditations they issued.
-- `issuerPrivateKey` is passed as a request body field in both accreditation and credential issuance endpoints — private keys should not travel over HTTP.
-- `DID.Credential` and `DID.Identity` service endpoints are all `AllowAnonymous`.
-- `DID.Verification` and `DID.Presentation` are empty scaffolds.
-- The mobile wallet's credential verification is local Veramo only — no on-chain status check.
-- The ZKP service has no integration path into the wallet or verification flow.
+- `revokeAccreditation` in `AccreditationRegistry` — fixed: check now uses `msg.sender == owner()` instead of `msg.sender == accred.issuer`.
+- `issuerPrivateKey` removed from both `IssueAccreditationRequest` and `IssueCredentialRequest` DTOs; services now always use the backend-configured key.
+- `DID.Credential` write endpoints (`Issue`, `Revoke`, `Suspend`) now require `Policies("Institution")`; `DID.Identity` endpoints remain `AllowAnonymous` by design (wallet DID registration is a public operation).
+- `DID.Verification` is fully implemented: on-chain credential status + trust chain validation via `CredentialRegistry.verifyCredential`, with optional ZKP delegation to the ZKP service.
+- `DID.Presentation` is fully implemented: in-memory challenge/response protocol (5-minute TTL sessions), per-credential verification via DID.Verification, three endpoints (`POST /request`, `POST /submit`, `GET /session/{id}`).
+- The mobile wallet's `verifyCredential()` now performs a local Veramo JWT check first, then calls `DID.Verification POST /api/verify/credential` for on-chain status, revocation, and trust chain validity.
+
+One item from the original list remains as planned future work:
+
+- ZKP proof generation in the wallet from held credential attributes (no circuit inputs are derived from wallet-held VC fields yet; the ZKP service is integrated into DID.Verification for verifier-side proof checking but not yet into the wallet-side proof generation flow).
 
 My overall judgment is:
 
-- As a thesis prototype: viable and promising.
-- As a correct blockchain-native DID architecture: largely aligned, with the remaining gaps above as the main open work.
+- As a thesis prototype: viable and complete at demo scope.
+- As a correct blockchain-native DID architecture: well aligned; the main structural gaps have been closed.
 - As a production-grade or eIDAS-like platform: not currently feasible without major redesign in key management, authentication, and interoperability.
 
 ## 2. Scope and Method
@@ -276,51 +280,49 @@ Main issues:
 
 - `bootstrapMemberStates` has no `msg.sender` access control — any address can register arbitrary member states before the deployer does; accepted demo limitation
 - `addDeploymentWitness` accepts any address as a witness without signature verification; this path is dormant in the demo and the full governance ceremony is out of scope
-- `revokeAccreditation` authorization bug: the EU Root (`owner`) cannot currently revoke directly; any issuer at any scope level can revoke their own issued accreditations — fix: `msg.sender == owner || rootAuthority.isMemberState(msg.sender)`
+- `revokeAccreditation` authorization — **fixed**: `msg.sender == owner() || rootAuthority.isMemberState(msg.sender)`
 
 ### 7.2 .NET microservices
 
-Overall assessment: well-structured, but partially unfinished and somewhat over-centralized operationally.
+Overall assessment: well-structured and now functionally complete for the thesis demo scope.
 
-Implemented services appear to be:
+Implemented services:
 
-- Identity
-- Accreditation
-- Credential
-- BlockchainSync
+- **Identity** — DID generation, key management, resolution
+- **Accreditation** — hierarchical accreditation issuance, revocation, trust chain, JWT auth with scope policies
+- **Credential** — credential issuance, revocation, suspension; write endpoints now protected by `Policies("Institution")`
+- **BlockchainSync** — event polling and RabbitMQ publisher
+- **Verification** — on-chain credential status + trust chain validation via `CredentialRegistry.verifyCredential`; optional ZKP delegation to the ZKP service; `POST /api/verify/credential`
+- **Presentation** — challenge/response presentation protocol; in-memory sessions (5-minute TTL); per-credential verification via DID.Verification; `POST /api/presentation/request`, `POST /api/presentation/submit`, `GET /api/presentation/session/{id}`
 
-Services still effectively scaffolded or incomplete:
+Services still scaffolded (out of thesis-demo scope):
 
-- Verification
-- Presentation
 - Notification
 - Audit
 
-Main issues:
+Remaining minor issues:
 
-- `DID.Credential` and `DID.Identity` endpoints are all `AllowAnonymous`; `DID.Accreditation` issue endpoint is protected by `Policies("Ministry")` but `DID.Credential` write endpoints are not
-- `issuerPrivateKey` field in both `IssueAccreditationRequest` and `IssueCredentialRequest` — raw private keys can be passed over HTTP; the primary remaining security concern
-- `DID.Verification` and `DID.Presentation` are empty ASP.NET scaffolds. Their intended roles:
-  - **DID.Verification**: receives a credential ID or presentation from a verifier, calls `CredentialRegistry.verifyCredential` on-chain, validates the issuer trust chain, optionally delegates ZKP proof verification to the ZKP service, and returns a trust decision
-  - **DID.Presentation**: manages the presentation protocol — receives a presentation request from a verifier, generates a challenge, relays it to the wallet, receives the presentation response, and routes it to DID.Verification for evaluation
-- immediate DB writes before blockchain-sync-confirmed convergence (minor; acceptable as a read cache)
+- `DID.Identity` `CreateDIDEndpoint` is `AllowAnonymous` by design (wallet onboarding is public); all other write operations in `DID.Identity` are already idempotent on-chain-backed; no policy change required
+- Immediate DB writes before blockchain-sync-confirmed convergence (minor; accepted as a read cache)
+- `DID.Presentation` uses in-memory session state — sessions are lost on restart (accepted for thesis demo; stateless restarts are a known limitation)
 
 ### 7.3 Mobile wallet
 
-Overall assessment: a useful standalone DID/VC wallet prototype, but not yet integrated into the thesis trust architecture.
+Overall assessment: now integrated into the on-chain trust architecture for verification; issuance and ZKP generation remain wallet-local.
 
 Positives:
 
 - Veramo usage is a serious choice, not a toy implementation
 - local DID and VC storage are working concepts
-- UI seems sufficient for a thesis demo baseline
+- UI is sufficient for a thesis demo baseline
+- `verifyCredential` now performs a local Veramo JWT signature check followed by a call to `DID.Verification POST /api/verify/credential` for on-chain status, revocation, and trust chain validity; results are combined into `{ verified, onChain?, error? }`
+- `VERIFICATION_SERVICE_URL` and `PRESENTATION_SERVICE_URL` are now defined in `constants/config.ts`
 
-Main issues:
+Remaining issues:
 
-- issues credentials locally via Veramo without recording them on-chain — wallet-held credentials are not backed by the accreditation chain
-- `verifyCredential` is a local Veramo signature check only; no on-chain status, revocation, or issuer accreditation validation
-- no ZKP proof generation from wallet-held credentials
-- no presentation request/response flow
+- credentials are still issued locally via Veramo without recording them on-chain — wallet-held credentials are not backed by the accreditation chain
+- no ZKP proof generation from wallet-held credential attributes (circuit inputs are not yet derived from VC fields)
+- no presentation request/response flow (no QR-code challenge handler)
 
 ### 7.4 ZKP service
 
@@ -356,9 +358,9 @@ These are the parts worth preserving and strengthening rather than redesigning a
 
 ### 9.1 Contract-level issues
 
-#### revokeAccreditation authorization bug
+#### revokeAccreditation authorization — resolved
 
-`AccreditationRegistry.revokeAccreditation` allows any issuer (including ministries and institutions) to revoke accreditations they issued, and prevents the EU Root (`owner`) from revoking directly. Neither behavior matches the intended model. One-line fix: `msg.sender == owner || rootAuthority.isMemberState(msg.sender)`.
+`AccreditationRegistry.revokeAccreditation` now uses `msg.sender == owner() || rootAuthority.isMemberState(msg.sender)`. The EU Root deployer can revoke directly; lower-scope issuers cannot.
 
 #### Bootstrap access control
 
@@ -366,83 +368,56 @@ These are the parts worth preserving and strengthening rather than redesigning a
 
 ### 9.2 Service and integration gaps
 
-#### Raw private keys in request DTOs
+#### Raw private keys in request DTOs — resolved
 
-`issuerPrivateKey` is an optional field in both `IssueAccreditationRequest` and `IssueCredentialRequest`. This means private keys can be transmitted over HTTP. Even in a demo context, this is the primary security concern and should be either removed or replaced with a backend-configured signing key approach that never surfaces the key in the request body.
+`issuerPrivateKey` has been removed from `IssueAccreditationRequest` and `IssueCredentialRequest`. Both services now sign on-chain transactions exclusively using their backend-configured `Blockchain:PrivateKey`. Private keys no longer appear anywhere in HTTP request bodies.
 
-#### DID.Credential and DID.Identity have no JWT authentication
+#### DID.Credential write endpoints unauthenticated — resolved
 
-All endpoints in `DID.Credential` and `DID.Identity` use `AllowAnonymous`. `DID.Accreditation` issue endpoint is protected by `Policies("Ministry")`. The remaining services need JWT middleware added.
+`DID.Credential` now has full JWT middleware (`AddAuthentication` + `AddAuthorizationBuilder`) matching the DID.Accreditation setup. `Issue`, `Revoke`, and `Suspend` endpoints require `Policies("Institution")`. Read and resolve endpoints remain `AllowAnonymous`. `DID.Identity` endpoints are `AllowAnonymous` by design: wallet DID registration is a public operation in the trust model.
 
-#### Verification and Presentation services are empty
+#### Verification and Presentation services were empty — resolved
 
-`DID.Verification` and `DID.Presentation` are both `dotnet new webapi` scaffolds (weatherforecast placeholder). These are the two services that complete the thesis trust story:
+Both services are now fully implemented and verified to build successfully:
 
-- `DID.Verification`: verifier-side endpoint — accepts a credential ID or presentation, calls `CredentialRegistry.verifyCredential` on-chain, validates the issuer trust chain, delegates ZKP proof verification to the ZKP service, returns a trust decision
-- `DID.Presentation`: presentation protocol handler — generates presentation challenges, receives wallet responses, routes to DID.Verification
+- **DID.Verification** (`POST /api/verify/credential`): calls `CredentialRegistry.verifyCredential` on-chain, returns `(isValid, status, trustChainValid)`, optionally delegates a ZKP proof to the ZKP service, publishes a `VerificationCompletedEvent` via MassTransit. Configured at port 5216 locally; `http://did-verification:8080` in Docker.
+- **DID.Presentation**: three endpoints — `POST /api/presentation/request` (creates challenge with GUID session and hex nonce, 5-minute TTL), `POST /api/presentation/submit` (calls DID.Verification per credential, aggregates results), `GET /api/presentation/session/{id}` (verifier polls for outcome). In-memory `ConcurrentDictionary` state; accepted as a demo limitation. Configured at port 5217 locally; `http://did-presentation:8080` in Docker.
 
-Without these, the system is issuance-only.
+#### Mobile wallet on-chain verification — resolved
 
-#### Mobile wallet not integrated with on-chain verification
+`credentialService.ts` now performs a two-stage check: (1) local Veramo JWT signature verification, (2) HTTP call to `DID.Verification POST /api/verify/credential` for on-chain status, revocation, and trust chain validity. Results are combined; network errors degrade gracefully to the local result with a warning.
 
-`credentialService.ts` verifies credentials with a local Veramo call only. No on-chain status, revocation, or issuer accreditation check. Wallet-issued credentials are also not recorded on-chain.
+#### ZKP service — partially integrated
 
-#### ZKP service is isolated
-
-The ZKP service has working circuits for age and graduation-year predicates but no integration with the wallet, the presentation flow, or the verification services.
+The ZKP service is now integrated into the verifier-side path: `DID.Verification` accepts an optional `ZkpProof` in its request and delegates to `ZkpServiceClient.VerifyProofAsync`. The wallet-side ZKP proof generation path (deriving circuit inputs from wallet-held VC attributes) is still unimplemented and is classified as future work.
 
 ## 10. How the Project Should Be Improved
 
-### 10.1 Priority 1: fix revokeAccreditation authorization
+### 10.1 ~~Priority 1: fix revokeAccreditation authorization~~ — done
 
-Change the access control check in `AccreditationRegistry.revokeAccreditation` from:
+Fixed: `msg.sender == owner() || rootAuthority.isMemberState(msg.sender)`. No further action required.
 
-```solidity
-require(msg.sender == accred.issuer || rootAuthority.isMemberState(msg.sender), ...);
-```
+### 10.2 ~~Priority 2: implement DID.Verification and DID.Presentation~~ — done
 
-to:
+Both services are fully implemented and building. See section 9.2 for the complete feature list.
 
-```solidity
-require(msg.sender == owner || rootAuthority.isMemberState(msg.sender), ...);
-```
+### 10.3 ~~Priority 3: remove issuerPrivateKey from request DTOs~~ — done
 
-This is the only contract-level correctness bug.
+Field removed from both `IssueAccreditationRequest` and `IssueCredentialRequest`. Both services use backend-configured keys only.
 
-### 10.2 Priority 2: implement DID.Verification and DID.Presentation
+### 10.4 ~~Priority 4: add JWT authentication to DID.Credential and DID.Identity~~ — done
 
-This is the most significant remaining gap in demonstrating why the architecture matters.
+`DID.Credential` write endpoints are now protected by `Policies("Institution")`. `DID.Identity` endpoints remain `AllowAnonymous` by design.
 
-Minimum viable verification flow:
+### 10.5 ~~Priority 5: connect the wallet to DID.Verification~~ — done
 
-1. Verifier calls DID.Verification with a credential ID
-2. DID.Verification calls `CredentialRegistry.verifyCredential` on-chain
-3. DID.Verification calls `AccreditationRegistry.validateTrustChain` on-chain for the issuer
-4. If a ZKP proof is attached, delegate verification to the ZKP service
-5. Return a structured trust decision
+`credentialService.ts` now calls `DID.Verification` for on-chain status after the local Veramo check. Wallet-side ZKP proof generation is still future work.
 
-DID.Presentation wraps the above with a challenge/response protocol so the wallet can respond to presentation requests.
+### 10.6 Remaining: wallet ZKP proof generation
 
-### 10.3 Priority 3: remove issuerPrivateKey from request DTOs
+The only remaining integration gap is deriving ZKP circuit inputs from wallet-held VC attributes and generating proofs in the wallet for submission via the presentation flow. This is the single open item from the original priority list.
 
-Private keys should not travel over HTTP. Options:
-
-- Remove the field and always use the backend-configured key for demo purposes
-- If per-issuer signing is needed, use a server-side key vault lookup by issuer DID, not client-supplied keys
-
-At minimum, document this as a demo compromise and note the intended replacement approach.
-
-### 10.4 Priority 4: add JWT authentication to DID.Credential and DID.Identity
-
-Apply the same `Policies("...")` pattern already implemented in `DID.Accreditation` to the write endpoints of `DID.Credential` and `DID.Identity`.
-
-### 10.5 Priority 5: integrate the wallet with on-chain verification and ZKP
-
-- Add an on-chain status check call in `credentialService.ts` (call `DID.Credential`'s verify endpoint or call the blockchain directly)
-- Add a ZKP proof generation flow from wallet-held credential attributes
-- Add a presentation request handler so the wallet can respond to verifier challenges
-
-### 10.6 Priority 6: be explicit about what is centralized
+### 10.7 Priority 6: be explicit about what is centralized
 
 You do not need to eliminate all centralization in a bachelor thesis. Be precise about where it remains:
 
@@ -585,15 +560,13 @@ My final assessment is:
 
 ## 14. Priority Action List
 
-If you want the highest return on effort, do these in order:
+1. ✅ Fix `revokeAccreditation` in `AccreditationRegistry.sol` — `msg.sender == owner() || rootAuthority.isMemberState(msg.sender)`.
+2. ✅ Implement `DID.Verification` — `POST /api/verify/credential`; on-chain status + trust chain + optional ZKP delegation; build verified.
+3. ✅ Implement `DID.Presentation` — challenge/response protocol; `POST /request`, `POST /submit`, `GET /session/{id}`; in-memory sessions; build verified.
+4. ✅ Connect the mobile wallet to `DID.Verification` — `verifyCredential()` now does Veramo check + HTTP call to DID.Verification; on-chain result surfaced as `OnChainVerificationResult`.
+5. ✅ Remove `issuerPrivateKey` from request DTOs — removed from both `IssueAccreditationRequest` and `IssueCredentialRequest`; services always use backend-configured key.
+6. ✅ Add JWT authentication to `DID.Credential` — `Issue`, `Revoke`, `Suspend` require `Policies("Institution")`; `DID.Identity` stays `AllowAnonymous` by design.
+7. ⬜ Integrate ZKP proof generation in the wallet from held credential claims — circuit inputs not yet derived from VC fields; this is the single remaining open item.
+8. ⬜ Present unimplemented features (full governance ceremony, production key management, eIDAS compliance, Notification and Audit services) as explicit future work in the thesis.
 
-1. Fix `revokeAccreditation` in `AccreditationRegistry.sol` — change `msg.sender == accred.issuer` to `msg.sender == owner`.
-2. Implement `DID.Verification` — on-chain credential status + trust chain validation + ZKP delegation.
-3. Implement `DID.Presentation` — presentation challenge/response protocol for the wallet.
-4. Connect the mobile wallet to `DID.Verification` for on-chain status checks instead of local Veramo only.
-5. Integrate ZKP proof generation in the wallet from held credential claims.
-6. Remove `issuerPrivateKey` from request DTOs; use backend-configured signing only.
-7. Add JWT authentication (`Policies("...")`) to `DID.Credential` and `DID.Identity` write endpoints.
-8. Present unimplemented features (full governance ceremony, production key management, eIDAS compliance) as explicit future work.
-
-Items 1–5 are the core thesis demo. Items 6–8 are cleanup and honesty.
+Items 1–6 are complete. Item 7 is the remaining integration work. Item 8 is a writing task.

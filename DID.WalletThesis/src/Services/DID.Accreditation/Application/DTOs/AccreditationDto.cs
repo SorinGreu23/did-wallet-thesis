@@ -29,8 +29,7 @@ public record IssueAccreditationRequest(
     string? Name,
     string? ParentAccreditationId,
     string? PermissionsHash = null,
-    DateTime? ExpiresAt = null,
-    string? IssuerPrivateKey = null
+    DateTime? ExpiresAt = null
 );
 
 public record RevokeAccreditationRequest(
