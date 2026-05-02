@@ -25,7 +25,7 @@ import { AccreditationVerification } from '../../core/models/accreditation.model
 @Component({
   selector: 'app-ministries',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, RouterLink, DatePipe, BreadcrumbComponent, EmptyStateComponent, TxBadgeComponent, AccreditationDetailPanelComponent],
+  imports: [ReactiveFormsModule, DatePipe, BreadcrumbComponent, EmptyStateComponent, TxBadgeComponent, AccreditationDetailPanelComponent],
   templateUrl: './ministries.component.html',
 })
 export class MinistriesComponent implements OnInit {

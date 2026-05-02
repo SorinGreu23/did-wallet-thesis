@@ -24,7 +24,6 @@ import { RegisteredIdentity } from '../../core/models/did.model';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ReactiveFormsModule,
-    RouterLink,
     DatePipe,
     BreadcrumbComponent,
     EmptyStateComponent,

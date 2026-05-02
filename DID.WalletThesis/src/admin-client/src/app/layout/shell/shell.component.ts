@@ -24,6 +24,11 @@ export class ShellComponent {
     return this.auth.hasScope(minimumScope);
   }
 
+  isScope(...scopes: string[]): boolean {
+    const current = this.auth.scope();
+    return current !== null && scopes.includes(current);
+  }
+
   scopeLabel(): string {
     const scope = this.auth.scope();
     if (!scope) return '';

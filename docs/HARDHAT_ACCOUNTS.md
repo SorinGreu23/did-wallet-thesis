@@ -64,4 +64,4 @@
 |------------|---------|-----------|---------|
 | UAIC       | Romania | #7 | `0x14dC79964da2C08b23698B3D3cc7Ca32193d9955` |
 | Sapienza   | Italy   | #8 | `0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f` |
-| Cambridge University | Greece | #9 | `0xa0Ee7A142d267C1f36714E4a8F75612F20a79720` |
+| Cambridge University | UK | #9 | `0xa0Ee7A142d267C1f36714E4a8F75612F20a79720` |
