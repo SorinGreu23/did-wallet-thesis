@@ -55,23 +55,24 @@ All tests should pass with >90% coverage. Tests validate:
 
 ## Deploy
 
-### Local Development (Hardhat Network)
+### Local Development (Foundry Anvil)
 
-Run a one-shot local deployment without starting a node:
-
-```bash
-npm run deploy:local
-```
-
-### Localhost Node Deployment (Persistent Chain)
+Deploy using the Foundry container from the repo root:
 
 ```bash
-# Terminal 1: Start local blockchain
-npm run node
-
-# Terminal 2: Deploy contracts
-npm run deploy:localhost
+docker run --rm -it \
+  --entrypoint forge \
+  --network did-infra \
+  -v "$PWD:/workspace" \
+  -w /workspace/blockchain \
+  ghcr.io/foundry-rs/foundry:latest \
+  script script/Deploy.s.sol \
+    --rpc-url http://foundry:8545 \
+    --broadcast \
+    --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ```
+
+Anvil state is persisted in the `foundry_data` Docker volume. Redeployment is only needed after `docker compose ... down -v`.
 
 ### Sepolia Testnet
 

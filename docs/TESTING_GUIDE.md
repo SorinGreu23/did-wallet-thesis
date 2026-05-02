@@ -16,11 +16,20 @@
 # From repo root
 docker compose -f docker-compose.infra.yml up -d
 
-# Wait ~10s for Hardhat to start, then deploy contracts
-cd blockchain && npx hardhat run scripts/deploy.ts --network localhost
+# Deploy only if starting from a fresh Anvil state
+docker run --rm -it \
+  --entrypoint forge \
+  --network did-infra \
+  -v "$PWD:/workspace" \
+  -w /workspace/blockchain \
+  ghcr.io/foundry-rs/foundry:latest \
+  script script/Deploy.s.sol \
+    --rpc-url http://foundry:8545 \
+    --broadcast \
+    --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ```
 
-This deploys the three smart contracts and bootstraps Romania ("RO") as a member state.
+This deploys the three smart contracts and bootstraps Romania ("RO") as the initial member state. Foundry Anvil persists the local chain state in Docker volume `foundry_data`, so redeployment is not required after normal container restarts.
 
 ## 2. Start the Accreditation Service
 
@@ -44,9 +53,9 @@ Runs on `http://localhost:4200`. The proxy routes `/api/*` to the backend automa
 
 ## 5. Test Admin Client Auth + RBAC
 
-### Hardhat Test Accounts
+### Foundry Anvil Test Accounts
 
-The Hardhat local node provides deterministic accounts:
+Foundry Anvil provides deterministic local development accounts:
 
 | Role | Account # | Address | Private Key |
 |------|-----------|---------|-------------|
@@ -100,7 +109,7 @@ As EU Root:
 ## 6. Test the Mobile Wallet
 
 ```bash
-cd mobile-wallet
+cd DID.WalletThesis/src/mobile-wallet
 npm install
 npx expo start --ios
 ```
@@ -151,7 +160,8 @@ curl -s http://localhost:5211/api/accreditations/{accreditationId}/verify | jq .
 | Problem | Solution |
 |---------|----------|
 | `Connection refused` on port 5211 | Accreditation service not running — check `dotnet run` output |
-| `eth_call` errors | Hardhat container not running — `docker compose -f docker-compose.infra.yml up -d` |
+| `eth_call` errors | Foundry Anvil container not running — `docker compose -f docker-compose.infra.yml up -d foundry` |
+| Contract code is `0x` | Contracts are not deployed on the current Anvil state. Deploy with `forge script`, or check that `foundry_data` was not deleted. |
 | `relation does not exist` | Postgres not initialised — destroy and recreate infra: `docker compose -f docker-compose.infra.yml down -v && docker compose -f docker-compose.infra.yml up -d` |
 | Login returns 403 | The DID has no on-chain accreditation — use an account that was accredited |
 | Angular shows blank page | Check browser console — likely a proxy or CORS issue |

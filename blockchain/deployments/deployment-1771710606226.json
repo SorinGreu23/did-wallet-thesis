@@ -1,5 +1,5 @@
 {
-  "network": "hardhat",
+  "network": "anvil",
   "chainId": "31337",
   "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
   "deployedAt": "2026-02-21T21:50:06.225Z",

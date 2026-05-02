@@ -1,4 +1,4 @@
-# Hardhat Accounts Reference
+# Foundry Anvil Accounts Reference
 
 > Mnemonic: `test test test test test test test test test test test junk`
 > Path: `m/44'/60'/0'/0` · Chain ID: `31337`

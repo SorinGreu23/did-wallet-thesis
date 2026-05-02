@@ -7,9 +7,9 @@ A blockchain-anchored, privacy-preserving digital identity prototype demonstrati
 ## Architecture
 
 ```
-                        ┌──────────────────────────┐
-                        │   Ethereum (Hardhat /     │
-                        │       Sepolia)            │
+                        ┌───────────────────────────┐
+                        │    Ethereum (Foundry      │
+                        │    Anvil / Sepolia)       │
                         │                           │
                         │  EURootAuthority.sol      │
                         │  AccreditationRegistry.sol│
@@ -91,7 +91,7 @@ The relying-party interface for banks, employers, and academic institutions. Val
 
 ## Smart Contracts
 
-Deployed on local Hardhat (deterministic addresses):
+Deployed on local Foundry Anvil with deterministic development addresses:
 
 | Contract | Address | Purpose |
 |----------|---------|---------|
@@ -125,10 +125,12 @@ The JWT contains the DID's on-chain scope (`EURoot`, `MemberState`, `Ministry`, 
 
 ```
 did-wallet-thesis/
-├── blockchain/                         # Smart contracts, deploy scripts, ABIs
+├── blockchain/                         # Smart contracts, Foundry scripts, ABIs
 │   ├── contracts/                      # Solidity sources
-│   ├── scripts/deploy.ts              # Deployment + bootstrap
-│   └── abis/                          # Exported ABIs for services
+│   ├── script/Deploy.s.sol             # Foundry deployment script
+│   ├── abis/                           # Exported ABIs for services
+│   ├── foundry.toml                    # Foundry configuration
+│   └── export-abis.js                  # ABI export helper
 ├── DID.WalletThesis/
 │   └── src/
 │       ├── admin-client/              # Angular 21 accreditation platform
@@ -136,6 +138,12 @@ did-wallet-thesis/
 │       │       ├── core/auth/         # DID-Auth service, guards, interceptor
 │       │       ├── features/          # member-states, ministries, universities, login
 │       │       └── shared/            # Reusable components
+│       ├── mobile-wallet/              # React Native/Expo mobile app
+│       │   └── src/
+│       │       ├── agents/veramoAgent.ts      # Veramo agent (DID, keys, credentials)
+│       │       ├── context/AuthContext.tsx     # Auth state + wallet creation
+│       │       ├── screens/                   # WelcomeScreen, HomeScreen, etc.
+│       │       └── services/                  # DID, credential, auth, wallet services
 │       ├── Services/
 │       │   ├── DID.Accreditation/     # Accreditation API + auth endpoints
 │       │   ├── DID.BlockchainSync/    # Event polling + RabbitMQ publisher
@@ -146,13 +154,7 @@ did-wallet-thesis/
 │       │   ├── DID.Shared.Application/# Interfaces (IBlockchainService, IEventBus)
 │       │   └── DID.Shared.Infrastructure/ # Nethereum, MassTransit, EF Core
 │       └── Contracts/DID.Contracts/   # RabbitMQ event DTOs
-├── mobile-wallet/                     # React Native/Expo mobile app
-│   └── src/
-│       ├── agents/veramoAgent.ts      # Veramo agent (DID, keys, credentials)
-│       ├── context/AuthContext.tsx     # Auth state + wallet creation
-│       ├── screens/                   # WelcomeScreen, HomeScreen, etc.
-│       └── services/                  # DID, credential, auth, wallet services
-├── docker-compose.infra.yml           # PostgreSQL, RabbitMQ, Hardhat
+├── docker-compose.infra.yml           # PostgreSQL, RabbitMQ, Foundry Anvil
 ├── docker-compose.services.yml        # Microservice containers
 ├── TESTING_GUIDE.md                   # Step-by-step testing instructions
 └── CLAUDE.md                          # AI coding assistant instructions
@@ -170,10 +172,30 @@ did-wallet-thesis/
 ### 1. Infrastructure
 
 ```bash
+# Start persistent infrastructure: Postgres, RabbitMQ, Foundry Anvil
 docker compose -f docker-compose.infra.yml up -d
-cd blockchain && npx hardhat run scripts/deploy.ts --network localhost
-docker exec did-postgres psql -U did_user -d postgres -c "CREATE DATABASE did_accreditation;"
+
+# Deploy contracts only when starting from a fresh Anvil state
+docker run --rm -it \
+  --entrypoint forge \
+  --network did-infra \
+  -v "$PWD:/workspace" \
+  -w /workspace/blockchain \
+  ghcr.io/foundry-rs/foundry:latest \
+  script script/Deploy.s.sol \
+    --rpc-url http://foundry:8545 \
+    --broadcast \
+    --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+
+# Export ABIs for .NET services
+docker run --rm -it \
+  -v "$PWD:/workspace" \
+  -w /workspace/blockchain \
+  node:20-alpine \
+  node export-abis.js
 ```
+
+> **Note:** Foundry Anvil persists local blockchain state in the `foundry_data` Docker volume. Do not run `docker compose -f docker-compose.infra.yml down -v` unless you intentionally want to wipe the local chain, Postgres, and RabbitMQ data.
 
 ### 2. Accreditation Platform
 
@@ -185,7 +207,7 @@ cd DID.WalletThesis && dotnet run --project src/Services/DID.Accreditation
 cd DID.WalletThesis/src/admin-client && npm install && npm start
 ```
 
-Open `http://localhost:4200` and sign in with a Hardhat account private key.
+Open `http://localhost:4200` and sign in with one of the default Foundry Anvil development private keys.
 
 ### 3. Mobile Wallet
 

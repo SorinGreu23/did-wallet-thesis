@@ -28,7 +28,7 @@ export interface AccreditationRecord {
 
 class AccreditationLookupService {
   private getContract(): Contract {
-    const provider = new JsonRpcProvider(CONFIG.HARDHAT_RPC_URL);
+    const provider = new JsonRpcProvider(CONFIG.ANVIL_RPC_URL);
     return new Contract(
       deploymentInfo.contracts.AccreditationRegistry.address,
       AccreditationRegistryAbi,

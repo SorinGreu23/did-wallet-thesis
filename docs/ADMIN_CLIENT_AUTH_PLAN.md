@@ -1,7 +1,7 @@
 # Admin Client — Authentication & Security Development Plan
 
 > Scope: EU Decentralized Digital Identity Accreditation Platform
-> Stack: Angular 21 · .NET 10 FastEndpoints · Ethereum (Hardhat/Sepolia) · DID:ethr
+> Stack: Angular 21 · .NET 10 FastEndpoints · Ethereum (Foundry Anvil/Sepolia) · DID:ethr
 > Principle: **Blockchain is the source of truth — not microservices.**
 
 ---
@@ -71,7 +71,7 @@ These principles derive from the thesis claim that blockchain replaces centraliz
 ```
 ┌─────────────┐                 ┌───────────────────┐              ┌──────────────┐
 │ Admin Client │                 │ Accreditation API  │              │  Blockchain  │
-│  (Angular)   │                 │     (.NET 10)      │              │  (Hardhat)   │
+│  (Angular)   │                 │     (.NET 10)      │              │  (Anvil)     │
 └──────┬───────┘                 └────────┬───────────┘              └──────┬───────┘
        │                                  │                                 │
        │  1. POST /api/auth/challenge     │                                 │

@@ -76,8 +76,8 @@ function patchDataSource(ds: DataSource): void {
 const NETWORKS = [
   {
     name: "sepolia",
-    chainId: CONFIG.HARDHAT_CHAIN_ID,
-    rpcUrl: CONFIG.HARDHAT_RPC_URL,
+    chainId: CONFIG.ANVIL_CHAIN_ID,
+    rpcUrl: CONFIG.ANVIL_RPC_URL,
   },
 ];
 

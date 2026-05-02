@@ -100,7 +100,7 @@ Companion to [PROMPT_ANSWERS.md](PROMPT_ANSWERS.md). All design decisions refere
   - `BusinessRegistry` may be issued only by `MemberState`-scoped issuers.
   - `Enterprise` may be issued only by `BusinessRegistry`-scoped issuers.
 - `validateTrustChain` requires no changes — it is scope-agnostic.
-- Add a deployment script `scripts/bootstrap-business-registry.ts` that, after the existing deployment, issues one `BusinessRegistry` accreditation per active member state to a designated test wallet (Hardhat account #10, #11, …; document in `docs/HARDHAT_ACCOUNTS.md`).
+- Add a deployment script `scripts/bootstrap-business-registry.ts` that, after the existing deployment, issues one `BusinessRegistry` accreditation per active member state to a designated test wallet (Anvil account #10, #11, …; document in `docs/TEST_ACCOUNTS.md`).
 - Update `blockchain/abis/AccreditationRegistry.json` and re-run the existing typechain pipeline.
 - New unit tests in `blockchain/test/AccreditationRegistry.test.ts`:
   - Reject `Enterprise` issuance from a `Ministry`-scoped issuer.
@@ -141,7 +141,7 @@ contract ZkpVerifierRegistry {
 
 ### B.4 Acceptance for Phase B
 
-- Hardhat tests pass for the extended `AccreditationRegistry`.
+- Foundry tests pass for the extended `AccreditationRegistry`.
 - `ZkpVerifierRegistry` deploys, registers all 3 circuits, returns matching hashes.
 - Local end-to-end: a wallet can fetch a vKey from its bundled assets, hash it, and successfully assert equality with the on-chain hash.
 
@@ -319,7 +319,7 @@ Decision rules in the verifier app:
 
 On Approve → issues `BachelorStudentCard` VC + on-chain hash.
 
-**Acceptance:** end-to-end happy path on local Hardhat with two devices (or one device + a simulator), including the on-chain credential record visible via `CredentialRegistry`.
+**Acceptance:** end-to-end happy path on local Foundry Anvil with two devices (or one device + a simulator), including the on-chain credential record visible via `CredentialRegistry`.
 
 ### D.3 Use case 2 — Master's application
 
@@ -347,7 +347,7 @@ Documented as a non-shipping placeholder in the wallet to demonstrate composabil
 
 ### D.7 Acceptance for Phase D
 
-- All four implemented use cases (D.2, D.3, D.4, D.5) complete on local Hardhat.
+- All four implemented use cases (D.2, D.3, D.4, D.5) complete on local Foundry Anvil.
 - All ZKP proofs verify on-device with on-chain vKey hash check.
 - Issued student/employee cards appear in the holder's Wallet tab and in `CredentialRegistry`.
 - No private inputs leave the device at any point.
@@ -381,7 +381,7 @@ Phase A, B, C are largely parallelizable; A depends on C only at the moment the 
 
 - A standalone web-based verifier portal (the plan keeps verification inside the mobile app for all account types).
 - Production-grade OCR / passport-MRZ parsing for the foreign-ID flow.
-- Cross-chain bridging or migration to Sepolia (local Hardhat only for the thesis demo).
+- Cross-chain bridging or migration to Sepolia (local Foundry Anvil only for the thesis demo).
 - Real VIES integration.
 - The future `incomeRange` circuit (scaffolded only).
 
