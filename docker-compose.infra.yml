@@ -150,6 +150,18 @@ services:
     profiles:
       - tools
 
+  contract-tester:
+    image: ghcr.io/foundry-rs/foundry:latest
+    container_name: did-contract-tester
+    entrypoint: forge
+    working_dir: /workspace/blockchain
+    volumes:
+      - .:/workspace
+    command:
+      - test
+    profiles:
+      - tools
+
 volumes:
   postgres_data:
   rabbitmq_data:
