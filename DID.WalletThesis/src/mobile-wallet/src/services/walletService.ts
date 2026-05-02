@@ -11,6 +11,17 @@ class WalletService {
     return didService.resolveDID(did);
   }
 
+  /** Returns true if the given DID is the wallet's primary identity. */
+  async isActiveDid(did: string): Promise<boolean> {
+    const identity = await didService.getOrCreateIdentity();
+    return identity.did === did;
+  }
+
+  /** No-op: with a single-identity wallet there is only one active DID. */
+  async setActiveDid(_did: string): Promise<void> {
+    // single-identity model — nothing to switch
+  }
+
   async listCredentials() {
     return credentialService.listCredentials();
   }

@@ -47,3 +47,14 @@ CLAUDE.md
 **/appsettings.*.json
 !**/appsettings.json
 !**/appsettings.Development.json
+
+# Foundry generated files
+blockchain/out/
+blockchain/cache/
+blockchain/broadcast/
+
+# Local Anvil state
+blockchain/.anvil/
+
+# Node dependencies
+blockchain/node_modules/

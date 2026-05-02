@@ -42,7 +42,7 @@ services:
       RabbitMQ__Host: rabbitmq
       RabbitMQ__Username: did_user
       RabbitMQ__Password: did_password
-      Blockchain__RpcUrl: "http://hardhat:8545"
+      Blockchain__RpcUrl: "http://foundry:8545"
       Blockchain__BrowserRpcUrl: "http://localhost:8545"
       Blockchain__AbisDirectory: /app/abis
       Blockchain__Contracts__AccreditationRegistry: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
@@ -67,7 +67,7 @@ services:
       RabbitMQ__Host: rabbitmq
       RabbitMQ__Username: did_user
       RabbitMQ__Password: did_password
-      Blockchain__RpcUrl: "http://hardhat:8545"
+      Blockchain__RpcUrl: "http://foundry:8545"
       Blockchain__AbisDirectory: /app/abis
       Blockchain__Contracts__AccreditationRegistry: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
       Blockchain__Contracts__CredentialRegistry: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
@@ -90,7 +90,7 @@ services:
       RabbitMQ__Host: rabbitmq
       RabbitMQ__Username: did_user
       RabbitMQ__Password: did_password
-      Blockchain__RpcUrl: "http://hardhat:8545"
+      Blockchain__RpcUrl: "http://foundry:8545"
       Blockchain__AbisDirectory: /app/abis
       Blockchain__Contracts__CredentialRegistry: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
     ports:
@@ -120,7 +120,7 @@ services:
 
   zkp-service:
     build:
-      context: ./zkp-service
+      context: ./DID.WalletThesis/src/zkp-service
     container_name: did-zkp-service
     environment:
       PORT: "3000"
@@ -141,7 +141,7 @@ services:
       RabbitMQ__Host: rabbitmq
       RabbitMQ__Username: did_user
       RabbitMQ__Password: did_password
-      Blockchain__RpcUrl: "http://hardhat:8545"
+      Blockchain__RpcUrl: "http://foundry:8545"
       Blockchain__AbisDirectory: /app/abis
       Blockchain__Contracts__CredentialRegistry: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
       ZkpService__BaseUrl: "http://did-zkp-service:3000"

@@ -61,13 +61,13 @@ function patchDataSource(ds: DataSource): void {
       query: string,
       parameters?: any[],
       useStructuredResult?: boolean,
-    ) {
+    ): Promise<any> {
       if (isTxControl(query)) {
         return useStructuredResult
           ? { records: [], affected: 0, raw: [] }
           : [];
       }
-      return origQuery(query, parameters, useStructuredResult);
+      return origQuery(query, parameters, useStructuredResult as true);
     };
     return qr;
   };

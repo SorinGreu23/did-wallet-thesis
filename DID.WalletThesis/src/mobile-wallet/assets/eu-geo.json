@@ -1,0 +1,112 @@
+{
+  "countries": [
+    {
+      "code": "AT", "name": "Austria",
+      "regions": ["Burgenland","Carinthia","Lower Austria","Salzburg","Styria","Tyrol","Upper Austria","Vienna","Vorarlberg"]
+    },
+    {
+      "code": "BE", "name": "Belgium",
+      "regions": ["Brussels","Flemish Region","Walloon Region"]
+    },
+    {
+      "code": "BG", "name": "Bulgaria",
+      "regions": ["Blagoevgrad","Burgas","Dobrich","Gabrovo","Haskovo","Kardzhali","Kyustendil","Lovech","Montana","Pazardzhik","Pernik","Pleven","Plovdiv","Razgrad","Ruse","Shumen","Silistra","Sliven","Smolyan","Sofia City","Sofia","Stara Zagora","Targovishte","Varna","Veliko Tarnovo","Vidin","Vratsa","Yambol"]
+    },
+    {
+      "code": "CY", "name": "Cyprus",
+      "regions": ["Nicosia","Limassol","Larnaca","Famagusta","Paphos","Kyrenia"]
+    },
+    {
+      "code": "CZ", "name": "Czechia",
+      "regions": ["Bohemia","Moravia","Silesia"]
+    },
+    {
+      "code": "DE", "name": "Germany",
+      "regions": ["Baden-Württemberg","Bavaria","Berlin","Brandenburg","Bremen","Hamburg","Hesse","Lower Saxony","Mecklenburg-Vorpommern","North Rhine-Westphalia","Rhineland-Palatinate","Saarland","Saxony","Saxony-Anhalt","Schleswig-Holstein","Thuringia"]
+    },
+    {
+      "code": "DK", "name": "Denmark",
+      "regions": ["Capital","Central Jutland","North Jutland","Southern Denmark","Zealand"]
+    },
+    {
+      "code": "EE", "name": "Estonia",
+      "regions": ["Harju","Hiiu","Ida-Viru","Järva","Jõgeva","Lääne","Lääne-Viru","Põlva","Pärnu","Rapla","Saare","Tartu","Valga","Viljandi","Võru"]
+    },
+    {
+      "code": "ES", "name": "Spain",
+      "regions": ["Andalusia","Aragon","Asturias","Balearic Islands","Basque Country","Canary Islands","Cantabria","Castile and León","Castilla–La Mancha","Catalonia","Extremadura","Galicia","La Rioja","Madrid","Murcia","Navarra","Valencia"]
+    },
+    {
+      "code": "FI", "name": "Finland",
+      "regions": ["Åland","Central Finland","Central Ostrobothnia","Kainuu","Kymenlaakso","Lapland","North Karelia","North Ostrobothnia","North Savo","Ostrobothnia","Päijänne Tavastia","Pirkanmaa","Satakunta","South Karelia","South Ostrobothnia","South Savo","Southwest Finland","Tavastia Proper","Uusimaa"]
+    },
+    {
+      "code": "FR", "name": "France",
+      "regions": ["Auvergne-Rhône-Alpes","Bourgogne-Franche-Comté","Bretagne","Centre-Val de Loire","Corse","Grand Est","Hauts-de-France","Île-de-France","Normandie","Nouvelle-Aquitaine","Occitanie","Pays de la Loire","Provence-Alpes-Côte d'Azur"]
+    },
+    {
+      "code": "GR", "name": "Greece",
+      "regions": ["Attica","Central Greece","Central Macedonia","Crete","Eastern Macedonia and Thrace","Epirus","Ionian Islands","North Aegean","Peloponnese","South Aegean","Thessaly","Western Greece","Western Macedonia"]
+    },
+    {
+      "code": "HR", "name": "Croatia",
+      "regions": ["Bjelovar-Bilogora","Brod-Posavina","Dubrovnik-Neretva","Istria","Karlovac","Koprivnica-Križevci","Krapina-Zagorje","Lika-Senj","Međimurje","Osijek-Baranja","Požega-Slavonia","Primorje-Gorski Kotar","Šibenik-Knin","Sisak-Moslavina","Split-Dalmatia","Varaždin","Virovitica-Podravina","Vukovar-Syrmia","Zadar","Zagreb County","Zagreb City"]
+    },
+    {
+      "code": "HU", "name": "Hungary",
+      "regions": ["Baranya","Bács-Kiskun","Békés","Borsod-Abaúj-Zemplén","Budapest","Csongrád-Csanád","Fejér","Győr-Moson-Sopron","Hajdú-Bihar","Heves","Jász-Nagykun-Szolnok","Komárom-Esztergom","Nógrád","Pest","Somogy","Szabolcs-Szatmár-Bereg","Tolna","Vas","Veszprém","Zala"]
+    },
+    {
+      "code": "IE", "name": "Ireland",
+      "regions": ["Connacht","Leinster","Munster","Ulster (ROI)"]
+    },
+    {
+      "code": "IT", "name": "Italy",
+      "regions": ["Abruzzo","Aosta Valley","Apulia","Basilicata","Calabria","Campania","Emilia-Romagna","Friuli-Venezia Giulia","Lazio","Liguria","Lombardy","Marche","Molise","Piedmont","Sardinia","Sicily","Trentino-South Tyrol","Tuscany","Umbria","Veneto"]
+    },
+    {
+      "code": "LT", "name": "Lithuania",
+      "regions": ["Alytus","Kaunas","Klaipėda","Marijampolė","Panevėžys","Šiauliai","Tauragė","Telšiai","Utena","Vilnius"]
+    },
+    {
+      "code": "LU", "name": "Luxembourg",
+      "regions": ["Capellen","Clervaux","Diekirch","Echternach","Esch-sur-Alzette","Grevenmacher","Luxembourg","Mersch","Redange","Remich","Vianden","Wiltz"]
+    },
+    {
+      "code": "LV", "name": "Latvia",
+      "regions": ["Ādaži","Aizkraukle","Alūksne","Augšdaugava","Bauska","Cēsis","Daugavpils","Dobele","Gulbene","Jēkabpils","Jelgava","Jūrmala","Krāslava","Kuldīga","Ķekava","Limbaži","Līvāni","Ludza","Madona","Mārupe","Ogre","Olaine","Preiļi","Rēzekne","Riga","Ropaži","Saldus","Saulkrasti","Sigulda","Smiltene","Talsi","Tukums","Valmiera","Varakļāni","Ventspils"]
+    },
+    {
+      "code": "MT", "name": "Malta",
+      "regions": ["Gozo","Malta"]
+    },
+    {
+      "code": "NL", "name": "Netherlands",
+      "regions": ["Drenthe","Flevoland","Friesland","Gelderland","Groningen","Limburg","North Brabant","North Holland","Overijssel","South Holland","Utrecht","Zeeland"]
+    },
+    {
+      "code": "PL", "name": "Poland",
+      "regions": ["Greater Poland","Holy Cross","Kuyavia-Pomerania","Lesser Poland","Łódź","Lower Silesia","Lublin","Lubusz","Masovian","Opole","Podlaskie","Pomerania","Silesia","Subcarpathia","Warmia-Mazuria","West Pomerania"]
+    },
+    {
+      "code": "PT", "name": "Portugal",
+      "regions": ["Açores","Alentejo","Algarve","Centro","Lisboa","Norte","Madeira"]
+    },
+    {
+      "code": "RO", "name": "Romania",
+      "regions": ["Alba","Arad","Argeș","Bacău","Bihor","Bistrița-Năsăud","Botoșani","Brăila","Brașov","Bucharest","Buzău","Călărași","Caraș-Severin","Cluj","Constanța","Covasna","Dâmbovița","Dolj","Galați","Giurgiu","Gorj","Harghita","Hunedoara","Ialomița","Iași","Ilfov","Maramureș","Mehedinți","Mureș","Neamț","Olt","Prahova","Satu Mare","Sălaj","Sibiu","Suceava","Teleorman","Timiș","Tulcea","Vâlcea","Vaslui","Vrancea"]
+    },
+    {
+      "code": "SE", "name": "Sweden",
+      "regions": ["Blekinge","Dalarna","Gävleborg","Gotland","Halland","Jämtland","Jönköping","Kalmar","Kronoberg","Norrbotten","Örebro","Östergötland","Skåne","Södermanland","Stockholm","Uppsala","Värmland","Västerbotten","Västernorrland","Västmanland","Västra Götaland"]
+    },
+    {
+      "code": "SI", "name": "Slovenia",
+      "regions": ["Central Slovenia","Coastal–Karst","Drava","Gorenjska","Posavje","Savinja","Southeastern Slovenia","Zasavje"]
+    },
+    {
+      "code": "SK", "name": "Slovakia",
+      "regions": ["Banská Bystrica","Bratislava","Košice","Nitra","Prešov","Trenčín","Trnava","Žilina"]
+    }
+  ]
+}

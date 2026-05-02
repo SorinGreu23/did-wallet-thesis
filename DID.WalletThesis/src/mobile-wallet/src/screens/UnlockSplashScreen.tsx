@@ -5,13 +5,16 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import * as LocalAuthentication from "expo-local-authentication";
 import { DARK_COLORS, LIGHT_COLORS, useTheme } from "../context/ThemeContext";
-import authService, { UserProfile } from "../services/authService";
+import authService from "../services/authService";
+import pinService from "../services/pinService";
+import { WalletProfile } from "../types/wallet";
 
 interface UnlockSplashScreenProps {
   onAuthenticated: () => void;
@@ -21,8 +24,10 @@ export default function UnlockSplashScreen({ onAuthenticated }: UnlockSplashScre
   const { colors, themeAnim } = useTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profile, setProfile] = useState<WalletProfile | null>(null);
   const [biometricLabel, setBiometricLabel] = useState("Face ID");
+  const [showPinFallback, setShowPinFallback] = useState(false);
+  const [pin, setPin] = useState("");
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateAnim = useRef(new Animated.Value(28)).current;
@@ -72,7 +77,7 @@ export default function UnlockSplashScreen({ onAuthenticated }: UnlockSplashScre
   }, []);
 
   const loadProfile = async () => {
-    const storedProfile = await authService.getProfile();
+    const storedProfile = await authService.getWalletProfile();
     setProfile(storedProfile);
   };
 
@@ -106,7 +111,6 @@ export default function UnlockSplashScreen({ onAuthenticated }: UnlockSplashScre
       if (hasHardware && isEnrolled) {
         const result = await LocalAuthentication.authenticateAsync({
           promptMessage: "Unlock your EU Identity Wallet",
-          subtitle: "Verify your identity to continue",
           fallbackLabel: "Use passcode",
           cancelLabel: "Not now",
           disableDeviceFallback: false,
@@ -114,18 +118,61 @@ export default function UnlockSplashScreen({ onAuthenticated }: UnlockSplashScre
 
         if (!result.success) {
           if (result.error && result.error !== "user_cancel" && result.error !== "system_cancel") {
-            setError("Authentication did not complete. Try again.");
+            setError("Biometric check did not complete.");
           }
+          // Fall through to PIN
+          setShowPinFallback(true);
           return;
         }
+      } else {
+        // No biometrics available — go straight to PIN
+        setShowPinFallback(true);
+        return;
       }
 
       await authService.setSessionActive();
       onAuthenticated();
     } catch (e: any) {
       setError(e?.message || "Failed to unlock wallet");
+      setShowPinFallback(true);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePinDigit = async (digit: string) => {
+    const next = digit === "⌫" ? pin.slice(0, -1) : pin.length < 6 ? pin + digit : pin;
+    setPin(next);
+    if (next.length === 6) {
+      setLoading(true);
+      setError(null);
+      try {
+        const status = await pinService.getStatus();
+        if (status.isLocked) {
+          const remaining = Math.ceil(((status.lockedUntil ?? 0) - Date.now()) / 1000);
+          setError(`Too many attempts. Try again in ${remaining}s.`);
+          setPin("");
+          return;
+        }
+        const correct = await pinService.verifyPin(next);
+        if (correct) {
+          await authService.setSessionActive();
+          onAuthenticated();
+        } else {
+          const updated = await pinService.getStatus();
+          if (updated.offerWipe) {
+            setError("Too many wrong PINs. Consider wiping and re-registering.");
+          } else {
+            setError("Incorrect PIN. Try again.");
+          }
+          setPin("");
+        }
+      } catch (e: any) {
+        setError(e?.message || "PIN check failed.");
+        setPin("");
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -160,17 +207,23 @@ export default function UnlockSplashScreen({ onAuthenticated }: UnlockSplashScre
         </Animated.View>
 
         <Text style={[styles.eyebrow, { color: colors.primary }]}>SECURE ACCESS</Text>
-        <Text style={[styles.title, { color: colors.text }]}>Welcome back{profile?.firstName ? `, ${profile.firstName}` : ""}</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Welcome back{profile ? `, ${profile.accountType === 'personal' ? profile.firstName : profile.legalName}` : ""}</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Use {biometricLabel} to continue to your EU Identity Wallet.</Text>
 
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
           <View style={styles.cardHeader}>
             <View style={[styles.cardIcon, { backgroundColor: colors.primaryLight }]}>
-              <Feather name="smartphone" size={18} color={colors.primary} />
+              <Feather name={showPinFallback ? "lock" : "smartphone"} size={18} color={colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.cardTitle, { color: colors.text }]}>Wallet protected</Text>
-              <Text style={[styles.cardBody, { color: colors.textSecondary }]}>Your keys stay on this device and remain locked until the biometric check passes.</Text>
+              <Text style={[styles.cardTitle, { color: colors.text }]}>
+                {showPinFallback ? "Enter PIN" : "Wallet protected"}
+              </Text>
+              <Text style={[styles.cardBody, { color: colors.textSecondary }]}>
+                {showPinFallback
+                  ? "Enter your 6-digit PIN to unlock."
+                  : "Your keys stay on this device and remain locked until the biometric check passes."}
+              </Text>
             </View>
           </View>
 
@@ -181,27 +234,67 @@ export default function UnlockSplashScreen({ onAuthenticated }: UnlockSplashScre
             </View>
           ) : null}
 
-          <TouchableOpacity
-            style={[styles.button, { backgroundColor: colors.primary }]}
-            onPress={() => void handleUnlock()}
-            disabled={loading}
-            activeOpacity={0.88}
-          >
-            {loading ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <>
-                <Feather
-                  name={biometricLabel === "Touch ID" ? "fingerprint" : "shield"}
-                  size={18}
-                  color="#ffffff"
-                />
-                <Text style={styles.buttonText}>Continue with {biometricLabel}</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          {showPinFallback ? (
+            <>
+              <View style={styles.pinDots}>
+                {[0,1,2,3,4,5].map((i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.pinDot,
+                      { backgroundColor: i < pin.length ? colors.primary : colors.border, borderColor: colors.border },
+                    ]}
+                  />
+                ))}
+              </View>
+              <View style={styles.keypadGrid}>
+                {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((d, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    style={[styles.keypadKey, d === '' && { opacity: 0 }, { backgroundColor: d ? colors.background : 'transparent', borderColor: colors.border }]}
+                    disabled={d === '' || loading}
+                    onPress={() => void handlePinDigit(d)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.keypadText, { color: colors.text }]}>{d}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity onPress={() => { setShowPinFallback(false); setPin(''); setError(null); }}>
+                <Text style={[styles.hint, { color: colors.primary, textAlign: 'center', marginTop: 8 }]}>
+                  Try biometrics instead
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: colors.primary }]}
+                onPress={() => void handleUnlock()}
+                disabled={loading}
+                activeOpacity={0.88}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <>
+                    <Feather
+                      name={biometricLabel === "Touch ID" ? "lock" : "shield"}
+                      size={18}
+                      color="#ffffff"
+                    />
+                    <Text style={styles.buttonText}>Continue with {biometricLabel}</Text>
+                  </>
+                )}
+              </TouchableOpacity>
 
-          <Text style={[styles.hint, { color: colors.textMuted }]}>If biometrics are unavailable, the device passcode fallback will be used automatically.</Text>
+              <TouchableOpacity onPress={() => { setShowPinFallback(true); setError(null); }}>
+                <Text style={[styles.hint, { color: colors.primary, textAlign: 'center', marginTop: 8 }]}>
+                  Use PIN instead
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </Animated.View>
     </Animated.View>
@@ -337,5 +430,35 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     textAlign: "center",
+  },
+  pinDots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 12,
+    marginVertical: 8,
+  },
+  pinDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 1,
+  },
+  keypadGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 10,
+  },
+  keypadKey: {
+    width: 72,
+    height: 56,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  keypadText: {
+    fontSize: 20,
+    fontWeight: "500",
   },
 });

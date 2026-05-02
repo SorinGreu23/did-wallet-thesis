@@ -201,13 +201,17 @@ export class MinistriesComponent implements OnInit {
     const selected = this.selected();
     if (!selected) return;
     this.revoking.set(true);
-    this.accreditationService.revoke(selected.accreditationId, selected.issuerDID).subscribe({
+    this.accreditationService.revokeViaClientWallet(selected.accreditationId, selected.issuerDID).subscribe({
       next: () => {
         this.revoking.set(false);
         this.load();
         this.verifySelected();
       },
       error: (err) => {
+        if (err?.message === 'SIGNER_LOST') {
+          this.auth.logout();
+          return;
+        }
         this.error.set(err?.error?.message ?? err?.message ?? 'Failed to revoke accreditation');
         this.revoking.set(false);
       },

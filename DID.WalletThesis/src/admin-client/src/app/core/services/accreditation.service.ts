@@ -60,9 +60,25 @@ export class AccreditationService {
     return this.http.get<AccreditationVerification>(`${this.baseUrl}/${accreditationId}/verify`);
   }
 
+  /** EU Root operations: backend holds the signing key and revokes directly on-chain. */
   revoke(accreditationId: string, revokedByDID: string): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/${accreditationId}`, {
       body: { revokedByDID },
     });
+  }
+
+  /**
+   * Non-EU-Root revokers (member states, ministries): the wallet signs and submits
+   * the revocation transaction entirely in the browser, then notifies the backend to persist.
+   */
+  revokeViaClientWallet(accreditationId: string, revokedByDID: string): Observable<void> {
+    return from(this.blockchainClient.revokeAccreditation(accreditationId)).pipe(
+      switchMap((txHash) =>
+        this.http.post<void>(`${this.baseUrl}/${accreditationId}/record-revoke`, {
+          txHash,
+          revokedByDID,
+        }),
+      ),
+    );
   }
 }

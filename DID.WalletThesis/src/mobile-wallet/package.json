@@ -13,6 +13,9 @@
     "@ethersproject/shims": "^5.8.0",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-navigation/bottom-tabs": "^7.15.11",
+    "@react-navigation/native": "^7.2.2",
+    "@react-navigation/native-stack": "^7.14.12",
     "@veramo/core": "^6.0.2",
     "@veramo/core-types": "^6.0.2",
     "@veramo/credential-eip712": "^6.0.2",
@@ -37,8 +40,12 @@
     "expo-status-bar": "~3.0.9",
     "key-did-resolver": "^4.0.0",
     "react": "19.1.0",
+    "react-hook-form": "^7.75.0",
     "react-native": "0.81.5",
+    "react-native-gesture-handler": "~2.28.0",
     "react-native-get-random-values": "^2.0.0",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0",
     "typeorm": "^0.3.28"
   },
   "devDependencies": {

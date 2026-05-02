@@ -4,13 +4,13 @@ import { StatusBar } from "expo-status-bar";
 import { ActivityIndicator, View, StyleSheet } from "react-native";
 import { ThemeProvider, useTheme } from "./src/context/ThemeContext";
 import { AuthProvider, useAuth } from "./src/context/AuthContext";
-import HomeScreen from "./src/screens/HomeScreen";
+import MainTabNavigator from "./src/screens/MainTabNavigator";
 import UnlockSplashScreen from "./src/screens/UnlockSplashScreen";
 import WelcomeScreen from "./src/screens/WelcomeScreen";
 
 function AppNavigator() {
   const { isDark, colors } = useTheme();
-  const { state, hasWallet, onAuthenticated } = useAuth();
+  const { state, hasWallet, onAuthenticated, signOut } = useAuth();
 
   if (state === "loading") {
     return (
@@ -23,7 +23,7 @@ function AppNavigator() {
   return (
     <>
       {state === "authenticated" ? (
-        <HomeScreen />
+        <MainTabNavigator onSignOut={signOut} />
       ) : hasWallet ? (
         <UnlockSplashScreen onAuthenticated={onAuthenticated} />
       ) : (

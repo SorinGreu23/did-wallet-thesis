@@ -82,6 +82,23 @@ class DIDService {
     const agent = getAgent();
     return agent.resolveDid({ didUrl: did });
   }
+
+  async getDID(did: string): Promise<DIDInfo> {
+    await this.initialize();
+    const agent = getAgent();
+    const id = await agent.didManagerGet({ did });
+    return {
+      did: id.did,
+      ethereumAddress: deriveEthereumAddress(id.did),
+      provider: id.provider,
+      alias: id.alias,
+      keys: id.keys.map((k) => ({
+        kid: k.kid,
+        type: k.type,
+        publicKeyHex: k.publicKeyHex,
+      })),
+    };
+  }
 }
 
 export default new DIDService();

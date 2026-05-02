@@ -165,9 +165,9 @@ contract AccreditationRegistry {
         if (!accred.exists) revert AccreditationNotFound();
         if (accred.revoked) revert AccreditationAlreadyRevoked();
 
-        // Only issuer or root authority can revoke
+        // Only the original issuer or the EU root owner can revoke
         require(
-            msg.sender == owner || rootAuthority.isMemberState(msg.sender),
+            msg.sender == owner || msg.sender == accred.issuer,
             "Unauthorized to revoke"
         );
 

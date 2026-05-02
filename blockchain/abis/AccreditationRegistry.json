@@ -1,1 +1,524 @@
-[{"type":"constructor","stateMutability":"undefined","payable":false,"inputs":[{"type":"address","name":"_rootAuthority"}]},{"type":"error","name":"AccreditationAlreadyExists","inputs":[]},{"type":"error","name":"AccreditationAlreadyRevoked","inputs":[]},{"type":"error","name":"AccreditationExpired","inputs":[]},{"type":"error","name":"AccreditationNotFound","inputs":[]},{"type":"error","name":"InvalidParentAccreditation","inputs":[]},{"type":"error","name":"InvalidScope","inputs":[]},{"type":"error","name":"InvalidTrustChain","inputs":[]},{"type":"error","name":"NotMemberState","inputs":[]},{"type":"error","name":"UnauthorizedIssuer","inputs":[]},{"type":"event","anonymous":false,"name":"AccreditationIssued","inputs":[{"type":"bytes32","name":"id","indexed":true},{"type":"address","name":"issuer","indexed":true},{"type":"address","name":"subject","indexed":true},{"type":"uint8","name":"scope","indexed":false},{"type":"bytes32","name":"parentAccreditationId","indexed":false}]},{"type":"event","anonymous":false,"name":"AccreditationRevoked","inputs":[{"type":"bytes32","name":"id","indexed":true},{"type":"address","name":"revokedBy","indexed":true},{"type":"uint256","name":"revokedAt","indexed":false}]},{"type":"event","anonymous":false,"name":"AccreditationUpdated","inputs":[{"type":"bytes32","name":"id","indexed":true},{"type":"bytes32","name":"newPermissionsHash","indexed":false}]},{"type":"function","name":"accreditations","constant":true,"stateMutability":"view","payable":false,"inputs":[{"type":"bytes32","name":""}],"outputs":[{"type":"bytes32","name":"id"},{"type":"address","name":"issuer"},{"type":"address","name":"subject"},{"type":"bytes32","name":"parentAccreditationId"},{"type":"uint8","name":"scope"},{"type":"bytes32","name":"permissionsHash"},{"type":"uint256","name":"issuedAt"},{"type":"uint256","name":"expiresAt"},{"type":"bool","name":"revoked"},{"type":"bool","name":"exists"}]},{"type":"function","name":"accreditationsByIssuer","constant":true,"stateMutability":"view","payable":false,"inputs":[{"type":"address","name":""},{"type":"uint256","name":""}],"outputs":[{"type":"bytes32","name":""}]},{"type":"function","name":"accreditationsBySubject","constant":true,"stateMutability":"view","payable":false,"inputs":[{"type":"address","name":""},{"type":"uint256","name":""}],"outputs":[{"type":"bytes32","name":""}]},{"type":"function","name":"getAccreditation","constant":true,"stateMutability":"view","payable":false,"inputs":[{"type":"bytes32","name":"accreditationId"}],"outputs":[{"type":"tuple","name":"","components":[{"type":"bytes32","name":"id"},{"type":"address","name":"issuer"},{"type":"address","name":"subject"},{"type":"bytes32","name":"parentAccreditationId"},{"type":"uint8","name":"scope"},{"type":"bytes32","name":"permissionsHash"},{"type":"uint256","name":"issuedAt"},{"type":"uint256","name":"expiresAt"},{"type":"bool","name":"revoked"},{"type":"bool","name":"exists"}]}]},{"type":"function","name":"getAccreditationsByIssuer","constant":true,"stateMutability":"view","payable":false,"inputs":[{"type":"address","name":"issuer"}],"outputs":[{"type":"bytes32[]","name":""}]},{"type":"function","name":"getAccreditationsBySubject","constant":true,"stateMutability":"view","payable":false,"inputs":[{"type":"address","name":"subject"}],"outputs":[{"type":"bytes32[]","name":""}]},{"type":"function","name":"getTrustChain","constant":true,"stateMutability":"view","payable":false,"inputs":[{"type":"bytes32","name":"accreditationId"}],"outputs":[{"type":"bytes32[]","name":""}]},{"type":"function","name":"hasValidAccreditation","constant":true,"stateMutability":"view","payable":false,"inputs":[{"type":"address","name":"subject"},{"type":"uint8","name":"scope"}],"outputs":[{"type":"bool","name":""}]},{"type":"function","name":"issueAccreditation","constant":false,"payable":false,"inputs":[{"type":"address","name":"subject"},{"type":"uint8","name":"scope"},{"type":"bytes32","name":"parentAccreditationId"},{"type":"bytes32","name":"permissionsHash"},{"type":"uint256","name":"expiresAt"}],"outputs":[{"type":"bytes32","name":""}]},{"type":"function","name":"owner","constant":true,"stateMutability":"view","payable":false,"inputs":[],"outputs":[{"type":"address","name":""}]},{"type":"function","name":"revokeAccreditation","constant":false,"payable":false,"inputs":[{"type":"bytes32","name":"accreditationId"}],"outputs":[]},{"type":"function","name":"rootAuthority","constant":true,"stateMutability":"view","payable":false,"inputs":[],"outputs":[{"type":"address","name":""}]},{"type":"function","name":"validAccreditations","constant":true,"stateMutability":"view","payable":false,"inputs":[{"type":"bytes32","name":""},{"type":"address","name":""}],"outputs":[{"type":"bool","name":""}]},{"type":"function","name":"validateTrustChain","constant":true,"stateMutability":"view","payable":false,"inputs":[{"type":"bytes32","name":"accreditationId"}],"outputs":[{"type":"bool","name":""}]}]
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "_rootAuthority",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "accreditations",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "id",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "issuer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "subject",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "parentAccreditationId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "scope",
+        "type": "uint8",
+        "internalType": "enum AccreditationRegistry.AccreditationScope"
+      },
+      {
+        "name": "permissionsHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "issuedAt",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "expiresAt",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "revoked",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "exists",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "accreditationsByIssuer",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "accreditationsBySubject",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getAccreditation",
+    "inputs": [
+      {
+        "name": "accreditationId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct AccreditationRegistry.Accreditation",
+        "components": [
+          {
+            "name": "id",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "issuer",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "subject",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "parentAccreditationId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "scope",
+            "type": "uint8",
+            "internalType": "enum AccreditationRegistry.AccreditationScope"
+          },
+          {
+            "name": "permissionsHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "issuedAt",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "expiresAt",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "revoked",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "exists",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getAccreditationsByIssuer",
+    "inputs": [
+      {
+        "name": "issuer",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getAccreditationsBySubject",
+    "inputs": [
+      {
+        "name": "subject",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getTrustChain",
+    "inputs": [
+      {
+        "name": "accreditationId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "hasValidAccreditation",
+    "inputs": [
+      {
+        "name": "subject",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "scope",
+        "type": "uint8",
+        "internalType": "enum AccreditationRegistry.AccreditationScope"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "issueAccreditation",
+    "inputs": [
+      {
+        "name": "subject",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "scope",
+        "type": "uint8",
+        "internalType": "enum AccreditationRegistry.AccreditationScope"
+      },
+      {
+        "name": "parentAccreditationId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "permissionsHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "expiresAt",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "owner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "revokeAccreditation",
+    "inputs": [
+      {
+        "name": "accreditationId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "rootAuthority",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract EURootAuthority"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "validAccreditations",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "validateTrustChain",
+    "inputs": [
+      {
+        "name": "accreditationId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "AccreditationIssued",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "issuer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "subject",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "scope",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "enum AccreditationRegistry.AccreditationScope"
+      },
+      {
+        "name": "parentAccreditationId",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "AccreditationRevoked",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "revokedBy",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "revokedAt",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "AccreditationUpdated",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "newPermissionsHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "AccreditationAlreadyExists",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AccreditationAlreadyRevoked",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AccreditationExpired",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AccreditationNotFound",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidParentAccreditation",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidScope",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidTrustChain",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotMemberState",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UnauthorizedIssuer",
+    "inputs": []
+  }
+]

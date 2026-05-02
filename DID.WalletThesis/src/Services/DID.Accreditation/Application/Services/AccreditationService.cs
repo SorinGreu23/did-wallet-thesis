@@ -193,8 +193,6 @@ public class AccreditationService(
     public async Task<bool> RevokeAsync(
         string accreditationId, string revokedByDid, CancellationToken ct = default)
     {
-        EnsureSignerMatchesIssuer(revokedByDid, signerAddress);
-
         var onChain = await GetOnChainAccreditationAsync(accreditationId);
         if (onChain is null || !onChain.Exists)
             return false;
@@ -207,6 +205,32 @@ public class AccreditationService(
         await blockchain.WaitForConfirmationAsync(txHash, ct);
 
         logger.LogInformation("Revoked accreditation {Id} on-chain in tx {TxHash}", accreditationId, txHash);
+        return true;
+    }
+
+    /// <summary>
+    /// Records a revocation whose on-chain transaction was signed and submitted
+    /// entirely by the caller's browser wallet. The private key never reaches the server.
+    /// </summary>
+    public async Task<bool> RevokeFromClientTxAsync(
+        string txHash, string accreditationId, string revokedByDid, CancellationToken ct = default)
+    {
+        var onChain = await GetOnChainAccreditationAsync(accreditationId);
+        if (onChain is null || !onChain.Exists)
+            return false;
+
+        await blockchain.WaitForConfirmationAsync(txHash, ct);
+
+        // Confirm the chain reflects the revocation
+        var updated = await GetOnChainAccreditationAsync(accreditationId);
+        if (updated is null || !updated.Revoked)
+            throw new InvalidOperationException(
+                $"Accreditation {accreditationId} is not revoked on-chain after tx {txHash}");
+
+        logger.LogInformation(
+            "Client-revoked accreditation {Id} on-chain in tx {TxHash}", accreditationId, txHash);
+
+        await RecordRevokedAsync(accreditationId, revokedByDid, 0, txHash, DateTime.UtcNow, ct);
         return true;
     }
 

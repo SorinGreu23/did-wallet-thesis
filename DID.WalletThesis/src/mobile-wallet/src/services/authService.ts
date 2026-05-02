@@ -1,20 +1,14 @@
 import * as SecureStore from "expo-secure-store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { randomUUID } from "expo-crypto";
+import { WalletProfile, AccountType } from "../types/wallet";
 
 const KEYS = {
   secretKey: "wallet.secretKey",
   walletCreated: "wallet.created",
   sessionActive: "wallet.sessionActive",
-  profileFirstName: "profile.firstName",
-  profileLastName: "profile.lastName",
-  profileEmail: "profile.email",
+  walletProfile: "wallet.profile",
 } as const;
-
-export interface UserProfile {
-  firstName: string;
-  lastName: string;
-  email: string;
-}
 
 /**
  * Manages wallet authentication state and secret key storage.
@@ -74,20 +68,22 @@ class AuthService {
     await SecureStore.deleteItemAsync(KEYS.sessionActive);
   }
 
-  /** Save user profile during registration. */
-  async saveProfile(profile: UserProfile): Promise<void> {
-    await SecureStore.setItemAsync(KEYS.profileFirstName, profile.firstName);
-    await SecureStore.setItemAsync(KEYS.profileLastName, profile.lastName);
-    await SecureStore.setItemAsync(KEYS.profileEmail, profile.email);
+  /** Save the full WalletProfile (written after the registration wizard completes). */
+  async saveWalletProfile(profile: WalletProfile): Promise<void> {
+    await AsyncStorage.setItem(KEYS.walletProfile, JSON.stringify(profile));
   }
 
-  /** Retrieve the stored user profile, or null if not registered. */
-  async getProfile(): Promise<UserProfile | null> {
-    const firstName = await SecureStore.getItemAsync(KEYS.profileFirstName);
-    const lastName = await SecureStore.getItemAsync(KEYS.profileLastName);
-    const email = await SecureStore.getItemAsync(KEYS.profileEmail);
-    if (!firstName || !lastName || !email) return null;
-    return { firstName, lastName, email };
+  /** Retrieve the full WalletProfile. Returns null if not yet set. */
+  async getWalletProfile(): Promise<WalletProfile | null> {
+    const raw = await AsyncStorage.getItem(KEYS.walletProfile);
+    if (!raw) return null;
+    return JSON.parse(raw) as WalletProfile;
+  }
+
+  /** Returns the accountType for the stored wallet, or null. */
+  async getAccountType(): Promise<AccountType | null> {
+    const profile = await this.getWalletProfile();
+    return profile?.accountType ?? null;
   }
 }
 
