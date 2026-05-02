@@ -138,6 +138,18 @@ services:
     profiles:
       - tools
 
+  deployment-exporter:
+    image: node:20-alpine
+    container_name: did-deployment-exporter
+    working_dir: /workspace/blockchain
+    volumes:
+      - .:/workspace
+    command:
+      - node
+      - export-deployment.js
+    profiles:
+      - tools
+
 volumes:
   postgres_data:
   rabbitmq_data:
