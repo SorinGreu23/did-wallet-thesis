@@ -5,6 +5,7 @@ const contracts = [
   "EURootAuthority",
   "AccreditationRegistry",
   "CredentialRegistry",
+  "ZkpVerifierRegistry",
 ];
 
 const abisDir = path.join(__dirname, "abis");

@@ -10,13 +10,15 @@ contract AccreditationRegistryTest is Test {
     AccreditationRegistry private registry;
 
     bytes32 private constant GENESIS_BLOCK_HASH =
-        keccak256("EU_DID_WALLET_GENESIS");
+    keccak256("EU_DID_WALLET_GENESIS");
 
     address private root = address(this);
     address private memberState = address(0x1001);
     address private ministry = address(0x1002);
     address private institution = address(0x1003);
     address private department = address(0x1004);
+    address private businessRegistry = address(0x1005);
+    address private enterprise = address(0x1006);
     address private randomUser = address(0x9999);
 
     function setUp() public {
@@ -43,12 +45,15 @@ contract AccreditationRegistryTest is Test {
         );
 
         AccreditationRegistry.Accreditation memory accred =
-            registry.getAccreditation(id);
+                            registry.getAccreditation(id);
 
         assertEq(accred.id, id);
         assertEq(accred.issuer, root);
         assertEq(accred.subject, memberState);
-        assertEq(uint256(accred.scope), uint256(AccreditationRegistry.AccreditationScope.MemberState));
+        assertEq(
+            uint256(accred.scope),
+            uint256(AccreditationRegistry.AccreditationScope.MemberState)
+        );
         assertEq(accred.parentAccreditationId, bytes32(0));
         assertFalse(accred.revoked);
         assertTrue(accred.exists);
@@ -82,10 +87,13 @@ contract AccreditationRegistryTest is Test {
         assertTrue(registry.validateTrustChain(ministryId));
 
         AccreditationRegistry.Accreditation memory accred =
-            registry.getAccreditation(ministryId);
+                            registry.getAccreditation(ministryId);
 
         assertEq(accred.subject, ministry);
-        assertEq(uint256(accred.scope), uint256(AccreditationRegistry.AccreditationScope.Ministry));
+        assertEq(
+            uint256(accred.scope),
+            uint256(AccreditationRegistry.AccreditationScope.Ministry)
+        );
     }
 
     function testMemberStateCanIssueMinistryWithValidParent() public {
@@ -110,7 +118,7 @@ contract AccreditationRegistryTest is Test {
         assertTrue(registry.validateTrustChain(ministryId));
 
         AccreditationRegistry.Accreditation memory accred =
-            registry.getAccreditation(ministryId);
+                            registry.getAccreditation(ministryId);
 
         assertEq(accred.issuer, memberState);
         assertEq(accred.subject, ministry);
@@ -163,7 +171,7 @@ contract AccreditationRegistryTest is Test {
         assertTrue(registry.validateTrustChain(institutionId));
 
         AccreditationRegistry.Accreditation memory accred =
-            registry.getAccreditation(institutionId);
+                            registry.getAccreditation(institutionId);
 
         assertEq(accred.issuer, ministry);
         assertEq(accred.subject, institution);
@@ -198,11 +206,160 @@ contract AccreditationRegistryTest is Test {
         assertTrue(registry.validateTrustChain(departmentId));
 
         AccreditationRegistry.Accreditation memory accred =
-            registry.getAccreditation(departmentId);
+                            registry.getAccreditation(departmentId);
 
         assertEq(accred.issuer, institution);
         assertEq(accred.subject, department);
         assertEq(accred.parentAccreditationId, institutionId);
+    }
+
+    function testMemberStateCanIssueBusinessRegistryWithValidParent() public {
+        bytes32 businessRegistryId = _issueValidBusinessRegistryAccreditation();
+
+        assertTrue(registry.validateTrustChain(businessRegistryId));
+
+        AccreditationRegistry.Accreditation memory accred =
+                            registry.getAccreditation(businessRegistryId);
+
+        assertEq(accred.issuer, memberState);
+        assertEq(accred.subject, businessRegistry);
+        assertEq(
+            uint256(accred.scope),
+            uint256(AccreditationRegistry.AccreditationScope.BusinessRegistry)
+        );
+    }
+
+    function testCannotIssueBusinessRegistryFromMinistry() public {
+        bytes32 memberStateId = registry.issueAccreditation(
+            memberState,
+            AccreditationRegistry.AccreditationScope.MemberState,
+            bytes32(0),
+            bytes32(0),
+            0
+        );
+
+        vm.prank(memberState);
+
+        bytes32 ministryId = registry.issueAccreditation(
+            ministry,
+            AccreditationRegistry.AccreditationScope.Ministry,
+            memberStateId,
+            bytes32(0),
+            0
+        );
+
+        vm.prank(ministry);
+
+        vm.expectRevert(AccreditationRegistry.InvalidScope.selector);
+
+        registry.issueAccreditation(
+            businessRegistry,
+            AccreditationRegistry.AccreditationScope.BusinessRegistry,
+            ministryId,
+            bytes32(0),
+            0
+        );
+    }
+
+    function testBusinessRegistryCanIssueEnterpriseWithValidParent() public {
+        bytes32 businessRegistryId = _issueValidBusinessRegistryAccreditation();
+
+        vm.prank(businessRegistry);
+
+        bytes32 enterpriseId = registry.issueAccreditation(
+            enterprise,
+            AccreditationRegistry.AccreditationScope.Enterprise,
+            businessRegistryId,
+            bytes32(0),
+            0
+        );
+
+        assertTrue(registry.validateTrustChain(enterpriseId));
+
+        AccreditationRegistry.Accreditation memory accred =
+                            registry.getAccreditation(enterpriseId);
+
+        assertEq(accred.issuer, businessRegistry);
+        assertEq(accred.subject, enterprise);
+        assertEq(accred.parentAccreditationId, businessRegistryId);
+        assertEq(
+            uint256(accred.scope),
+            uint256(AccreditationRegistry.AccreditationScope.Enterprise)
+        );
+    }
+
+    function testCannotIssueEnterpriseFromMinistry() public {
+        bytes32 memberStateId = registry.issueAccreditation(
+            memberState,
+            AccreditationRegistry.AccreditationScope.MemberState,
+            bytes32(0),
+            bytes32(0),
+            0
+        );
+
+        vm.prank(memberState);
+
+        bytes32 ministryId = registry.issueAccreditation(
+            ministry,
+            AccreditationRegistry.AccreditationScope.Ministry,
+            memberStateId,
+            bytes32(0),
+            0
+        );
+
+        vm.prank(ministry);
+
+        vm.expectRevert(AccreditationRegistry.InvalidScope.selector);
+
+        registry.issueAccreditation(
+            enterprise,
+            AccreditationRegistry.AccreditationScope.Enterprise,
+            ministryId,
+            bytes32(0),
+            0
+        );
+    }
+
+    function testEnterpriseTrustChainReturnsRootToTargetOrder() public {
+        bytes32 businessRegistryId = _issueValidBusinessRegistryAccreditation();
+
+        vm.prank(businessRegistry);
+
+        bytes32 enterpriseId = registry.issueAccreditation(
+            enterprise,
+            AccreditationRegistry.AccreditationScope.Enterprise,
+            businessRegistryId,
+            bytes32(0),
+            0
+        );
+
+        bytes32[] memory chain = registry.getTrustChain(enterpriseId);
+
+        assertEq(chain.length, 3);
+
+        AccreditationRegistry.Accreditation memory memberStateAccred =
+                            registry.getAccreditation(chain[0]);
+
+        AccreditationRegistry.Accreditation memory businessRegistryAccred =
+                            registry.getAccreditation(chain[1]);
+
+        AccreditationRegistry.Accreditation memory enterpriseAccred =
+                            registry.getAccreditation(chain[2]);
+
+        assertEq(
+            uint256(memberStateAccred.scope),
+            uint256(AccreditationRegistry.AccreditationScope.MemberState)
+        );
+        assertEq(
+            uint256(businessRegistryAccred.scope),
+            uint256(AccreditationRegistry.AccreditationScope.BusinessRegistry)
+        );
+        assertEq(
+            uint256(enterpriseAccred.scope),
+            uint256(AccreditationRegistry.AccreditationScope.Enterprise)
+        );
+
+        assertEq(chain[2], enterpriseId);
     }
 
     function testHasValidAccreditationReturnsTrueForValidScope() public {
@@ -216,6 +373,27 @@ contract AccreditationRegistryTest is Test {
         );
 
         assertTrue(hasInstitutionScope);
+    }
+
+    function testHasValidAccreditationReturnsTrueForEnterpriseScope() public {
+        bytes32 businessRegistryId = _issueValidBusinessRegistryAccreditation();
+
+        vm.prank(businessRegistry);
+
+        registry.issueAccreditation(
+            enterprise,
+            AccreditationRegistry.AccreditationScope.Enterprise,
+            businessRegistryId,
+            bytes32(0),
+            0
+        );
+
+        bool hasEnterpriseScope = registry.hasValidAccreditation(
+            enterprise,
+            AccreditationRegistry.AccreditationScope.Enterprise
+        );
+
+        assertTrue(hasEnterpriseScope);
     }
 
     function testHasValidAccreditationReturnsFalseForWrongScope() public {
@@ -237,7 +415,7 @@ contract AccreditationRegistryTest is Test {
         registry.revokeAccreditation(institutionId);
 
         AccreditationRegistry.Accreditation memory accred =
-            registry.getAccreditation(institutionId);
+                            registry.getAccreditation(institutionId);
 
         assertTrue(accred.revoked);
         assertFalse(registry.validateTrustChain(institutionId));
@@ -249,7 +427,7 @@ contract AccreditationRegistryTest is Test {
         registry.revokeAccreditation(institutionId);
 
         AccreditationRegistry.Accreditation memory accred =
-            registry.getAccreditation(institutionId);
+                            registry.getAccreditation(institutionId);
 
         assertTrue(accred.revoked);
         assertFalse(registry.validateTrustChain(institutionId));
@@ -315,21 +493,34 @@ contract AccreditationRegistryTest is Test {
         assertEq(chain.length, 3);
 
         AccreditationRegistry.Accreditation memory memberStateAccred =
-            registry.getAccreditation(chain[0]);
+                            registry.getAccreditation(chain[0]);
 
         AccreditationRegistry.Accreditation memory ministryAccred =
-            registry.getAccreditation(chain[1]);
+                            registry.getAccreditation(chain[1]);
 
         AccreditationRegistry.Accreditation memory institutionAccred =
-            registry.getAccreditation(chain[2]);
+                            registry.getAccreditation(chain[2]);
 
-        assertEq(uint256(memberStateAccred.scope), uint256(AccreditationRegistry.AccreditationScope.MemberState));
-        assertEq(uint256(ministryAccred.scope), uint256(AccreditationRegistry.AccreditationScope.Ministry));
-        assertEq(uint256(institutionAccred.scope), uint256(AccreditationRegistry.AccreditationScope.Institution));
+        assertEq(
+            uint256(memberStateAccred.scope),
+            uint256(AccreditationRegistry.AccreditationScope.MemberState)
+        );
+        assertEq(
+            uint256(ministryAccred.scope),
+            uint256(AccreditationRegistry.AccreditationScope.Ministry)
+        );
+        assertEq(
+            uint256(institutionAccred.scope),
+            uint256(AccreditationRegistry.AccreditationScope.Institution)
+        );
+
         assertEq(chain[2], institutionId);
     }
 
-    function _issueValidInstitutionAccreditation() private returns (bytes32 institutionId) {
+    function _issueValidInstitutionAccreditation()
+    private
+    returns (bytes32 institutionId)
+    {
         bytes32 memberStateId = registry.issueAccreditation(
             memberState,
             AccreditationRegistry.AccreditationScope.MemberState,
@@ -354,6 +545,29 @@ contract AccreditationRegistryTest is Test {
             institution,
             AccreditationRegistry.AccreditationScope.Institution,
             ministryId,
+            bytes32(0),
+            0
+        );
+    }
+
+    function _issueValidBusinessRegistryAccreditation()
+    private
+    returns (bytes32 businessRegistryId)
+    {
+        bytes32 memberStateId = registry.issueAccreditation(
+            memberState,
+            AccreditationRegistry.AccreditationScope.MemberState,
+            bytes32(0),
+            bytes32(0),
+            0
+        );
+
+        vm.prank(memberState);
+
+        businessRegistryId = registry.issueAccreditation(
+            businessRegistry,
+            AccreditationRegistry.AccreditationScope.BusinessRegistry,
+            memberStateId,
             bytes32(0),
             0
         );

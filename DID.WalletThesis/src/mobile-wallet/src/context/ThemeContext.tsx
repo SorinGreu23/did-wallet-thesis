@@ -1,5 +1,8 @@
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Animated } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const THEME_KEY = '@theme_isDark';
 
 export const LIGHT_COLORS = {
   primary: '#003399',
@@ -50,6 +53,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [isDark, setIsDark] = useState(false);
   const themeAnim = useRef(new Animated.Value(0)).current;
 
+  // Load persisted preference on mount
+  useEffect(() => {
+    AsyncStorage.getItem(THEME_KEY).then(value => {
+      if (value === 'true') {
+        setIsDark(true);
+        themeAnim.setValue(1);
+      }
+    });
+  }, []);
+
   const toggleTheme = useCallback(() => {
     setIsDark(prev => {
       const next = !prev;
@@ -58,6 +71,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         duration: 320,
         useNativeDriver: false,
       }).start();
+      AsyncStorage.setItem(THEME_KEY, String(next));
       return next;
     });
   }, [themeAnim]);

@@ -1,7 +1,7 @@
-import { getAddress } from "@ethersproject/address";
 import { arrayify } from "@ethersproject/bytes";
 import { keccak256 } from "@ethersproject/keccak256";
 import { computePublicKey } from "@ethersproject/signing-key";
+import { getAddress } from "ethers";
 import { getAgent, initializeAgent } from "../agents/veramoAgent";
 import authService from "./authService";
 

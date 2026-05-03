@@ -55,6 +55,9 @@ const deploymentInfo = {
     CredentialRegistry: {
       address: findDeployment("CredentialRegistry"),
     },
+    ZkpVerifierRegistry: {
+      address: findDeployment("ZkpVerifierRegistry"),
+    },
   },
 };
 

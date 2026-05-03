@@ -3,12 +3,25 @@ import { ethers } from 'ethers';
 import { SignerService } from '../auth/signer.service';
 import { ConfigService } from './config.service';
 
-/** Scope values must match AccreditationScope enum in AccreditationRegistry.sol */
+/**
+ * Scope values must match AccreditationScope enum in AccreditationRegistry.sol.
+ *
+ * Solidity enum:
+ * None = 0
+ * MemberState = 1
+ * Ministry = 2
+ * Institution = 3
+ * Department = 4
+ * BusinessRegistry = 5
+ * Enterprise = 6
+ */
 const SCOPE_MAP: Record<string, number> = {
   MemberState: 1,
   Ministry: 2,
   Institution: 3,
   Department: 4,
+  BusinessRegistry: 5,
+  Enterprise: 6,
 };
 
 const ACCREDITATION_REGISTRY_ABI = [
@@ -29,7 +42,7 @@ export class BlockchainClientService {
    * Signs and submits an `issueAccreditation` transaction directly from the
    * in-memory wallet — the private key never leaves the browser.
    *
-   * @returns the transaction hash (not yet confirmed)
+   * @returns the transaction hash, not yet confirmed
    */
   async issueAccreditation(
     subjectAddress: string,
@@ -55,20 +68,24 @@ export class BlockchainClientService {
     const provider = new ethers.JsonRpcProvider(rpcUrl);
     const wallet = this.signer.getConnectedWallet(provider);
 
-    const contract = new ethers.Contract(contractAddress, ACCREDITATION_REGISTRY_ABI, wallet);
+    const contract = new ethers.Contract(
+      contractAddress,
+      ACCREDITATION_REGISTRY_ABI,
+      wallet,
+    );
 
     const parentBytes: string = parentAccreditationId
-      ? (parentAccreditationId.startsWith('0x')
-          ? parentAccreditationId.padEnd(66, '0')
-          : `0x${parentAccreditationId}`.padEnd(66, '0'))
+      ? parentAccreditationId.startsWith('0x')
+        ? parentAccreditationId.padEnd(66, '0')
+        : `0x${parentAccreditationId}`.padEnd(66, '0')
       : ethers.ZeroHash;
 
     const tx = await contract['issueAccreditation'](
-      subjectAddress,
+      ethers.getAddress(subjectAddress.toLowerCase()),
       scopeValue,
       parentBytes,
       ethers.ZeroHash, // permissionsHash — not used in the basic flow
-      0,               // expiresAt — 0 means no expiry
+      0, // expiresAt — 0 means no expiry
     );
 
     return tx.hash as string;
@@ -78,7 +95,7 @@ export class BlockchainClientService {
    * Signs and submits a `revokeAccreditation` transaction directly from the
    * in-memory wallet — the private key never leaves the browser.
    *
-   * @returns the transaction hash (not yet confirmed)
+   * @returns the transaction hash, not yet confirmed
    */
   async revokeAccreditation(accreditationId: string): Promise<string> {
     const rpcUrl = this.config.rpcUrl();
@@ -95,7 +112,11 @@ export class BlockchainClientService {
     const provider = new ethers.JsonRpcProvider(rpcUrl);
     const wallet = this.signer.getConnectedWallet(provider);
 
-    const contract = new ethers.Contract(contractAddress, ACCREDITATION_REGISTRY_ABI, wallet);
+    const contract = new ethers.Contract(
+      contractAddress,
+      ACCREDITATION_REGISTRY_ABI,
+      wallet,
+    );
 
     const idBytes: string = accreditationId.startsWith('0x')
       ? accreditationId
@@ -110,7 +131,7 @@ export class BlockchainClientService {
    * Signs and submits a `recordCredential` transaction directly from the
    * in-memory wallet — the private key never leaves the browser.
    *
-   * @returns the transaction hash (not yet confirmed)
+   * @returns the transaction hash
    */
   async recordCredential(
     holderAddress: string,
@@ -133,12 +154,16 @@ export class BlockchainClientService {
     const provider = new ethers.JsonRpcProvider(rpcUrl);
     const wallet = this.signer.getConnectedWallet(provider);
 
-    const contract = new ethers.Contract(contractAddress, CREDENTIAL_REGISTRY_ABI, wallet);
+    const contract = new ethers.Contract(
+      contractAddress,
+      CREDENTIAL_REGISTRY_ABI,
+      wallet,
+    );
 
     const accreditationBytes: string = issuerAccreditationId
-      ? (issuerAccreditationId.startsWith('0x')
-          ? issuerAccreditationId.padEnd(66, '0')
-          : `0x${issuerAccreditationId}`.padEnd(66, '0'))
+      ? issuerAccreditationId.startsWith('0x')
+        ? issuerAccreditationId.padEnd(66, '0')
+        : `0x${issuerAccreditationId}`.padEnd(66, '0')
       : ethers.ZeroHash;
 
     const tx = await contract['recordCredential'](

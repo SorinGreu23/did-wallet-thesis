@@ -1,14 +1,18 @@
+// For iOS Simulator, use the Mac's local network IP instead of localhost.
+// Run `ipconfig getifaddr en0` (Wi-Fi) or `en1` (Ethernet) to find your IP.
+const HOST = 'localhost'; // ← replace with your Mac's LAN IP when running on a simulator/device
+
 export const CONFIG = {
   DID_METHOD: 'did:ethr',
   STORAGE_KEY: 'did-wallet-data',
   APP_NAME: 'EU Identity Wallet',
-  ANVIL_RPC_URL: 'http://localhost:8545',
+  ANVIL_RPC_URL: `http://${HOST}:8545`,
   ANVIL_CHAIN_ID: 31337,
-  IDENTITY_SERVICE_URL: 'http://localhost:5259',
-  CREDENTIAL_SERVICE_URL: 'http://localhost:5214',
-  ACCREDITATION_SERVICE_URL: 'http://localhost:5260',
-  VERIFICATION_SERVICE_URL: 'http://localhost:5216',
-  PRESENTATION_SERVICE_URL: 'http://localhost:5217',
+  IDENTITY_SERVICE_URL: `http://${HOST}:5259`,
+  CREDENTIAL_SERVICE_URL: `http://${HOST}:5214`,
+  ACCREDITATION_SERVICE_URL: `http://${HOST}:5260`,
+  VERIFICATION_SERVICE_URL: `http://${HOST}:5216`,
+  PRESENTATION_SERVICE_URL: `http://${HOST}:5217`,
 };
 
 export const COLORS = {

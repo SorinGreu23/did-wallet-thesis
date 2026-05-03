@@ -13,6 +13,7 @@ import {
     View,
 } from 'react-native';
 import {Feather} from '@expo/vector-icons';
+import {ethers} from 'ethers';
 import {useTheme} from '../context/ThemeContext';
 import {useRegistration} from '../context/RegistrationContext';
 import {AccountType} from '../types/wallet';
@@ -214,6 +215,10 @@ export default function RegistrationWizardScreen({accountType, onComplete, onBac
     // Gating state for enterprise
     const [enterpriseRequestId, setEnterpriseRequestId] = useState<string | null>(null);
     const [pollingAccreditation, setPollingAccreditation] = useState(false);
+
+    // Gating state for university
+    const [universityPrivateKey, setUniversityPrivateKey] = useState('');
+    const [derivedAddress, setDerivedAddress] = useState<string | null>(null);
 
     const slideAnim = useRef(new Animated.Value(0)).current;
 
@@ -454,7 +459,7 @@ export default function RegistrationWizardScreen({accountType, onComplete, onBac
 
     React.useEffect(() => {
         if(step !== 'gating') return;
-        if(accountType === 'personal') return;
+        if(accountType === 'personal' || accountType === 'university') return;
         if(did && walletAddress) return;
 
         setLoading(true);
@@ -469,13 +474,47 @@ export default function RegistrationWizardScreen({accountType, onComplete, onBac
             });
     }, [step, accountType, did, walletAddress]);
 
+    const onUniversityKeyChange = (key: string) => {
+        setUniversityPrivateKey(key);
+        setError(null);
+        const trimmed = key.trim();
+        const isFullKey = trimmed.length === 64 || (trimmed.startsWith('0x') && trimmed.length === 66);
+        if (!isFullKey) {
+            setDerivedAddress(null);
+            return;
+        }
+        try {
+            const normalized = trimmed.startsWith('0x') ? trimmed : `0x${trimmed}`;
+            const addr = ethers.computeAddress(normalized);
+            setDerivedAddress(addr);
+        } catch {
+            setDerivedAddress(null);
+        }
+    };
+
     const handleCheckUniversityAccreditation = async () => {
+        if (!derivedAddress) {
+            setError('Enter your institution private key first.');
+            return;
+        }
         setLoading(true);
         setError(null);
 
         try {
-            const identity = await ensureIdentityCreated();
-            const id = await accreditationLookupService.findActiveInstitutionAccreditation(identity.walletAddress);
+            const trimmed = universityPrivateKey.trim();
+            const normalized = trimmed.startsWith('0x') ? trimmed : `0x${trimmed}`;
+            const wallet = new ethers.Wallet(normalized);
+            const address = wallet.address;
+            const did = `did:ethr:sepolia:${address.toLowerCase()}`;
+
+            // Persist identity so subsequent steps have the right address
+            setIdentity(did, address);
+
+            // Store the private key so the Veramo agent can sign later
+            await authService.createWallet();
+            await didService.getOrCreateIdentity();
+
+            const id = await accreditationLookupService.findActiveInstitutionAccreditation(address);
 
             if (id) {
                 setAccreditationId(id);
@@ -572,40 +611,41 @@ export default function RegistrationWizardScreen({accountType, onComplete, onBac
                 <View style={styles.stepContent}>
                     <Text style={[styles.stepTitle, {color: colors.text}]}>Accreditation check</Text>
                     <Text style={[styles.stepSubtitle, {color: colors.textSecondary}]}>
-                        Your institution must be accredited by a Member-State operator before you can proceed.
+                        Enter the private key of the wallet that was accredited by your Ministry of Education.
                     </Text>
 
-                    <View style={[styles.infoBox, {backgroundColor: colors.primaryLight}]}>
-                        <Feather name="info" size={16} color={colors.primary}/>
-                        <Text style={[styles.infoText, {color: colors.primary}]}>
-                            Share your wallet address with your operator so they can issue the accreditation via the
-                            admin client.
-                        </Text>
-                    </View>
+                    <Label text="Institution private key" colors={colors}/>
+                    <Field
+                        placeholder="0x… or 64 hex chars"
+                        value={universityPrivateKey}
+                        onChangeText={onUniversityKeyChange}
+                        secureTextEntry
+                        autoCapitalize="none"
+                        returnKeyType="done"
+                        colors={colors}
+                    />
 
-                    {walletAddress ? (
-                        <View
-                            style={[styles.addressBox, {backgroundColor: colors.surface, borderColor: colors.border}]}>
-                            <Text style={[styles.addressLabel, {color: colors.textSecondary}]}>Your wallet
-                                address</Text>
-                            <Text style={[styles.addressValue, {color: colors.text}]} selectable>{walletAddress}</Text>
+                    {derivedAddress ? (
+                        <View style={[styles.addressBox, {backgroundColor: colors.surface, borderColor: colors.border}]}>
+                            <Text style={[styles.addressLabel, {color: colors.textSecondary}]}>Derived wallet address</Text>
+                            <Text style={[styles.addressValue, {color: colors.text}]} selectable>{derivedAddress}</Text>
                         </View>
                     ) : null}
 
                     {error && <Text style={styles.error}>{error}</Text>}
 
                     <TouchableOpacity
-                        style={[styles.btn, {backgroundColor: colors.primary}]}
+                        style={[styles.btn, {backgroundColor: derivedAddress ? colors.primary : colors.border}]}
                         onPress={handleCheckUniversityAccreditation}
-                        disabled={loading}
+                        disabled={loading || !derivedAddress}
                         activeOpacity={0.85}
                     >
                         {loading ? (
                             <ActivityIndicator color="#fff"/>
                         ) : (
                             <>
-                                <Feather name="check-circle" size={16} color="#fff"/>
-                                <Text style={styles.btnText}>I have my accreditation</Text>
+                                <Feather name="check-circle" size={16} color={derivedAddress ? '#fff' : colors.textMuted}/>
+                                <Text style={[styles.btnText, {color: derivedAddress ? '#fff' : colors.textMuted}]}>Verify accreditation</Text>
                             </>
                         )}
                     </TouchableOpacity>

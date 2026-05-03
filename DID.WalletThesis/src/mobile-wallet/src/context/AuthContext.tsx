@@ -52,9 +52,12 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
             const previousAppState = appState.current;
             appState.current = nextAppState;
 
+            // Only lock when the app truly goes to background.
+            // "inactive" is triggered by system overlays (biometric prompts,
+            // control centre, etc.) and should NOT clear the session.
             const leavingApp =
                 previousAppState === "active" &&
-                (nextAppState === "inactive" || nextAppState === "background");
+                nextAppState === "background";
 
             if (!leavingApp) return;
             if (!hasWalletRef.current) return;
