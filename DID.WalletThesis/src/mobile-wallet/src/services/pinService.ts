@@ -1,5 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
-import { getRandomBytes } from 'expo-crypto';
+import * as Crypto from 'expo-crypto';
 
 const KEYS = {
   pinSalt: 'pin.salt',
@@ -8,52 +8,29 @@ const KEYS = {
   pinLockedUntil: 'pin.lockedUntil',
 } as const;
 
-const PBKDF2_ITERATIONS = 100_000;
 const MAX_FAILURES_BEFORE_COOLDOWN = 5;
 const MAX_FAILURES_BEFORE_WIPE_OFFER = 10;
 const COOLDOWN_MS = 30_000;
 
-/** Converts a Uint8Array to a hex string. */
 function toHex(buf: Uint8Array): string {
   return Array.from(buf)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
 }
 
-/** Converts a hex string to a Uint8Array. */
-function fromHex(hex: string): Uint8Array {
-  const out = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) {
-    out[i / 2] = parseInt(hex.slice(i, i + 2), 16);
-  }
-  return out;
+async function randomHex(byteLength: number): Promise<string> {
+  const bytes = await Crypto.getRandomBytesAsync(byteLength);
+  return toHex(bytes);
 }
 
-/** Derive a 32-byte key from a PIN using PBKDF2-SHA256 via Web Crypto. */
-async function deriveKey(pin: string, salt: Uint8Array): Promise<Uint8Array> {
-  const enc = new TextEncoder();
-  const pinBuffer = enc.encode(pin);
-
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    pinBuffer,
-    'PBKDF2',
-    false,
-    ['deriveBits'],
+/**
+ * Expo Go-compatible PIN derivation.
+ */
+async function derivePinHash(pin: string, saltHex: string): Promise<string> {
+  return Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      `${saltHex}:${pin}`,
   );
-
-  const derivedBits = await crypto.subtle.deriveBits(
-    {
-      name: 'PBKDF2',
-      salt: salt.buffer as ArrayBuffer,
-      iterations: PBKDF2_ITERATIONS,
-      hash: 'SHA-256',
-    },
-    keyMaterial,
-    256,
-  );
-
-  return new Uint8Array(derivedBits);
 }
 
 export interface PinStatus {
@@ -65,59 +42,69 @@ export interface PinStatus {
 }
 
 class PinService {
-  /** Returns true if a PIN has been set up. */
   async hasPin(): Promise<boolean> {
     const hash = await SecureStore.getItemAsync(KEYS.pinHash);
     return hash !== null;
   }
 
-  /** Set up a new PIN. Stores a PBKDF2-derived hash with a random salt. */
   async setupPin(pin: string): Promise<void> {
-    const salt = getRandomBytes(16);
-    const derived = await deriveKey(pin, salt);
-    await SecureStore.setItemAsync(KEYS.pinSalt, toHex(salt));
-    await SecureStore.setItemAsync(KEYS.pinHash, toHex(derived));
+    if (!/^\d{6}$/.test(pin)) {
+      throw new Error('PIN must be exactly 6 digits.');
+    }
+
+    const saltHex = await randomHex(16);
+    const hash = await derivePinHash(pin, saltHex);
+
+    await SecureStore.setItemAsync(KEYS.pinSalt, saltHex);
+    await SecureStore.setItemAsync(KEYS.pinHash, hash);
     await SecureStore.setItemAsync(KEYS.pinFailures, '0');
+    await SecureStore.deleteItemAsync(KEYS.pinLockedUntil);
   }
 
-  /**
-   * Verify the PIN. Returns true if correct.
-   * Manages the failure counter and lockout.
-   */
   async verifyPin(pin: string): Promise<boolean> {
     const status = await this.getStatus();
+
     if (status.isLocked) {
       throw new Error('PIN is temporarily locked. Try again later.');
     }
 
     const saltHex = await SecureStore.getItemAsync(KEYS.pinSalt);
     const storedHash = await SecureStore.getItemAsync(KEYS.pinHash);
-    if (!saltHex || !storedHash) throw new Error('PIN not configured.');
 
-    const salt = fromHex(saltHex);
-    const derived = await deriveKey(pin, salt);
-    const correct = toHex(derived) === storedHash;
+    if (!saltHex || !storedHash) {
+      throw new Error('PIN not configured.');
+    }
+
+    const hash = await derivePinHash(pin, saltHex);
+    const correct = hash === storedHash;
 
     if (correct) {
       await SecureStore.setItemAsync(KEYS.pinFailures, '0');
-    } else {
-      const failures = status.failures + 1;
-      await SecureStore.setItemAsync(KEYS.pinFailures, String(failures));
-      if (failures >= MAX_FAILURES_BEFORE_COOLDOWN && failures < MAX_FAILURES_BEFORE_WIPE_OFFER) {
-        await SecureStore.setItemAsync(
-          KEYS.pinLockedUntil,
-          String(Date.now() + COOLDOWN_MS),
-        );
-      }
+      await SecureStore.deleteItemAsync(KEYS.pinLockedUntil);
+      return true;
     }
 
-    return correct;
+    const failures = status.failures + 1;
+    await SecureStore.setItemAsync(KEYS.pinFailures, String(failures));
+
+    if (
+        failures >= MAX_FAILURES_BEFORE_COOLDOWN &&
+        failures < MAX_FAILURES_BEFORE_WIPE_OFFER
+    ) {
+      await SecureStore.setItemAsync(
+          KEYS.pinLockedUntil,
+          String(Date.now() + COOLDOWN_MS),
+      );
+    }
+
+    return false;
   }
 
   async getStatus(): Promise<PinStatus> {
     const hasPin = await this.hasPin();
     const failuresStr = await SecureStore.getItemAsync(KEYS.pinFailures);
     const lockedUntilStr = await SecureStore.getItemAsync(KEYS.pinLockedUntil);
+
     const failures = parseInt(failuresStr ?? '0', 10);
     const lockedUntil = lockedUntilStr ? parseInt(lockedUntilStr, 10) : null;
     const isLocked = lockedUntil !== null && Date.now() < lockedUntil;

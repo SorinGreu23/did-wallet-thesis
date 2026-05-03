@@ -1,7 +1,7 @@
 import { Contract, JsonRpcProvider } from 'ethers';
 import { CONFIG } from '../constants/config';
-import AccreditationRegistryAbi from '../../../blockchain/abis/AccreditationRegistry.json';
-import deploymentInfo from '../../../blockchain/deployments/latest.json';
+import AccreditationRegistryAbi from '../blockchain/abis/AccreditationRegistry.json';
+import deploymentInfo from '../blockchain/deployments/latest.json';
 
 // Scope enum from the contract (must match Solidity enum order)
 export enum AccreditationScope {

@@ -111,9 +111,9 @@ export default function UnlockSplashScreen({ onAuthenticated }: UnlockSplashScre
       if (hasHardware && isEnrolled) {
         const result = await LocalAuthentication.authenticateAsync({
           promptMessage: "Unlock your EU Identity Wallet",
-          fallbackLabel: "Use passcode",
-          cancelLabel: "Not now",
-          disableDeviceFallback: false,
+          fallbackLabel: "",
+          cancelLabel: "Use PIN",
+          disableDeviceFallback: true,
         });
 
         if (!result.success) {

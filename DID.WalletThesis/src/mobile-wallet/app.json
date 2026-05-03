@@ -16,7 +16,8 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSFaceIDUsageDescription": "EU Identity Wallet uses Face ID to protect your identity data."
-      }
+      },
+      "bundleIdentifier": "com.anonymous.didwallet"
     },
     "android": {
       "adaptiveIcon": {
@@ -24,13 +25,24 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ],
+      "package": "com.anonymous.didwallet"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow EU Identity Wallet to use Face ID."
+        }
+      ]
     ]
   }
 }
