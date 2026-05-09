@@ -1,5 +1,7 @@
 # EU Decentralized Digital Identity System
 
+Note: Outdated file, will be updated via the next pull request.
+
 Bachelor's Thesis — Computer Science, Alexandru Ioan Cuza University, Iasi
 
 A blockchain-anchored, privacy-preserving digital identity prototype demonstrating hierarchical trust chains, DID-based authentication, and W3C Verifiable Credentials across three platforms.
