@@ -7,6 +7,7 @@ import { AccreditationService } from '../../core/services/accreditation.service'
 import { Accreditation } from '../../core/models/accreditation.model';
 import { NavigationStateService } from '../../core/services/navigation-state.service';
 import { AuthService } from '../../core/auth/auth.service';
+import { extractApiError } from '../../core/utils/api-error';
 import { BreadcrumbComponent } from '../../shared/components/breadcrumb/breadcrumb.component';
 import { EmptyStateComponent } from '../../shared/components/empty-state/empty-state.component';
 import { TxBadgeComponent } from '../../shared/components/tx-badge/tx-badge.component';
@@ -140,7 +141,7 @@ export class UniversitiesComponent implements OnInit {
         return true;
       } catch (err: any) {
         this.error.set(
-          err?.error?.message ?? err?.message ?? 'Failed to resolve university context',
+          extractApiError(err, 'Failed to resolve university context'),
         );
         return false;
       }
@@ -182,7 +183,7 @@ export class UniversitiesComponent implements OnInit {
         return true;
       } catch (err: any) {
         this.error.set(
-          err?.error?.message ?? err?.message ?? 'Failed to resolve ministry context',
+          extractApiError(err, 'Failed to resolve ministry context'),
         );
         return false;
       }
@@ -205,7 +206,7 @@ export class UniversitiesComponent implements OnInit {
         this.loading.set(false);
       },
       error: (err) => {
-        this.error.set(err?.message ?? 'Failed to load universities');
+        this.error.set(extractApiError(err, 'Failed to load universities'));
         this.loading.set(false);
       },
     });
@@ -252,7 +253,7 @@ export class UniversitiesComponent implements OnInit {
             this.auth.logout();
             return;
           }
-          this.error.set(err?.error?.message ?? err?.message ?? 'Failed to issue accreditation');
+          this.error.set(extractApiError(err, 'Failed to issue accreditation'));
           this.submitting.set(false);
         },
       });
@@ -291,7 +292,7 @@ export class UniversitiesComponent implements OnInit {
         this.revokingCredentialId.set(null);
         this.loadDiplomas(university);
       },
-      error: (err) => this.error.set(err?.error?.message ?? 'Failed to revoke credential'),
+      error: (err) => this.error.set(extractApiError(err, 'Failed to revoke credential')),
     });
   }
 
@@ -347,7 +348,7 @@ export class UniversitiesComponent implements OnInit {
         this.verifying.set(false);
       },
       error: (err) => {
-        this.error.set(err?.error?.message ?? err?.message ?? 'Failed to verify accreditation');
+        this.error.set(extractApiError(err, 'Failed to verify accreditation'));
         this.verifying.set(false);
       },
     });
@@ -368,7 +369,7 @@ export class UniversitiesComponent implements OnInit {
           this.auth.logout();
           return;
         }
-        this.error.set(err?.error?.message ?? err?.message ?? 'Failed to revoke accreditation');
+        this.error.set(extractApiError(err, 'Failed to revoke accreditation'));
         this.revoking.set(false);
       },
     });
@@ -443,7 +444,7 @@ export class UniversitiesComponent implements OnInit {
         this.diplomaForm.reset();
       },
       error: (err) => {
-        this.error.set(err?.error?.message ?? err?.message ?? 'Failed to issue diploma');
+          this.error.set(extractApiError(err, 'Failed to issue diploma'));
         this.issuingDiploma.set(false);
       },
     });

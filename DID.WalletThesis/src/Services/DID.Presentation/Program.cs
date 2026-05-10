@@ -9,10 +9,6 @@ builder.Services.AddSerilog((_, lc) => lc
     .ReadFrom.Configuration(builder.Configuration)
     .WriteTo.Console());
 
-builder.Services.AddHttpClient<VerificationServiceClient>(client =>
-    client.BaseAddress = new Uri(
-        builder.Configuration["VerificationService:BaseUrl"] ?? "http://localhost:5002"));
-
 builder.Services.AddSingleton<PresentationService>();
 
 builder.Services.AddCors(options =>

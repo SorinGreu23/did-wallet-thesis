@@ -27,10 +27,10 @@ export const routes: Routes = [
         canActivate: [scopeGuard],
       },
       {
-        path: 'ministries',
+        path: 'government',
         loadComponent: () =>
-          import('./features/ministries/ministries.component').then(
-            (m) => m.MinistriesComponent,
+          import('./features/government/government.component').then(
+            (m) => m.GovernmentComponent,
           ),
         data: { allowedScopes: ['MemberState'] },
         canActivate: [scopeGuard],
@@ -42,6 +42,15 @@ export const routes: Routes = [
             (m) => m.UniversitiesComponent,
           ),
         data: { allowedScopes: ['Ministry', 'Institution'] },
+        canActivate: [scopeGuard],
+      },
+      {
+        path: 'enterprises',
+        loadComponent: () =>
+          import('./features/enterprises/enterprises.component').then(
+            (m) => m.EnterprisesComponent,
+          ),
+        data: { allowedScopes: ['MemberState', 'BusinessRegistry', 'EURoot'] },
         canActivate: [scopeGuard],
       },
     ],

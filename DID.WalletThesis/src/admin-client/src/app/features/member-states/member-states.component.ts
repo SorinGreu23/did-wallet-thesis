@@ -9,11 +9,13 @@ import { Router } from '@angular/router';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { DatePipe } from '@angular/common';
 import { AccreditationService } from '../../core/services/accreditation.service';
-import { Accreditation } from '../../core/models/accreditation.model';
+import { Accreditation, AccreditationVerification } from '../../core/models/accreditation.model';
 import {
   EU_ROOT_LABEL,
   NavigationStateService,
 } from '../../core/services/navigation-state.service';
+import { AuthService } from '../../core/auth/auth.service';
+import { extractApiError } from '../../core/utils/api-error';
 import { BreadcrumbComponent } from '../../shared/components/breadcrumb/breadcrumb.component';
 import { EmptyStateComponent } from '../../shared/components/empty-state/empty-state.component';
 import { TxBadgeComponent } from '../../shared/components/tx-badge/tx-badge.component';
@@ -30,12 +32,14 @@ import {
 })
 export class MemberStatesComponent implements OnInit {
   private readonly accreditationService = inject(AccreditationService);
-  private readonly navState = inject(NavigationStateService);
+  readonly navState = inject(NavigationStateService);
   private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
+  readonly auth = inject(AuthService);
 
   readonly euRootLabel = EU_ROOT_LABEL;
 
+  // ── Member State list ────────────────────────────────────────────────────
   readonly memberStates = signal<Accreditation[]>([]);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
@@ -43,7 +47,7 @@ export class MemberStatesComponent implements OnInit {
   readonly submitting = signal(false);
   readonly lastIssued = signal<Accreditation | null>(null);
   readonly selected = signal<Accreditation | null>(null);
-  readonly verification = signal<import('../../core/models/accreditation.model').AccreditationVerification | null>(null);
+  readonly verification = signal<AccreditationVerification | null>(null);
   readonly verifying = signal(false);
   readonly revoking = signal(false);
 
@@ -66,7 +70,7 @@ export class MemberStatesComponent implements OnInit {
         this.loading.set(false);
       },
       error: (err) => {
-        this.error.set(err?.message ?? 'Failed to load member states');
+        this.error.set(extractApiError(err, 'Failed to load member states'));
         this.loading.set(false);
       },
     });
@@ -108,7 +112,7 @@ export class MemberStatesComponent implements OnInit {
           this.load();
         },
         error: (err) => {
-          this.error.set(err?.error?.message ?? err?.message ?? 'Failed to issue accreditation');
+          this.error.set(extractApiError(err, 'Failed to issue accreditation'));
           this.submitting.set(false);
         },
       });
@@ -120,7 +124,7 @@ export class MemberStatesComponent implements OnInit {
       label: ms.name || ms.scope,
       accreditationId: ms.accreditationId,
     });
-    this.router.navigate(['/ministries']);
+    this.router.navigate(['/government']);
   }
 
   inspect(ms: Accreditation): void {
@@ -143,7 +147,7 @@ export class MemberStatesComponent implements OnInit {
         this.verifying.set(false);
       },
       error: (err) => {
-        this.error.set(err?.error?.message ?? err?.message ?? 'Failed to verify accreditation');
+        this.error.set(extractApiError(err, 'Failed to verify accreditation'));
         this.verifying.set(false);
       },
     });
@@ -160,7 +164,7 @@ export class MemberStatesComponent implements OnInit {
         this.verifySelected();
       },
       error: (err) => {
-        this.error.set(err?.error?.message ?? err?.message ?? 'Failed to revoke accreditation');
+        this.error.set(extractApiError(err, 'Failed to revoke accreditation'));
         this.revoking.set(false);
       },
     });

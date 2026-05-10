@@ -13,9 +13,10 @@ import authService from '../services/authService';
 import { WalletProfile } from '../types/wallet';
 
 // ── Tab screens (lazy imports to keep bundle splits clean) ────────────────────
-import HomeScreen from './HomeScreen';
+import IdentityStackNavigator from './IdentityStackNavigator';
 import WalletScreen from './WalletScreen';
-import ActionsStubScreen from './ActionsStubScreen';
+import ActionsStackNavigator from './ActionsStackNavigator';
+import ProfileSettingsScreen from './ProfileSettingsScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -44,8 +45,26 @@ export default function MainTabNavigator({ onSignOut }: MainTabNavigatorProps) {
     );
   }
 
+  const isPersonal = !profile || profile.accountType === 'personal';
+
+  const linking = {
+    prefixes: ['didwallet://'],
+    config: {
+      screens: {
+        Actions: {
+          screens: {
+            PresentationConsent: {
+              path: 'present',
+              parse: { encodedRequest: (r: string) => r },
+            },
+          },
+        },
+      },
+    },
+  };
+
   return (
-      <NavigationContainer>
+      <NavigationContainer linking={linking}>
         <Tab.Navigator
           screenOptions={{
             headerShown: false,
@@ -67,7 +86,7 @@ export default function MainTabNavigator({ onSignOut }: MainTabNavigatorProps) {
         >
           <Tab.Screen
             name="Identity"
-            component={HomeScreen}
+            component={IdentityStackNavigator}
             options={{
               tabBarLabel: 'Identity',
               tabBarIcon: ({ color, size }) => (
@@ -76,20 +95,22 @@ export default function MainTabNavigator({ onSignOut }: MainTabNavigatorProps) {
             }}
           />
 
-          <Tab.Screen
-            name="Wallet"
-            component={WalletScreen}
-            options={{
-              tabBarLabel: 'Wallet',
-              tabBarIcon: ({ color, size }) => (
-                <Feather name="credit-card" size={size} color={color} />
-              ),
-            }}
-          />
+          {isPersonal && (
+            <Tab.Screen
+              name="Wallet"
+              component={WalletScreen}
+              options={{
+                tabBarLabel: 'Wallet',
+                tabBarIcon: ({ color, size }) => (
+                  <Feather name="credit-card" size={size} color={color} />
+                ),
+              }}
+            />
+          )}
 
           <Tab.Screen
             name="Actions"
-            component={ActionsStubScreen}
+            component={ActionsStackNavigator}
             options={{
               tabBarLabel: 'Actions',
               tabBarIcon: ({ color, size }) => (
@@ -97,6 +118,19 @@ export default function MainTabNavigator({ onSignOut }: MainTabNavigatorProps) {
               ),
             }}
           />
+
+          {isPersonal && (
+            <Tab.Screen
+              name="Profile"
+              component={ProfileSettingsScreen}
+              options={{
+                tabBarLabel: 'Profile',
+                tabBarIcon: ({ color, size }) => (
+                  <Feather name="user" size={size} color={color} />
+                ),
+              }}
+            />
+          )}
         </Tab.Navigator>
       </NavigationContainer>
   );

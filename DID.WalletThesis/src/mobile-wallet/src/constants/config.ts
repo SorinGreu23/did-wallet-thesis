@@ -1,6 +1,6 @@
 // For iOS Simulator, use the Mac's local network IP instead of localhost.
 // Run `ipconfig getifaddr en0` (Wi-Fi) or `en1` (Ethernet) to find your IP.
-const HOST = 'localhost'; // ← replace with your Mac's LAN IP when running on a simulator/device
+const HOST = '192.168.1.12'; // Mac's LAN IP — use this for physical iPhone on the same Wi-Fi
 
 export const CONFIG = {
   DID_METHOD: 'did:ethr',
@@ -10,7 +10,7 @@ export const CONFIG = {
   ANVIL_CHAIN_ID: 31337,
   IDENTITY_SERVICE_URL: `http://${HOST}:5259`,
   CREDENTIAL_SERVICE_URL: `http://${HOST}:5214`,
-  ACCREDITATION_SERVICE_URL: `http://${HOST}:5260`,
+  ACCREDITATION_SERVICE_URL: `http://${HOST}:5211`,
   VERIFICATION_SERVICE_URL: `http://${HOST}:5216`,
   PRESENTATION_SERVICE_URL: `http://${HOST}:5217`,
 };

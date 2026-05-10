@@ -4,10 +4,31 @@ using DID.Accreditation.Domain.Interfaces;
 using DID.Shared.Application.Interfaces;
 using DID.Shared.Infrastructure.Options;
 using Microsoft.Extensions.Options;
+using Nethereum.ABI.FunctionEncoding.Attributes;
 using Nethereum.Web3.Accounts;
 using System.Numerics;
 
 namespace DID.Accreditation.Application.Services;
+
+/// <summary>Nethereum typed DTO for the AccreditationIssued on-chain event.</summary>
+[Event("AccreditationIssued")]
+file sealed class AccreditationIssuedEvent : IEventDTO
+{
+    [Parameter("bytes32", "id", 1, true)]
+    public byte[] Id { get; set; } = [];
+
+    [Parameter("address", "issuer", 2, true)]
+    public string Issuer { get; set; } = string.Empty;
+
+    [Parameter("address", "subject", 3, true)]
+    public string Subject { get; set; } = string.Empty;
+
+    [Parameter("uint8", "scope", 4, false)]
+    public byte Scope { get; set; }
+
+    [Parameter("bytes32", "parentAccreditationId", 5, false)]
+    public byte[] ParentAccreditationId { get; set; } = [];
+}
 
 public class AccreditationService(
     IAccreditationRepository repository,
@@ -108,12 +129,18 @@ public class AccreditationService(
 
         await blockchain.WaitForConfirmationAsync(txHash, ct);
 
-        var accreditationId = await FindIssuedAccreditationIdAsync(
-            effectiveSignerAddress,
-            subjectAddress,
-            scopeValue,
-            parentBytes,
-            permissionsBytes);
+        // Prefer reading the accreditation ID directly from the emitted event log
+        // to avoid relying on Nethereum's bytes32[] array decoding (which can return null).
+        var issuedEvents = await blockchain.FindEventsInReceiptAsync<AccreditationIssuedEvent>(
+            "AccreditationRegistry", txHash);
+        var accreditationId = issuedEvents.Count > 0
+            ? Bytes32ToHex(issuedEvents[0].Id)
+            : await FindIssuedAccreditationIdAsync(
+                effectiveSignerAddress,
+                subjectAddress,
+                scopeValue,
+                parentBytes,
+                permissionsBytes);
 
         var onChain = await GetRequiredOnChainAccreditationAsync(accreditationId);
 
@@ -166,9 +193,13 @@ public class AccreditationService(
         var parentBytes = HexToBytes32(parentAccreditationId);
         var permissionsBytes = HexToBytes32(null); // clients don't set permissions
 
-        // 2. Locate the resulting accreditation on-chain
-        var accreditationId = await FindIssuedAccreditationIdAsync(
-            issuerAddress, subjectAddress, scopeValue, parentBytes, permissionsBytes);
+        // 2. Locate the resulting accreditation on-chain — prefer the event log
+        var issuedEvents = await blockchain.FindEventsInReceiptAsync<AccreditationIssuedEvent>(
+            "AccreditationRegistry", txHash);
+        var accreditationId = issuedEvents.Count > 0
+            ? Bytes32ToHex(issuedEvents[0].Id)
+            : await FindIssuedAccreditationIdAsync(
+                issuerAddress, subjectAddress, scopeValue, parentBytes, permissionsBytes);
 
         // 3. Read and verify the on-chain record
         var onChain = await GetRequiredOnChainAccreditationAsync(accreditationId);
@@ -333,7 +364,7 @@ public class AccreditationService(
             "getAccreditationsBySubject",
             subjectAddress);
 
-        foreach (var accreditationId in accreditationIds.AsEnumerable().Reverse())
+        foreach (var accreditationId in ((IEnumerable<byte[]>?)accreditationIds ?? []).Reverse())
         {
             var candidate = await blockchain.CallContractAsync<OnChainAccreditationDto>(
                 "AccreditationRegistry",
@@ -380,8 +411,10 @@ public class AccreditationService(
         "ministry" => 2,
         "institution" => 3,
         "department" => 4,
+        "businessregistry" => 5,
+        "enterprise" => 6,
         _ => throw new ArgumentOutOfRangeException(nameof(scope), scope,
-            "Unsupported accreditation scope. Valid values are: MemberState, Ministry, Institution, Department")
+            "Unsupported accreditation scope. Valid values are: MemberState, Ministry, Institution, Department, BusinessRegistry, Enterprise")
     };
 
     private static string ScopeToString(byte scope) => scope switch
@@ -390,6 +423,8 @@ public class AccreditationService(
         2 => "Ministry",
         3 => "Institution",
         4 => "Department",
+        5 => "BusinessRegistry",
+        6 => "Enterprise",
         _ => "None"
     };
 

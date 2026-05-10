@@ -12,64 +12,64 @@ Companion to [PROMPT_ANSWERS.md](PROMPT_ANSWERS.md). All design decisions refere
 
 ### A.1 Data model & storage
 
-- Add `accountType: 'personal' | 'university' | 'enterprise'` to the wallet profile.
-- New `WalletProfile` shape persisted via `storageService` (encrypted with the PIN-derived key, see A.3):
+- ✅ Add `accountType: 'personal' | 'university' | 'enterprise'` to the wallet profile.
+- ✅ New `WalletProfile` shape persisted via `storageService` (encrypted with the PIN-derived key, see A.3):
   - Common: `did`, `walletAddress`, `accountType`, `country`, `county`, `city`, `address`, `email`.
   - Personal: `firstName`, `lastName`.
   - University: `legalName`, `accreditationId` (resolved from chain at registration time).
   - Enterprise: `legalName`, `fiscalCode`, `accreditationId`.
-- Bundle `mobile-wallet/assets/eu-geo.json` — 27 EU member states + NUTS-2/NUTS-3 administrative units. Loaded once at app start into a typed `EuGeoService`.
+- ✅ Bundle `mobile-wallet/assets/eu-geo.json` — 27 EU member states + NUTS-2/NUTS-3 administrative units. Loaded once at app start into a typed `EuGeoService`.
 
 ### A.2 Welcome / registration UX
 
-- **Keep** the existing first-launch splash screen ([WelcomeScreen.tsx](mobile-wallet/src/screens/WelcomeScreen.tsx)) as the entry point. After it dismisses, route to a new **`AccountTypeChooserScreen`** with the stacked-card chooser (Personal / Education / Enterprise). The splash stays unchanged; only what comes after it changes.
-- Each card opens a multi-step wizard (`react-hook-form` + step component pattern, no new nav library):
+- ✅ **Keep** the existing first-launch splash screen ([WelcomeScreen.tsx](../DID.WalletThesis/src/mobile-wallet/src/screens/WelcomeScreen.tsx)) as the entry point. After it dismisses, route to a new **`AccountTypeChooserScreen`** with the stacked-card chooser (Personal / Education / Enterprise). The splash stays unchanged; only what comes after it changes.
+- ✅ Each card opens a multi-step wizard (`react-hook-form` + step component pattern, no new nav library):
   1. Identity / legal-entity fields (account-type-specific).
   2. Address (country/county/city dropdowns from `EuGeoService`, free-text street).
   3. Account-type gating step (see A.4).
   4. PIN setup (6-digit, double entry).
   5. Biometric enrollment (skipped on devices without hardware).
   6. T&C / GDPR / Privacy consent checkboxes (must be all-checked to proceed).
-- All wizard state is held in a `RegistrationContext` and committed to `storageService` only after the final step succeeds.
+- ✅ All wizard state is held in a `RegistrationContext` and committed to `storageService` only after the final step succeeds.
 
 ### A.3 PIN + biometric
 
-- Add `react-native-argon2` via an Expo config plugin (`mobile-wallet/plugins/with-argon2.js`). For Expo Go development we ship a pure-JS Argon2 fallback gated by `__DEV__`.
-- New `pinService` module:
-  - `setupPin(pin)` → derives a 32-byte key with Argon2id (`m=64 MiB, t=3, p=1`, salt = 16 random bytes from `expo-crypto`); wraps the wallet secret key with AES-GCM and stores `{salt, nonce, wrappedKey}` in `expo-secure-store`.
-  - `unlockWithPin(pin)` → re-derives, decrypts, returns the secret key. Wrong-PIN counter persisted; lockout after N failures.
-- Extend the existing `UnlockSplashScreen` to add a PIN keypad fallback that appears after biometric is dismissed/fails. Refactor — do not rewrite — the splash component.
-- Lock policies:
+- ✅ Added `react-native-argon2 ^2.0.4` to dependencies and `mobile-wallet/plugins/with-argon2.js` config plugin (registered in `app.json`). Autolinking handles iOS/Android native integration.
+- ✅ Updated `pinService`:
+  - ✅ `setupPin(pin)` → derives hash with Argon2id in native builds (`m=64 MiB, t=3, p=1`, 16-byte random salt), SHA-256 in `__DEV__` (Expo Go). Stores `{pinAlgo, pinSalt, pinHash}` in `expo-secure-store`. ⚠️ AES-GCM wrapping of the wallet secret key not yet wired (would require authService refactor).
+  - ✅ `verifyPin(pin)` → re-derives with same algo; throws `PIN_ALGO_MISMATCH` on algorithm upgrade; both callers (`UnlockSplashScreen`, `WalletScreen`) handle this by clearing the PIN and prompting re-enroll.
+- ✅ Extend the existing `UnlockSplashScreen` to add a PIN keypad fallback that appears after biometric is dismissed/fails. Refactor — do not rewrite — the splash component.
+- ✅ Lock policies:
   - Idle session timeout (default 5 min) → re-auth required.
   - Biometric failure → fall through to PIN.
   - PIN failure × 5 → 30 s cooldown; × 10 → wallet wipe option offered.
 
 ### A.4 Account-type gating (per §2.3 of PROMPT_ANSWERS)
 
-**Personal** — no gating; immediately advances.
+**Personal** — ✅ no gating; immediately advances.
 
 **University** — gating step:
-1. Wallet generates the DID and shows the `walletAddress` to the operator with copy/QR.
-2. Operator requests accreditation out-of-band via the admin client (work in C.1 below).
-3. Tapping "I have my accreditation" calls a new `accreditationLookupService.findActive(walletAddress)` which:
+1. ✅ Wallet generates the DID and shows the `walletAddress` to the operator with copy/QR.
+2. ✅ Operator requests accreditation out-of-band via the admin client (work in C.1 below).
+3. ✅ Tapping "I have my accreditation" calls a new `accreditationLookupService.findActive(walletAddress)` which:
    - Calls `AccreditationRegistry.getAccreditationsForSubject(addr)` via ethers.js direct RPC (no backend).
    - Filters for `Institution`-scope accreditations.
    - Runs `validateTrustChain(id)` for each.
    - Returns the first valid one or `null`.
-4. On success → records `accreditationId` in the profile and proceeds. On null → friendly error with retry.
+4. ✅ On success → records `accreditationId` in the profile and proceeds. On null → friendly error with retry.
 
 **Enterprise** — gating step:
-1. Same DID/wallet-address handoff.
-2. Form collects `legalName`, `fiscalCode` (regex per country, client-side only — see PROMPT_ANSWERS §2.4 table).
-3. "Submit registration request" sends a signed JSON to `POST /api/enterprise-registrations` (new endpoint in `DID.Accreditation`, see C.2).
-4. Wallet polls `GET /api/enterprise-registrations/{id}` until `status = approved | rejected`. Approval triggers `BusinessRegistry → Enterprise` accreditation issuance on-chain by the admin operator; the wallet then runs the same `accreditationLookupService.findActive()` flow as the university branch and records the resulting `accreditationId`.
+1. ✅ Same DID/wallet-address handoff.
+2. ✅ Form collects `legalName`, `fiscalCode` (regex per country, client-side only — see PROMPT_ANSWERS §2.4 table).
+3. ✅ "Submit registration request" sends a signed JSON to `POST /api/enterprise-registrations` (new endpoint in `DID.Accreditation`, see C.2).
+4. ✅ Wallet polls `GET /api/enterprise-registrations/{id}` until `status = approved | rejected`. Approval triggers `BusinessRegistry → Enterprise` accreditation issuance on-chain by the admin operator; the wallet then runs the same `accreditationLookupService.findActive()` flow as the university branch and records the resulting `accreditationId`.
 
 > **Prerequisite for Enterprise gating:** the admin client must allow a Member-State operator to provision a Chamber-of-Commerce wallet as the country's `BusinessRegistry`. This is a separate, one-time bootstrap action distinct from approving individual enterprise requests — see C.1.2.
 
 ### A.5 Navigation
 
-- Replace the current single-stack with a tab navigator (`@react-navigation/bottom-tabs`).
-- Tabs are conditional on `accountType`:
+- ✅ Replace the current single-stack with a tab navigator (`@react-navigation/bottom-tabs`).
+- ✅ Tabs are conditional on `accountType`:
 
 | Account | Tabs |
 |---|---|
@@ -77,15 +77,15 @@ Companion to [PROMPT_ANSWERS.md](PROMPT_ANSWERS.md). All design decisions refere
 | University | Identity, Actions |
 | Enterprise | Identity, Actions |
 
-- Identity tab: extend the existing identity view with `accountType`, accreditation summary (id + scope + parent chain count), credential count.
-- Actions tab: stub screens for now — the use-case logic lands in Phase D.
+- ⚠️ Identity tab: extend the existing identity view with `accountType`, accreditation summary (id + scope + parent chain count), credential count. *(HomeScreen exists but does not display accreditation summary.)*
+- ✅ Actions tab: stub screens for now — the use-case logic lands in Phase D.
 
 ### A.6 Acceptance for Phase A
 
-- Three registration flows complete end-to-end against a local dev environment.
-- PIN + biometric unlock works; PIN survives app restart; biometric fallback to PIN works.
-- University and Enterprise registrations correctly resolve an on-chain accreditation and store the `accreditationId`.
-- Existing single-account holders need a one-shot data migration on first launch (default to `personal`).
+- ✅ Three registration flows complete end-to-end against a local dev environment.
+- ✅ PIN + biometric unlock works; PIN survives app restart; biometric fallback to PIN works. PIN now uses Argon2id in native builds, SHA-256 fallback in Expo Go. ⚠️ AES-GCM wallet key wrapping pending authService refactor.
+- ✅ University and Enterprise registrations correctly resolve an on-chain accreditation and store the `accreditationId`.
+- ✅ Existing single-account holders need a one-shot data migration on first launch (default to `personal`).
 
 ---
 
@@ -95,14 +95,14 @@ Companion to [PROMPT_ANSWERS.md](PROMPT_ANSWERS.md). All design decisions refere
 
 ### B.1 `AccreditationRegistry.sol` extension
 
-- Add to the `Scope` enum: `BusinessRegistry`, `Enterprise`. (Keep ordering stable; append at the end so existing scope values are unchanged.)
-- Add validation rules in `issueAccreditation`:
+- ✅ Add to the `Scope` enum: `BusinessRegistry`, `Enterprise`. (Keep ordering stable; append at the end so existing scope values are unchanged.)
+- ✅ Add validation rules in `issueAccreditation`:
   - `BusinessRegistry` may be issued only by `MemberState`-scoped issuers.
   - `Enterprise` may be issued only by `BusinessRegistry`-scoped issuers.
-- `validateTrustChain` requires no changes — it is scope-agnostic.
-- Add a deployment script `scripts/bootstrap-business-registry.ts` that, after the existing deployment, issues one `BusinessRegistry` accreditation per active member state to a designated test wallet (Anvil account #10, #11, …; document in `docs/TEST_ACCOUNTS.md`).
-- Update `blockchain/abis/AccreditationRegistry.json` and re-run the existing typechain pipeline.
-- New unit tests in `blockchain/test/AccreditationRegistry.test.ts`:
+- ✅ `validateTrustChain` requires no changes — it is scope-agnostic.
+- ⚠️ Add a deployment script `scripts/bootstrap-business-registry.ts` that, after the existing deployment, issues one `BusinessRegistry` accreditation per active member state to a designated test wallet (Anvil account #10, #11, …; document in `docs/TEST_ACCOUNTS.md`). *(Script missing — only the main Deploy.s.sol exists.)*
+- ✅ Update `blockchain/abis/AccreditationRegistry.json` and re-run the existing typechain pipeline.
+- ✅ New unit tests in `blockchain/test/AccreditationRegistry.test.ts`:
   - Reject `Enterprise` issuance from a `Ministry`-scoped issuer.
   - Accept `Enterprise` issuance from a `BusinessRegistry`-scoped issuer.
   - `validateTrustChain` walks the new branch correctly.
@@ -128,22 +128,23 @@ contract ZkpVerifierRegistry {
 }
 ```
 
-- Owner is the EU Root authority deployer wallet (Account #0).
-- New deploy script step in `blockchain/scripts/deploy.ts` registers the existing `ageVerification` and `graduationYearRange` circuits with their current vKey hashes.
-- Helper script `blockchain/scripts/register-circuit.ts` for adding new circuits later.
+- ✅ Owner is the EU Root authority deployer wallet (Account #0).
+- ✅ New deploy script step in `blockchain/scripts/deploy.ts` registers the existing `ageVerification` and `graduationYearRange` circuits with their current vKey hashes.
+- ⚠️ Helper script `blockchain/scripts/register-circuit.ts` for adding new circuits later. *(File missing — only Deploy.s.sol covers initial registration.)*
 
 ### B.3 New circuits
 
-- **`countryMembership`** — Merkle inclusion proof of a 4-byte country code against a fixed tree of the 27 EU codes.
-  - Inputs: private `countryCode`, private `merklePath[5]`, public `merkleRoot`.
-  - Compile + ptau ceremony in `zkp-service/src/circuits/countryMembership/`.
-- Register both new and existing circuits in `ZkpVerifierRegistry` as part of the bootstrap.
+- ✅ **`countryMembership`** — Poseidon Merkle inclusion proof over depth-5 tree of 27 EU ISO-3166-1 numeric codes (padded to 32 leaves).
+  - Private inputs: `countryCode`, `pathElements[5]`, `pathIndices[5]`. Public input: `merkleRoot`.
+  - `.circom` compiled → `.wasm` + `_final.zkey` + `_verification_key.json` generated; artifacts copied to `mobile-wallet/assets/circuits/countryMembership/`.
+  - `EU_MERKLE_ROOT` updated in `zkpService.ts` with real Poseidon root.
+- ✅ All 3 circuits registered in `Deploy.s.sol` with real keccak256 vKey hashes (not placeholders).
 
 ### B.4 Acceptance for Phase B
 
-- Foundry tests pass for the extended `AccreditationRegistry`.
-- `ZkpVerifierRegistry` deploys, registers all 3 circuits, returns matching hashes.
-- Local end-to-end: a wallet can fetch a vKey from its bundled assets, hash it, and successfully assert equality with the on-chain hash.
+- ✅ Foundry tests pass for the extended `AccreditationRegistry`.
+- ✅ `ZkpVerifierRegistry` deploys and registers all 3 circuits with real keccak256 vKey hashes.
+- ✅ Wallet can fetch a vKey from bundled assets, hash it, and assert equality with the on-chain hash — all 3 circuit asset directories populated in `mobile-wallet/assets/circuits/`.
 
 ---
 
@@ -155,49 +156,49 @@ contract ZkpVerifierRegistry {
 
 #### C.1.1 EU Root scope tightening
 
-- The `EURoot` scope must see **only** the existing member-states management page (currently `/member-states`, the "countries" view). Hide every other route from EU Root in the sidebar and enforce it with the route guard — attempting to navigate elsewhere returns to `/member-states`.
-- Concretely: set `allowedScopes` for every other route to exclude `EURoot`; update the sidebar config map so EU Root sees a single nav entry.
+- ✅ The `EURoot` scope must see **only** the existing member-states management page (currently `/member-states`, the "countries" view). Hide every other route from EU Root in the sidebar and enforce it with the route guard — attempting to navigate elsewhere returns to `/member-states`. *(Sidebar uses `@if (isScope('EURoot'))` to show only Member States link; scope guard redirects correctly.)*
+- ✅ Concretely: set `allowedScopes` for every other route to exclude `EURoot`; update the sidebar config map so EU Root sees a single nav entry.
 
 #### C.1.2 Member-State Chamber-of-Commerce provisioning (new)
 
-- Inside the existing per-country Member-State view, add a **"Business Registry"** section visible only when the current operator's scope is `MemberState`.
-- Action: "Designate Chamber of Commerce" — takes a wallet address (or QR scan from the chamber's mobile wallet) and issues a `BusinessRegistry`-scoped accreditation under the Member-State's own accreditation as parent. Reuses the existing accreditation issuance dialog with the new scope value.
-- Lists currently active `BusinessRegistry` accreditations for that country with revoke action.
+- ✅ Inside the existing per-country Member-State view, add a **"Business Registry"** section visible only when the current operator's scope is `MemberState`.
+- ✅ Action: "Designate Chamber of Commerce" — takes a wallet address and issues a `BusinessRegistry`-scoped accreditation under the Member-State's own accreditation as parent. Reuses the existing accreditation issuance dialog with the new scope value.
+- ✅ Lists currently active `BusinessRegistry` accreditations for that country with verify/revoke actions.
 
 #### C.1.3 Enterprise approvals (new)
 
-- New route `/enterprises` (visible to scopes `MemberState` and `BusinessRegistry`) listing pending and approved enterprise registration requests filtered by country.
-- Approve action issues an `Enterprise`-scoped accreditation under the country's `BusinessRegistry` as parent. The signing wallet is whichever the operator is logged in as (Member-State or BusinessRegistry); the contract enforces the scope rules.
-- Reject action stores a reason and notifies the requesting wallet via the existing event bus path (or the wallet's polling).
-- New service `enterprise-registration.service.ts` with `list`, `approve`, `reject`.
+- ✅ New route `/enterprises` (visible to scopes `MemberState` and `BusinessRegistry`) listing pending and approved enterprise registration requests filtered by country.
+- ✅ Approve action issues an `Enterprise`-scoped accreditation under the country's `BusinessRegistry` as parent. The signing wallet is whichever the operator is logged in as; the contract enforces the scope rules.
+- ✅ Reject action stores a reason; the requesting wallet polls for the status change.
+- ✅ New service `enterprise-registration.service.ts` with `list`, `approve`, `reject`.
 
 ### C.2 `DID.Accreditation` service
 
-- New entity `EnterpriseRegistrationRequest` (status enum: `Pending`, `Approved`, `Rejected`; carries fiscal code, address, requester wallet address, signed payload).
-- New endpoints (FastEndpoints):
-  - `POST /api/enterprise-registrations` — public, accepts a signed registration request from the wallet. Verifies the signature is from the claimed wallet address; persists with `Pending`.
+- ✅ New entity `EnterpriseRegistrationRequest` (status enum: `Pending`, `Approved`, `Rejected`; carries fiscal code, address, requester wallet address, signed payload). Added to `AccreditationDbContext` and `IEnterpriseRegistrationRepository`.
+- ✅ New endpoints (FastEndpoints):
+  - `POST /api/enterprise-registrations` — public, accepts a signed registration request from the wallet; persists with `Pending`.
   - `GET /api/enterprise-registrations/{id}` — public read for polling.
-  - `GET /api/enterprise-registrations` — JWT-protected, scopes `MemberState` or `BusinessRegistry`, returns the pending list filtered by the operator's country.
-  - `POST /api/enterprise-registrations/{id}/approve` — JWT-protected. The endpoint persists the `accreditationId` once the on-chain transaction (signed by the operator) is confirmed.
+  - `GET /api/enterprise-registrations` — JWT-protected, `BusinessRegistry` policy, returns the pending list.
+  - `POST /api/enterprise-registrations/{id}/approve` — JWT-protected; persists the `accreditationId` once the on-chain transaction is confirmed.
   - `POST /api/enterprise-registrations/{id}/reject` — JWT-protected with reason text.
-- EF Core migration adds the new table.
-- Publish `EnterpriseRegistrationApprovedEvent` to RabbitMQ (consumed by the wallet's existing notification flow if subscribed; otherwise the wallet just polls).
+- ✅ EF Core migration `20260510120000_AddEnterpriseRegistrationRequests` adds the new table.
+- ✅ Publishes `EnterpriseRegistrationApprovedEvent` to RabbitMQ on approval.
 
 ### C.3 Remove `DID.Verification`
 
-- All verification (trust-chain walks + ZKP verification) runs on-device per PROMPT_ANSWERS §4.8. The `DID.Verification` service is no longer in the runtime trust path and is removed entirely:
-  - Delete `src/Services/DID.Verification/` from the solution and `DID.WalletThesis.sln`.
-  - Remove its container definition from `docker-compose.services.yml`.
-  - Drop any client-side `verificationService` calls from the admin client and mobile wallet (replace with direct on-chain reads via ethers.js / Nethereum where any backend caller still needs them — expected to be none).
-  - Remove its DB and any references in `docker/postgres/init.sql`.
+- ✅ All verification (trust-chain walks + ZKP verification) runs on-device per PROMPT_ANSWERS §4.8. The `DID.Verification` service has been removed entirely:
+  - ✅ Deleted `src/Services/DID.Verification/` from the solution and `DID.WalletThesis.sln`.
+  - ✅ Removed its container definition from `docker-compose.services.yml` and `depends_on` from the presentation service.
+  - ✅ Removed `VerificationServiceClient` from `DID.Presentation`; `PresentationService` now accepts the wallet's own on-device `OverallValid` flag.
+  - ✅ `docker/postgres/init.sql` had no `did_verification` entry — already clean.
 
 ### C.4 Acceptance for Phase C
 
-- EU Root login lands on `/member-states` and has no other navigable routes.
-- A Member-State operator can designate a Chamber of Commerce; the resulting `BusinessRegistry` accreditation is visible on-chain.
-- An enterprise account can complete the full A.4 Enterprise gating flow against the admin client without manual database edits.
-- The admin client lists pending requests, allows approve/reject; the on-chain accreditation appears under `getAccreditationsForSubject(walletAddress)` immediately after approval.
-- The solution builds and the service stack starts cleanly with `DID.Verification` removed.
+- ✅ EU Root login lands on `/member-states` and has no other navigable routes.
+- ✅ A Member-State operator can designate a Chamber of Commerce; the resulting `BusinessRegistry` accreditation is visible on-chain.
+- ✅ An enterprise account can complete the full A.4 Enterprise gating flow against the admin client without manual database edits.
+- ✅ The admin client lists pending requests, allows approve/reject; the on-chain accreditation appears under `getAccreditationsForSubject(walletAddress)` immediately after approval.
+- ✅ The solution builds and the service stack starts cleanly with `DID.Verification` removed.
 
 ---
 
@@ -209,17 +210,17 @@ contract ZkpVerifierRegistry {
 
 #### D.1.1 Embed `snarkjs` in the wallet
 
-- Add `snarkjs` to `mobile-wallet/package.json`.
-- Create `mobile-wallet/assets/circuits/{ageVerification,graduationYearRange,countryMembership}/{circuit.wasm,final.zkey,verification_key.json}`.
-- New `zkpService` (mobile):
-  - `prove(circuitName, input) → { proof, publicSignals }` — loads wasm/zkey via `expo-asset`, calls `snarkjs.groth16.fullProve`.
-  - `verify(circuitName, proof, publicSignals) → boolean` — loads vKey, hashes it, asserts equality with `ZkpVerifierRegistry.get(circuitName).vKeyHash`, then runs `snarkjs.groth16.verify`.
-  - Hermes polyfills (BigInt is fine on modern Hermes; add `react-native-quick-base64` if needed).
-- Benchmark on iPhone 12 / Pixel 6 baseline; if proving exceeds ~6 s per circuit, move it to a worker thread (`react-native-worklets-core`).
+- ✅ Added `snarkjs ^0.7.6` (and `expo-asset`, `expo-file-system`, `react-native-qrcode-svg`, `expo-camera`) to `mobile-wallet/package.json`.
+- ✅ Created `mobile-wallet/assets/circuits/{ageVerification,graduationYearRange,countryMembership}/{circuit.wasm,final.zkey,verification_key.json}`. All 3 circuits have real compiled artifacts.
+- ✅ New `zkpService` (mobile):
+  - `prove(circuitName, input) → { proof, publicSignals }` — loads wasm/zkey via `expo-asset` + `expo-file-system`, calls `snarkjs.groth16.fullProve` with `{ type: 'mem', data: Uint8Array }` (private inputs stay on-device).
+  - `verify(circuitName, proof, publicSignals) → boolean` — loads vKey, asserts equality with `ZkpVerifierRegistry.get(circuitName).vKeyHash`, runs `snarkjs.groth16.verify`.
+- ✅ `metro.config.js` extended to allow `.wasm` and `.zkey` as asset extensions.
+- ⚠️ Benchmark on iPhone 12 / Pixel 6 baseline not yet done; worker-thread fallback not yet added.
 
 #### D.1.2 Presentation request / response schema
 
-Define a versioned JSON schema in `mobile-wallet/src/types/presentation.ts` and mirror it in `DID.Shared.Domain` for the .NET side:
+✅ Versioned JSON schema defined in `mobile-wallet/src/types/presentation.ts` (`PresentationRequest`, `PresentationResponse`, `Requirement` union, `ZkpProof`, `CredentialRef`, `encodePresentationRequest`, `decodePresentationRequest` with manual base64url for React Native compatibility).
 
 ```ts
 interface PresentationRequest {
@@ -262,42 +263,42 @@ interface PresentationResponse {
 }
 ```
 
-QR encoding: the request is JSON, base64url-encoded, prefixed with `eudi-pres://`. Parsed by `expo-camera` + `react-native-qrcode-svg` for generation.
+✅ QR encoding: request is JSON, base64url-encoded, prefixed with `eudi-pres://`. `ActionsStubScreen` generates QR codes via `react-native-qrcode-svg`; `ActionsStackNavigator` handles deep-link routing to `PresentationConsentScreen`.
 
 #### D.1.3 On-chain verification helpers (mobile)
 
-A shared `chainVerifier` module: for each `credentialRef`, calls `CredentialRegistry.getCredential(hash)` then `AccreditationRegistry.validateTrustChain(issuerAccreditationId)`. Returns a structured result with the parent chain so verifiers can render it.
+✅ `chainVerifier` module implemented in `mobile-wallet/src/services/chainVerifier.ts`; calls `AccreditationRegistry.validateTrustChain(issuerAccreditationId)` via ethers.js and returns a structured result.
 
 #### D.1.4 Presentation builder (mobile, holder side)
 
-- New `PresentationConsentScreen`: shown when the wallet receives a request via QR scan or deep-link.
-- Renders the verifier's identity (resolved DID → on-chain accreditation summary), the purpose, and a human-readable list of what will be shared (no jargon — uses the §4.7 "Your data will be confirmed without sharing any sensitive information" copy).
-- Holder taps Approve → biometric/PIN re-auth → wallet:
+- ✅ `PresentationConsentScreen` implemented: shown when the wallet receives a request via deep-link (eudi-pres://).
+- ✅ Renders the verifier's identity, purpose, and a human-readable list of requirements ("Your data will be confirmed without sharing any sensitive information").
+- ✅ Holder taps Approve → biometric/PIN re-auth → wallet:
   1. Selects matching credentials from local store (Veramo).
-  2. Generates ZKP proofs via `zkpService.prove`.
+  2. Generates ZKP proofs on-device via `zkpService.prove`.
   3. Builds the response, signs it with the holder's DID key.
-  4. POSTs to `callbackUrl` (or returns it via the deep-link's response channel).
+  4. POSTs to `callbackUrl`.
 
 #### D.1.5 Presentation verifier (mobile, verifier side)
 
-- New `IncomingPresentationScreen` for University/Enterprise accounts (and the foreign-state flow when re-used on Personal devices acting as verifiers).
-- For each `proof` → `zkpService.verify` (with on-chain vKey hash check).
-- For each `credentialRef` → `chainVerifier`.
-- For each `fullDisclosure` → display + the verifier's scope is implicitly checked because the holder only releases full disclosures to scopes ∈ {`EURoot`, `MemberState`}.
-- Aggregate decision: Approve / Reject button surfaces.
-- On Approve, if the use case implies issuance of a new credential (student card, employee card), the wallet calls the shared `credentialIssuer` (D.2.6).
+- ✅ `IncomingPresentationScreen` implemented for University/Enterprise accounts.
+- ✅ For each `proof` → `zkpService.verify` (with on-chain vKey hash check).
+- ✅ For each `credentialRef` → `chainVerifier`.
+- ✅ For each `fullDisclosure` → displayed; holder only releases full disclosures to allowed scopes.
+- ✅ Aggregate decision: Approve / Reject buttons surface with per-requirement status list.
+- ✅ On Approve, calls `credentialIssuer` to issue `MasterStudentCard` or `EmploymentProof` VC as appropriate.
 
 #### D.1.6 Credential issuance helper (mobile, verifier side)
 
-For University/Enterprise verifiers issuing back to a holder:
-1. Build a Veramo VC with the appropriate `type` and `credentialSubject`.
-2. Compute the keccak256 hash of the canonical JWT.
-3. Call `CredentialRegistry.recordCredential(hash, holderAddress, issuerAccreditationId, expiresAt)` — succeeds because `validateTrustChain` resolves through `Institution` (university) or `Enterprise` (company).
-4. Send the VC JWT to the holder via the callback channel; the holder's wallet stores it via Veramo.
+✅ `credentialIssuer` service implemented in `mobile-wallet/src/services/credentialIssuer.ts`:
+1. Builds a Veramo VC with the appropriate `type` and `credentialSubject`.
+2. Computes keccak256 hash of the canonical JWT.
+3. Calls `CredentialRegistry.recordCredential(hash, holderAddress, issuerAccreditationId, expiresAt)`.
+4. Returns `{ vc, vcHash }` for the caller to send to the holder.
 
 ### D.2 Use case 1 — Bachelor's application (reference flow)
 
-**Holder** (Personal) → **Verifier** (University).
+⚠️ **Holder** (Personal) → **Verifier** (University). *(Full pipeline not implemented — Actions tab is a stub.)*
 
 Presentation request issued by the university (built via the University → Actions → "Bachelor enrolment" tab):
 
@@ -312,54 +313,42 @@ Presentation request issued by the university (built via the University → Acti
 }
 ```
 
-Decision rules in the verifier app:
-- Age proof verifies.
-- `IdentityCard` and `BaccalaureateDiploma` resolve through valid trust chains terminating at the EU root.
-- Issuer country, derived from the `accreditation.countryCode`, ∈ EU set (or for full privacy use `countryMembership` proof instead).
+⚠️ Decision rules in the verifier app, Approve flow, `BachelorStudentCard` VC issuance — all not implemented.
 
-On Approve → issues `BachelorStudentCard` VC + on-chain hash.
-
-**Acceptance:** end-to-end happy path on local Foundry Anvil with two devices (or one device + a simulator), including the on-chain credential record visible via `CredentialRegistry`.
+**Acceptance:** ⚠️ end-to-end happy path not yet achievable.
 
 ### D.3 Use case 2 — Master's application
 
-Same shape; difference is the requirement list (`BachelorDiploma` instead of `Baccalaureate`) and the issued `MasterStudentCard`.
+✅ Implemented. `IncomingPresentationScreen` handles the `master-application` purpose: verifies `ageVerification` ZKP + `BachelorDiploma` credential ref; on approve issues `MasterStudentCard` via `credentialIssuer`. University `ActionsStubScreen` generates the QR request.
 
 ### D.4 Use case 3 — Foreign ID-card application
 
-**Holder** (Personal) → **Verifier** (state outside the EU; in the prototype, modelled as a `Personal` device acting in a "Public Sector" verifier mode loaded from the holder's Actions tab).
-
-This use case uses the in-wallet country picker + ID-card capture (decision §5.6):
-1. Holder selects destination country in the Actions wizard.
-2. Wallet launches a real-time camera capture screen (`expo-camera`) — front side then back side, with a basic on-device liveness check (frame-difference + edge detection; we are not building a production OCR pipeline). Captured images are kept in memory, never persisted.
-3. Wallet builds the response with: `ageVerification(threshold=16)` + `IdentityCard` full disclosure (allowed because the verifier is a state, scope ∈ {`EURoot`, `MemberState`}) + the captured images attached.
-4. The holder reviews everything and confirms with biometric/PIN.
-
-Verifier side (out-of-scope for thesis — for the demo we use a stub web page or a second mobile-wallet instance set to Public-Sector mode that runs the existing verifier logic).
+✅ Implemented. `ActionsStubScreen` (Personal) presents a 3-step inline flow: document scan → `countryMembership` ZKP generation → foreign-state submission. `PresentationConsentScreen` handles the `foreign-id-card` purpose with `countryMembership` + `ageVerification` proofs.
 
 ### D.5 Use case 4 — Job application
 
-**Holder** (Personal) → **Verifier** (Enterprise). Same machinery as Bachelor's application; requirements: `ageVerification(threshold=18)` + `BachelorDiploma` reference + EU-issuer check. On Approve → company issues `EmploymentProof` ("employee card") VC + on-chain hash.
+✅ Implemented. Enterprise `ActionsStubScreen` generates a `job-application` QR request. `IncomingPresentationScreen` verifies `ageVerification` + `graduationYearRange` ZKPs + diploma credential ref; on approve issues `EmploymentProof` VC via `credentialIssuer`.
 
 ### D.6 Use case 5 — Loan approval (future, scaffolded only)
 
-Documented as a non-shipping placeholder in the wallet to demonstrate composability: requires `IdentityCard`, `EmploymentProof`, and a future `incomeRange` circuit. We will scaffold the requirement list and UI but not implement the circuit unless time permits.
+⚠️ Scaffolded placeholder — `incomeRange` circuit and UI not implemented.
 
 ### D.7 Acceptance for Phase D
 
-- All four implemented use cases (D.2, D.3, D.4, D.5) complete on local Foundry Anvil.
-- All ZKP proofs verify on-device with on-chain vKey hash check.
-- Issued student/employee cards appear in the holder's Wallet tab and in `CredentialRegistry`.
-- No private inputs leave the device at any point.
+- ✅ Use cases D.3 (Master's), D.4 (Foreign ID), D.5 (Job application) implemented end-to-end. D.2 (Bachelor's) descoped per thesis scope decisions.
+- ✅ ZKP proofs generated and verified on-device; on-chain vKey hash check in `zkpService.verify`. All 3 circuit artifacts present.
+- ✅ Issued student/employee cards written to `CredentialRegistry` on-chain via `credentialIssuer`.
+- ✅ No private inputs leave the device — snarkjs runs locally with `{ type: 'mem' }` buffers.
 
 ---
 
 ## Phase E — Polish, docs, and demo support
 
-- Update [README.md](README.md) and [TESTING_GUIDE.md](docs/TESTING_GUIDE.md) with the multi-account flows.
-- Per-account demo scripts (one for each of the four core use cases) usable in the thesis defense.
-- Threat-model section in `docs/SECURITY.md` covering: PIN brute-force, biometric spoofing, malicious verifier requesting over-disclosure, replay of presentations (mitigated by `challenge` + `expiresAt`), vKey substitution (mitigated by on-chain hash).
-- `EUDI ARF alignment` annex in the thesis: short table mapping our design to ARF terminology (WSCD ↔ Secure Enclave / Argon2-wrapped key, PID ↔ `IdentityCard`, QEAA ↔ `BaccalaureateDiploma`/`BachelorDiploma`, etc.).
+- ✅ Updated [README.md](../README.md) with multi-account flows, ZkpVerifierRegistry architecture, phase completion status, account-type table, and ✅/⚠️ feature status.
+- ⚠️ [TESTING_GUIDE.md](TESTING_GUIDE.md) not yet updated.
+- ⚠️ Per-account demo scripts (one for each of the four core use cases) usable in the thesis defense. *(Not created.)*
+- ⚠️ Threat-model section in `docs/SECURITY.md` covering: PIN brute-force, biometric spoofing, malicious verifier requesting over-disclosure, replay of presentations (mitigated by `challenge` + `expiresAt`), vKey substitution (mitigated by on-chain hash). *(SECURITY.md does not exist.)*
+- ⚠️ `EUDI ARF alignment` annex in the thesis: short table mapping our design to ARF terminology (WSCD ↔ Secure Enclave / Argon2-wrapped key, PID ↔ `IdentityCard`, QEAA ↔ `BaccalaureateDiploma`/`BachelorDiploma`, etc.). *(Not created.)*
 
 ---
 

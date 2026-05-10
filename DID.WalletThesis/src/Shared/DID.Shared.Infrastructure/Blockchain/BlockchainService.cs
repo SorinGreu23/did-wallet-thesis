@@ -2,6 +2,7 @@ using DID.Shared.Application.Interfaces;
 using DID.Shared.Infrastructure.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Nethereum.ABI.ABIDeserialisation;
 using Nethereum.ABI.FunctionEncoding.Attributes;
 using Nethereum.Contracts;
 using Nethereum.Hex.HexTypes;
@@ -69,6 +70,12 @@ public class BlockchainService : IBlockchainService
           txHash, contractName, functionName, fromAddress);
       return txHash;
     }
+    catch (SmartContractCustomErrorRevertException customEx)
+    {
+      var errorName = DecodeContractError(customEx, contractName);
+      _logger.LogError(customEx, "Contract {Contract}.{Function} reverted: {Error}", contractName, functionName, errorName);
+      throw new InvalidOperationException($"Contract error: {errorName}", customEx);
+    }
     catch (Exception ex)
     {
       _logger.LogError(ex, "Transaction failed for {Contract}.{Function} from {Address}", contractName, functionName, fromAddress);
@@ -127,6 +134,21 @@ public class BlockchainService : IBlockchainService
     _logger.LogInformation("Stopped listening for {Event} on {Contract}", eventName, contractName);
   }
 
+  public async Task<IReadOnlyList<TEvent>> FindEventsInReceiptAsync<TEvent>(
+      string contractName, string txHash)
+      where TEvent : class, IEventDTO, new()
+  {
+    var receipt = await _web3.Eth.Transactions.GetTransactionReceipt
+        .SendRequestAsync(txHash);
+    if (receipt?.Logs == null)
+      return [];
+
+    var contract = GetContract(contractName);
+    var eventHandler = contract.GetEvent<TEvent>();
+    var decoded = eventHandler.DecodeAllEventsForEvent(receipt.Logs);
+    return decoded.Select(l => l.Event).ToList();
+  }
+
   public async Task<string> WaitForConfirmationAsync(string txHash, CancellationToken ct = default)
   {
     while (!ct.IsCancellationRequested)
@@ -166,6 +188,30 @@ public class BlockchainService : IBlockchainService
   {
     return _options.Contracts.TryGetValue(contractName, out var addr) ? addr
         : throw new InvalidOperationException($"Contract address not configured for '{contractName}'");
+  }
+
+  private string DecodeContractError(SmartContractCustomErrorRevertException ex, string contractName)
+  {
+    var encoded = ex.ExceptionEncodedData;
+    if (string.IsNullOrEmpty(encoded)) return "UnknownContractError";
+
+    var hex = encoded.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? encoded[2..] : encoded;
+    if (hex.Length < 8) return "UnknownContractError";
+    var selector = hex[..8].ToLowerInvariant();
+
+    if (_abis.TryGetValue(contractName, out var abi))
+    {
+      try
+      {
+        var contractAbi = ABIDeserialiserFactory.DeserialiseContractABI(abi);
+        var matched = contractAbi.Errors?.FirstOrDefault(e =>
+            e.Sha3Signature.StartsWith(selector, StringComparison.OrdinalIgnoreCase));
+        if (matched is not null) return matched.Name;
+      }
+      catch { /* ignore ABI parse failures */ }
+    }
+
+    return $"ContractError(0x{selector})";
   }
 
   private void LoadAbis()

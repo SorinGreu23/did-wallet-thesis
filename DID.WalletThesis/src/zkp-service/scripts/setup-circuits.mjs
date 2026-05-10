@@ -23,6 +23,14 @@ const PTAU_FINAL  = `${KEYS}/powersOfTau.ptau`;
 mkdirSync(COMPILED, { recursive: true });
 mkdirSync(KEYS,     { recursive: true });
 
+// Resolve circom binary: prefer PATH, fall back to /tmp/circom
+function findCircom() {
+    try { execSync('circom --version', { stdio: 'ignore' }); return 'circom'; } catch {}
+    if (existsSync('/tmp/circom')) return '/tmp/circom';
+    throw new Error('circom not found in PATH or /tmp/circom');
+}
+const CIRCOM = findCircom();
+
 function run(cmd) {
     console.log(`  $ ${cmd}`);
     execSync(cmd, { stdio: 'inherit', cwd: ROOT });
@@ -32,11 +40,13 @@ function run(cmd) {
 
 if (!existsSync(PTAU_FINAL)) {
     console.log('\n==> Generating powers of tau (power 12)...');
-    await snarkjs.powersOfTau.newAccumulator(undefined, 12, PTAU_0, console);
+    const bn128 = await snarkjs.curves.getCurveFromName('bn128');
+    await snarkjs.powersOfTau.newAccumulator(bn128, 12, PTAU_0, console);
     await snarkjs.powersOfTau.contribute(PTAU_0, PTAU_1, 'did-wallet-thesis', 'did wallet thesis entropy');
     await snarkjs.powersOfTau.preparePhase2(PTAU_1, PTAU_FINAL, console);
     rmSync(PTAU_0, { force: true });
     rmSync(PTAU_1, { force: true });
+    await bn128.terminate();
     console.log('==> Powers of tau ready.');
 } else {
     console.log('\n==> Powers of tau already exists, skipping.');
@@ -46,7 +56,7 @@ if (!existsSync(PTAU_FINAL)) {
 
 async function setupCircuit(name) {
     console.log(`\n==> Compiling ${name}...`);
-    run(`circom ${CIRCUITS}/${name}.circom --r1cs --wasm --sym --output ${COMPILED}`);
+    run(`${CIRCOM} ${CIRCUITS}/${name}.circom --r1cs --wasm --sym --output ${COMPILED}`);
 
     // snarkjs outputs wasm inside a subdirectory - move it up
     const wasmSub = `${COMPILED}/${name}_js/${name}.wasm`;
@@ -72,5 +82,6 @@ async function setupCircuit(name) {
 
 await setupCircuit('ageVerification');
 await setupCircuit('graduationYearRange');
+await setupCircuit('countryMembership');
 
 console.log('\nAll circuits compiled and keys generated.');

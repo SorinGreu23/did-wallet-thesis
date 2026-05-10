@@ -25,7 +25,7 @@ export class NavigationStateService {
 
     const ms = this.memberState();
     if (ms) {
-      crumbs.push({ label: ms.label, route: '/ministries' });
+      crumbs.push({ label: ms.label, route: '/government' });
     }
 
     const min = this.ministry();

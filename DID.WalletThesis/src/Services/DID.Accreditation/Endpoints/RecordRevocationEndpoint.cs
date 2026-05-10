@@ -21,7 +21,7 @@ public class RecordRevocationEndpoint(AccreditationService service)
     public override void Configure()
     {
         Post("/api/accreditations/{accreditationId}/record-revoke");
-        Policies("Ministry");
+        Policies("ClientWalletIssuer");
     }
 
     public override async Task HandleAsync(RecordRevocationRequest req, CancellationToken ct)

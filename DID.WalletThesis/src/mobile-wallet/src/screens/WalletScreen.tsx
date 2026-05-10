@@ -86,7 +86,12 @@ function LockScreen({ onUnlock, colors }: LockScreenProps) {
           setPin('');
         }
       } catch (e: any) {
-        setError(e?.message ?? 'PIN error.');
+        if (e?.message === 'PIN_ALGO_MISMATCH') {
+          await pinService.clearPin();
+          setError('Security upgrade required. Please re-register your PIN.');
+        } else {
+          setError(e?.message ?? 'PIN error.');
+        }
         setPin('');
       }
     }
@@ -182,10 +187,10 @@ const lockStyles = StyleSheet.create({
   btnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   dotsRow: { flexDirection: 'row', gap: 14, marginVertical: 20 },
   dot: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, backgroundColor: 'transparent' },
-  numpad: { flexDirection: 'row', flexWrap: 'wrap', width: 264, marginTop: 8 },
-  numpadCell: { width: 88, height: 72, alignItems: 'center', justifyContent: 'center' },
-  numpadBtn: { borderRadius: 14, borderWidth: 1 },
-  numpadBtnText: { fontSize: 22, fontWeight: '600' },
+  numpad: { flexDirection: 'row', flexWrap: 'wrap', width: 264, marginTop: 8, gap: 12 },
+  numpadCell: { width: 80, height: 58, alignItems: 'center', justifyContent: 'center' },
+  numpadBtn: { borderRadius: 12, borderWidth: 1 },
+  numpadBtnText: { fontSize: 20, fontWeight: '600' },
 });
 
 // ─── Info section ─────────────────────────────────────────────────────────────

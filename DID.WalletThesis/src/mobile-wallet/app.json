@@ -2,6 +2,7 @@
   "expo": {
     "name": "did-wallet",
     "slug": "did-wallet",
+    "scheme": "didwallet",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -42,7 +43,9 @@
         {
           "faceIDPermission": "Allow EU Identity Wallet to use Face ID."
         }
-      ]
+      ],
+      "./plugins/with-argon2",
+      "@react-native-community/datetimepicker"
     ]
   }
 }

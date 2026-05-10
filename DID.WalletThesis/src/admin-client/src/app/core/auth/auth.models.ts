@@ -2,7 +2,7 @@ export interface AuthSession {
   token: string;
   did: string;
   ethAddress: string;
-  scope: 'EURoot' | 'MemberState' | 'Ministry' | 'Institution';
+  scope: 'EURoot' | 'MemberState' | 'Ministry' | 'Institution' | 'BusinessRegistry';
   accreditationId: string | null;
   expiresAt: Date;
 }

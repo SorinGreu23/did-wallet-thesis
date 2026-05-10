@@ -14,7 +14,7 @@ public class RecordAccreditationEndpoint(AccreditationService service)
     public override void Configure()
     {
         Post("/api/accreditations/record");
-        Policies("Ministry");
+        Policies("ClientWalletIssuer");
     }
 
     public override async Task HandleAsync(RecordAccreditationRequest req, CancellationToken ct)

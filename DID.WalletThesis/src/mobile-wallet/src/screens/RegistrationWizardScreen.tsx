@@ -1,4 +1,4 @@
-import React, {useRef, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {
     ActivityIndicator,
     Animated,
@@ -23,6 +23,9 @@ import authService from '../services/authService';
 import didService from '../services/didService';
 import accreditationLookupService from '../services/accreditationLookupService';
 import {CONFIG} from '../constants/config';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const ENTERPRISE_REQUEST_KEY = 'enterprise_request_id';
 
 // ─── Step types ───────────────────────────────────────────────────────────────
 
@@ -110,7 +113,7 @@ function Picker({
 }) {
     const [open, setOpen] = useState(false);
     return (
-        <View style={styles.pickerWrap}>
+        <View style={[styles.pickerWrap, open && {zIndex: 100}]}>
             <TouchableOpacity
                 style={[styles.pickerBtn, {backgroundColor: colors.surface, borderColor: colors.border}]}
                 onPress={() => setOpen((o) => !o)}
@@ -215,6 +218,31 @@ export default function RegistrationWizardScreen({accountType, onComplete, onBac
     // Gating state for enterprise
     const [enterpriseRequestId, setEnterpriseRequestId] = useState<string | null>(null);
     const [pollingAccreditation, setPollingAccreditation] = useState(false);
+
+    // Restore persisted enterprise request ID on mount and auto-check if already approved
+    useEffect(() => {
+        if (accountType !== 'enterprise') return;
+        AsyncStorage.getItem(ENTERPRISE_REQUEST_KEY).then(async (saved) => {
+            if (!saved) return;
+            setEnterpriseRequestId(saved);
+            // Silently check if already approved so the user doesn't have to tap
+            try {
+                const res = await fetch(
+                    `${CONFIG.ACCREDITATION_SERVICE_URL}/api/enterprise-registrations/${saved}`,
+                );
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.status === 'Approved' && data.accreditationId) {
+                    setAccreditationId(data.accreditationId);
+                    await AsyncStorage.removeItem(ENTERPRISE_REQUEST_KEY);
+                    go('pin');
+                }
+            } catch {
+                // silent — user can still tap "Check approval status"
+            }
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Gating state for university
     const [universityPrivateKey, setUniversityPrivateKey] = useState('');
@@ -555,7 +583,8 @@ export default function RegistrationWizardScreen({accountType, onComplete, onBac
             }
 
             const data = await res.json();
-            setEnterpriseRequestId(data.id);
+            setEnterpriseRequestId(data.requestId);
+            await AsyncStorage.setItem(ENTERPRISE_REQUEST_KEY, data.requestId);
         } catch (e: any) {
             setError(e.message ?? 'Failed to submit registration.');
         } finally {
@@ -589,6 +618,7 @@ export default function RegistrationWizardScreen({accountType, onComplete, onBac
 
                 if (id) {
                     setAccreditationId(id);
+                    await AsyncStorage.removeItem(ENTERPRISE_REQUEST_KEY);
                     go('pin');
                 } else {
                     setError('Approval found but accreditation not yet on-chain. Please try again in a moment.');
@@ -1017,7 +1047,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 14,
         fontSize: 15,
     },
-    pickerWrap: {position: 'relative', zIndex: 10},
+    pickerWrap: {position: 'relative', zIndex: 10, marginBottom: 2},
     pickerBtn: {
         height: 48,
         borderWidth: 1,
@@ -1099,13 +1129,13 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         justifyContent: 'center',
-        gap: 12,
-        maxWidth: 300,
+        gap: 16,
+        maxWidth: 340,
     },
     keypadKey: {
-        width: 80,
-        height: 64,
-        borderRadius: 12,
+        width: 88,
+        height: 72,
+        borderRadius: 14,
         borderWidth: 1,
         alignItems: 'center',
         justifyContent: 'center',

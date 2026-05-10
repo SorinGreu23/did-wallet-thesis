@@ -80,6 +80,13 @@ class AuthService {
     return JSON.parse(raw) as WalletProfile;
   }
 
+  /** Patch specific fields into the stored WalletProfile. */
+  async updateWalletProfile(patch: Partial<WalletProfile>): Promise<void> {
+    const existing = await this.getWalletProfile();
+    if (!existing) return;
+    await AsyncStorage.setItem(KEYS.walletProfile, JSON.stringify({ ...existing, ...patch }));
+  }
+
   /** Returns the accountType for the stored wallet, or null. */
   async getAccountType(): Promise<AccountType | null> {
     const profile = await this.getWalletProfile();

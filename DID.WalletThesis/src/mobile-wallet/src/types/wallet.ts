@@ -15,6 +15,7 @@ export interface PersonalWalletProfile extends WalletProfileBase {
   accountType: 'personal';
   firstName: string;
   lastName: string;
+  birthDate?: string; // ISO "YYYY-MM-DD"
 }
 
 export interface UniversityWalletProfile extends WalletProfileBase {

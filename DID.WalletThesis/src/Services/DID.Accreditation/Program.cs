@@ -30,6 +30,9 @@ builder.Services.AddSingleton<IBlockchainService, BlockchainService>();
 builder.Services.AddScoped<IAccreditationRepository, AccreditationRepository>();
 builder.Services.AddScoped<AccreditationService>();
 
+builder.Services.AddScoped<IEnterpriseRegistrationRepository, EnterpriseRegistrationRepository>();
+builder.Services.AddScoped<EnterpriseRegistrationService>();
+
 builder.Services.AddMassTransit(x =>
 {
     x.AddConsumer<AccreditationRevokedConsumer>();
@@ -77,7 +80,9 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy("EURoot", p => p.RequireClaim("scope", "EURoot"))
     .AddPolicy("MemberState", p => p.RequireClaim("scope", "EURoot", "MemberState"))
     .AddPolicy("Ministry", p => p.RequireClaim("scope", "EURoot", "MemberState", "Ministry"))
-    .AddPolicy("Institution", p => p.RequireClaim("scope", "EURoot", "MemberState", "Ministry", "Institution"));
+    .AddPolicy("Institution", p => p.RequireClaim("scope", "EURoot", "MemberState", "Ministry", "Institution"))
+    .AddPolicy("BusinessRegistry", p => p.RequireClaim("scope", "EURoot", "MemberState", "BusinessRegistry"))
+    .AddPolicy("ClientWalletIssuer", p => p.RequireClaim("scope", "EURoot", "MemberState", "Ministry", "Institution", "BusinessRegistry"));
 
 builder.Services.AddFastEndpoints();
 builder.Services.SwaggerDocument(o =>

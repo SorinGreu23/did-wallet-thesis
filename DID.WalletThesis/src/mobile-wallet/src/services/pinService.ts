@@ -2,6 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 
 const KEYS = {
+  pinAlgo: 'pin.algo',
   pinSalt: 'pin.salt',
   pinHash: 'pin.hash',
   pinFailures: 'pin.failures',
@@ -11,6 +12,9 @@ const KEYS = {
 const MAX_FAILURES_BEFORE_COOLDOWN = 5;
 const MAX_FAILURES_BEFORE_WIPE_OFFER = 10;
 const COOLDOWN_MS = 30_000;
+
+// 'argon2id' in native builds, 'sha256' in Expo Go (__DEV__)
+const CURRENT_ALGO = __DEV__ ? 'sha256' : 'argon2id';
 
 function toHex(buf: Uint8Array): string {
   return Array.from(buf)
@@ -23,14 +27,30 @@ async function randomHex(byteLength: number): Promise<string> {
   return toHex(bytes);
 }
 
-/**
- * Expo Go-compatible PIN derivation.
- */
-async function derivePinHash(pin: string, saltHex: string): Promise<string> {
+async function deriveArgon2id(pin: string, saltHex: string): Promise<string> {
+  // Dynamic import: native module only present in custom dev-client / EAS builds.
+  const argon2 = (await import('react-native-argon2')).default;
+  const result = await argon2(pin, saltHex, {
+    iterations: 3,
+    memory: 65536, // 64 MiB
+    parallelism: 1,
+    hashLength: 32,
+    mode: 'argon2id',
+    saltEncoding: 'hex',
+  });
+  return result.rawHash as string;
+}
+
+async function deriveSha256(pin: string, saltHex: string): Promise<string> {
   return Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
       `${saltHex}:${pin}`,
   );
+}
+
+async function derivePinHash(pin: string, saltHex: string): Promise<string> {
+  if (__DEV__) return deriveSha256(pin, saltHex);
+  return deriveArgon2id(pin, saltHex);
 }
 
 export interface PinStatus {
@@ -47,6 +67,14 @@ class PinService {
     return hash !== null;
   }
 
+  // Returns true if a PIN exists but was stored with a different algorithm
+  // (e.g. app was upgraded from Expo Go to native build). Callers should
+  // clear the PIN and ask the user to re-enroll.
+  async algMismatch(): Promise<boolean> {
+    const storedAlgo = await SecureStore.getItemAsync(KEYS.pinAlgo);
+    return storedAlgo !== null && storedAlgo !== CURRENT_ALGO;
+  }
+
   async setupPin(pin: string): Promise<void> {
     if (!/^\d{6}$/.test(pin)) {
       throw new Error('PIN must be exactly 6 digits.');
@@ -55,6 +83,7 @@ class PinService {
     const saltHex = await randomHex(16);
     const hash = await derivePinHash(pin, saltHex);
 
+    await SecureStore.setItemAsync(KEYS.pinAlgo, CURRENT_ALGO);
     await SecureStore.setItemAsync(KEYS.pinSalt, saltHex);
     await SecureStore.setItemAsync(KEYS.pinHash, hash);
     await SecureStore.setItemAsync(KEYS.pinFailures, '0');
@@ -70,9 +99,15 @@ class PinService {
 
     const saltHex = await SecureStore.getItemAsync(KEYS.pinSalt);
     const storedHash = await SecureStore.getItemAsync(KEYS.pinHash);
+    const storedAlgo = await SecureStore.getItemAsync(KEYS.pinAlgo);
 
     if (!saltHex || !storedHash) {
       throw new Error('PIN not configured.');
+    }
+
+    // If stored with a different algorithm, the hash will never match.
+    if (storedAlgo && storedAlgo !== CURRENT_ALGO) {
+      throw new Error('PIN_ALGO_MISMATCH');
     }
 
     const hash = await derivePinHash(pin, saltHex);
@@ -119,6 +154,7 @@ class PinService {
   }
 
   async clearPin(): Promise<void> {
+    await SecureStore.deleteItemAsync(KEYS.pinAlgo);
     await SecureStore.deleteItemAsync(KEYS.pinSalt);
     await SecureStore.deleteItemAsync(KEYS.pinHash);
     await SecureStore.deleteItemAsync(KEYS.pinFailures);

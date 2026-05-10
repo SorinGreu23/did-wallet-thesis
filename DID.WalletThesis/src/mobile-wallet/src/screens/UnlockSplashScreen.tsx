@@ -167,7 +167,12 @@ export default function UnlockSplashScreen({ onAuthenticated }: UnlockSplashScre
           setPin("");
         }
       } catch (e: any) {
-        setError(e?.message || "PIN check failed.");
+        if (e?.message === 'PIN_ALGO_MISMATCH') {
+          await pinService.clearPin();
+          setError('Security upgrade required. Please re-register your PIN.');
+        } else {
+          setError(e?.message || "PIN check failed.");
+        }
         setPin("");
       } finally {
         setLoading(false);

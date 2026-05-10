@@ -2,32 +2,35 @@
 
 Bachelor's Thesis — Computer Science, Alexandru Ioan Cuza University, Iasi
 
-A blockchain-anchored, privacy-preserving digital identity prototype demonstrating hierarchical trust chains, DID-based authentication, and W3C Verifiable Credentials across three platforms.
+A blockchain-anchored, privacy-preserving digital identity prototype demonstrating hierarchical trust chains, DID-based authentication, W3C Verifiable Credentials, and zero-knowledge proofs across three platforms.
 
 ## Architecture
 
 ```
-                        ┌───────────────────────────┐
-                        │    Ethereum (Foundry      │
-                        │    Anvil / Sepolia)       │
-                        │                           │
-                        │  EURootAuthority.sol      │
-                        │  AccreditationRegistry.sol│
-                        │  CredentialRegistry.sol   │
-                        └────────────┬──────────────┘
+                        ┌───────────────────────────────┐
+                        │    Ethereum (Foundry Anvil)   │
+                        │                               │
+                        │  EURootAuthority.sol          │
+                        │  AccreditationRegistry.sol    │
+                        │  CredentialRegistry.sol       │
+                        │  ZkpVerifierRegistry.sol      │
+                        └────────────┬──────────────────┘
                                      │
                     Source of truth for all
-                    trust & authorization
+                    trust, authorization & ZKP vKey anchoring
                                      │
               ┌──────────────────────┼──────────────────────┐
               │                      │                      │
-   ┌──────────▼─────────┐ ┌─────────▼──────────┐ ┌────────▼────────┐
-   │ Accreditation       │ │ Mobile Wallet      │ │ Verifier        │
-   │ Platform            │ │                    │ │ Platform        │
-   │                     │ │ React Native/Expo  │ │ (planned)       │
-   │ Angular 21 + .NET 10│ │ Veramo + SQLite    │ │                 │
-   │ DID-Auth + RBAC     │ │ expo-secure-store  │ │                 │
-   └─────────────────────┘ └────────────────────┘ └─────────────────┘
+   ┌──────────▼─────────┐ ┌─────────▼──────────────────────────────────┐
+   │ Accreditation       │ │ Mobile Wallet                              │
+   │ Platform            │ │                                            │
+   │                     │ │ React Native/Expo | Veramo | SQLite        │
+   │ Angular 21 + .NET 10│ │ expo-secure-store | snarkjs (on-device)   │
+   │ DID-Auth + RBAC     │ │ Groth16 ZKP proofs never leave the device  │
+   └─────────────────────┘ └────────────────────────────────────────────┘
+
+  zkp-circuit-tools/  (build-time only — not a runtime service)
+  circom 2.x + snarkjs trusted setup → .wasm / .zkey / vKey assets bundled into the mobile wallet
 ```
 
 ### Core Principle
@@ -36,8 +39,9 @@ A blockchain-anchored, privacy-preserving digital identity prototype demonstrati
 
 - Smart contracts enforce all authorization on-chain
 - Microservices are convenience wrappers only (indexing, relaying, UI helpers)
-- The mobile wallet can verify credentials independently by reading the blockchain
+- The mobile wallet can verify credentials independently by reading the blockchain directly
 - No centralized identity provider — authentication uses DID-Auth (challenge-response with DID key signatures)
+- ZKP verification keys are anchored on-chain via `ZkpVerifierRegistry.sol` so clients can detect tampered circuits
 
 ### Trust Hierarchy
 
@@ -45,49 +49,71 @@ Every arrow is enforced by smart contract logic:
 
 ```
 EU Root Authority (EURootAuthority.sol — multi-sig governance, 66% approval)
-  → Member State (AccreditationRegistry.sol — checks isMemberState())
-    → Ministry (AccreditationRegistry.sol — validates parent chain)
-      → Institution (AccreditationRegistry.sol — validates parent chain)
-        → Credential (CredentialRegistry.sol — validates issuer accreditation)
+  → Member State (AccreditationRegistry.sol)
+    → Ministry (AccreditationRegistry.sol)
+      → Institution (AccreditationRegistry.sol)
+        → Department (AccreditationRegistry.sol)
+    → Business Registry / Chamber of Commerce (AccreditationRegistry.sol)
+      → Enterprise (AccreditationRegistry.sol)
 ```
 
 ## Platforms
 
-### 1. Accreditation Platform
+### 1. Accreditation Platform (Admin Client)
 
-The institutional control plane. Used by EU Root, member states, ministries, and universities.
+The institutional control plane. Used by EU Root, member states, ministries, universities, and business registries.
 
 | Feature | Status |
 |---------|--------|
-| Hierarchical accreditation issuance (on-chain) | Done |
-| Trust chain verification via `validateTrustChain()` | Done |
-| Revocation and inspection | Done |
-| DID-Auth login (challenge-response, no passwords) | Done |
-| Role-based access control derived from on-chain scope | Done |
-| Admin UI with scope-filtered navigation | Done |
+| Hierarchical accreditation issuance (on-chain) | ✅ Done |
+| Trust chain verification via `validateTrustChain()` | ✅ Done |
+| Revocation and inspection | ✅ Done |
+| DID-Auth login (challenge-response, no passwords) | ✅ Done |
+| Role-based access control from on-chain scope | ✅ Done |
+| Scope-filtered sidebar (EU Root sees only Member States) | ✅ Done |
+| `BusinessRegistry` and `Enterprise` scope support on-chain | ✅ Done |
+| Chamber-of-Commerce provisioning UI (Member State view) | ✅ Done |
+| Enterprise registration approvals route (`/enterprises`) | ✅ Done |
 
 **Stack:** Angular 21, Tailwind CSS, .NET 10 (FastEndpoints), Nethereum, PostgreSQL, RabbitMQ + MassTransit.
 
 ### 2. Mobile Wallet
 
-The citizen-controlled component. Holds keys locally, manages DIDs and credentials.
+The citizen-controlled component. Holds keys locally, manages DIDs, credentials, and account types.
 
 | Feature | Status |
 |---------|--------|
-| DID creation and management (`did:ethr:sepolia`) | Done |
-| Key storage in iOS Keychain (expo-secure-store) | Done |
-| W3C Verifiable Credential storage and display | Done |
-| Biometric-gated identity view (Face ID / Touch ID) | Done |
-| Wallet creation flow with secure key generation | Done |
-| Auto-login bypass for returning users | Done |
-| ZKP-backed selective disclosure | Planned |
-| QR-based credential presentation | Planned |
+| DID creation and management (`did:ethr`) | ✅ Done |
+| Key storage in iOS Keychain (`expo-secure-store`) | ✅ Done |
+| W3C Verifiable Credential storage and display | ✅ Done |
+| Biometric-gated identity view (Face ID / Touch ID) | ✅ Done |
+| Three account types: Personal, University, Enterprise | ✅ Done |
+| Multi-step registration wizard per account type | ✅ Done |
+| EU geo dataset (27 member states, NUTS-2/NUTS-3) | ✅ Done |
+| PIN unlock — Argon2id in native builds, SHA-256 fallback in Expo Go | ✅ Done |
+| On-chain accreditation lookup at registration | ✅ Done |
+| Enterprise registration request + polling | ✅ Done |
+| Bottom tab navigator (`@react-navigation/bottom-tabs`) | ✅ Done |
+| Account-type-conditional tabs (Wallet hidden for University/Enterprise) | ✅ Done |
+| On-device ZKP proving (`snarkjs` + bundled circuit assets) | ✅ Done |
+| Presentation request schema + `eudi-pres://` QR encoding | ✅ Done |
+| `PresentationConsentScreen` (holder side) | ✅ Done |
+| `IncomingPresentationScreen` (verifier side) | ✅ Done |
+| `chainVerifier` + `credentialIssuer` helpers | ✅ Done |
 
-**Stack:** React Native, Expo, Veramo Framework, SQLite (TypeORM), expo-secure-store.
+**Stack:** React Native, Expo, Veramo Framework, SQLite (TypeORM), expo-secure-store, ethers.js.
 
-### 3. Verifier Platform (planned)
+### 3. ZKP Circuit Toolchain
 
-The relying-party interface for banks, employers, and academic institutions. Validates credentials, trust chains, and ZKP proofs directly against the blockchain.
+Build-time tooling only — not a runtime service. Compiles circom circuits and runs the trusted setup ceremony. Output artifacts are bundled directly into the mobile wallet. All proof generation and verification happens on-device.
+
+| Artifact | Status |
+|---------|--------|
+| `ageVerification` circuit + `.wasm` / `.zkey` / vKey | ✅ Done |
+| `graduationYearRange` circuit + `.wasm` / `.zkey` / vKey | ✅ Done |
+| `countryMembership` circuit — Poseidon Merkle tree (depth 5, 27 EU ISO codes) | ✅ Done |
+| EU Merkle root anchored as constant in `zkpService.ts` | ✅ Done |
+| vKey keccak256 hashes registered in `Deploy.s.sol` → `ZkpVerifierRegistry` | ✅ Done |
 
 ## Smart Contracts
 
@@ -95,9 +121,22 @@ Deployed on local Foundry Anvil with deterministic development addresses:
 
 | Contract | Address | Purpose |
 |----------|---------|---------|
-| `EURootAuthority.sol` | `0x5FbDB2315678afecb367f032d93F642f64180aa3` | Root of trust, deployment ceremony, multi-sig governance |
-| `AccreditationRegistry.sol` | `0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0` | Hierarchical trust chain, `validateTrustChain(bytes32)` |
+| `EURootAuthority.sol` | `0x5FbDB2315678afecb367f032d93F642f64180aa3` | Root of trust, multi-sig governance |
+| `AccreditationRegistry.sol` | `0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0` | Hierarchical trust chain (all scopes incl. BusinessRegistry, Enterprise) |
 | `CredentialRegistry.sol` | `0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9` | Credential status, issuer accreditation validation |
+| `ZkpVerifierRegistry.sol` | see `blockchain/deployments/latest.json` | On-chain vKey hash anchoring for ZKP circuits |
+
+### Accreditation Scopes
+
+```
+0 = None
+1 = MemberState
+2 = Ministry
+3 = Institution
+4 = Department
+5 = BusinessRegistry   (Chamber of Commerce / business registry)
+6 = Enterprise         (issued by BusinessRegistry)
+```
 
 ## Authentication
 
@@ -110,55 +149,77 @@ No passwords. Users authenticate by signing a cryptographic challenge with their
 3. Submits signature to `POST /api/auth/verify`
 4. Backend recovers the signer address, queries on-chain accreditation scope, issues a JWT
 
-The JWT contains the DID's on-chain scope (`EURoot`, `MemberState`, `Ministry`, `Institution`), which drives:
+The JWT contains the DID's on-chain scope, which drives route guards, sidebar filtering, and backend policies.
 
-- **Route guards** — each route requires a minimum scope
-- **Sidebar filtering** — users only see routes they're authorized for
-- **Backend policies** — endpoints enforce scope via `[Authorize]` policies
-
-### Mobile Wallet — Secure Storage
+### Mobile Wallet — PIN + Biometric
 
 - Secret key generated at wallet creation, stored in iOS Keychain via `expo-secure-store`
-- Returning users bypass the welcome screen automatically
-- Biometric authentication (Face ID / Touch ID) gates sensitive operations
+- 6-digit PIN hashed with **Argon2id** (`m=64 MiB, t=3, p=1`) in native builds; SHA-256 fallback in Expo Go (`__DEV__`)
+- Wrong-PIN lockout: 5 failures → 30 s cooldown; 10 failures → wallet wipe option offered
+- Biometric (Face ID / Touch ID) with automatic PIN fallback
+- Session idle timeout (5 min) triggers re-auth
 
 ## Repository Layout
 
 ```
 did-wallet-thesis/
 ├── blockchain/                         # Smart contracts, Foundry scripts, ABIs
-│   ├── contracts/                      # Solidity sources
-│   ├── script/Deploy.s.sol             # Foundry deployment script
+│   ├── contracts/
+│   │   ├── AccreditationRegistry.sol   # Trust chain (incl. BusinessRegistry + Enterprise)
+│   │   ├── CredentialRegistry.sol
+│   │   ├── EURootAuthority.sol
+│   │   └── ZkpVerifierRegistry.sol     # On-chain vKey anchoring
+│   ├── script/Deploy.s.sol             # Deploy + register circuits
+│   ├── test/                           # Foundry unit tests (incl. BusinessRegistry branch)
 │   ├── abis/                           # Exported ABIs for services
-│   ├── foundry.toml                    # Foundry configuration
-│   └── export-abis.js                  # ABI export helper
+│   └── deployments/latest.json         # Last deployment addresses
 ├── DID.WalletThesis/
 │   └── src/
 │       ├── admin-client/               # Angular 21 accreditation platform
 │       │   └── src/app/
-│       │       ├── core/auth/          # DID-Auth service, guards, interceptor
-│       │       ├── features/           # member-states, ministries, universities, login
-│       │       └── shared/             # Reusable components
+│       │       ├── core/auth/          # DID-Auth service, scope guard, interceptor
+│       │       ├── features/           # member-states, ministries, institutions, enterprises, login
+│       │       └── layout/shell/       # Scope-aware sidebar
 │       ├── mobile-wallet/              # React Native/Expo mobile app
 │       │   └── src/
-│       │       ├── agents/veramoAgent.ts   # Veramo agent (DID, keys, credentials)
-│       │       ├── context/AuthContext.tsx # Auth state + wallet creation
-│       │       ├── screens/                # WelcomeScreen, HomeScreen, etc.
-│       │       └── services/               # DID, credential, auth, wallet services
+│       │       ├── screens/            # WelcomeScreen, AccountTypeChooserScreen,
+│       │       │                       # RegistrationWizardScreen, UnlockSplashScreen,
+│       │       │                       # MainTabNavigator, HomeScreen, WalletScreen,
+│       │       │                       # ActionsStackNavigator, ActionsStubScreen,
+│       │       │                       # PresentationConsentScreen, IncomingPresentationScreen
+│       │       ├── context/            # RegistrationContext, AuthContext, ThemeContext
+│       │       ├── services/           # pinService (Argon2id), euGeoService, zkpService,
+│       │       │                       # chainVerifier, credentialIssuer,
+│       │       │                       # accreditationLookupService, authService, walletService
+│       │       └── types/              # WalletProfile, presentation.ts (request/response schema)
+│       │   └── assets/
+│       │       ├── eu-geo.json         # 27 EU member states + NUTS-2/3 regions
+│       │       └── circuits/           # ageVerification · graduationYearRange · countryMembership
+│       │           └── {name}/         #   circuit.wasm · final.zkey · verification_key.json
 │       ├── Services/
-│       │   ├── DID.Accreditation/      # Accreditation API + auth endpoints
+│       │   ├── DID.Accreditation/      # Accreditation API + DID-Auth + enterprise registrations
 │       │   ├── DID.BlockchainSync/     # Event polling + RabbitMQ publisher
 │       │   ├── DID.Identity/           # DID generation service
-│       │   └── DID.Credential/         # Credential API (stub)
+│       │   ├── DID.Credential/         # Credential API
+│       │   ├── DID.Presentation/       # Presentation handling (on-device verification)
+│       │   ├── DID.Notification/       # Notification service
+│       │   └── DID.Audit/              # Audit trail
 │       ├── Shared/
-│       │   ├── DID.Shared.Domain/      # DDD base classes
-│       │   ├── DID.Shared.Application/ # Interfaces (IBlockchainService, IEventBus)
-│       │   └── DID.Shared.Infrastructure/ # Nethereum, MassTransit, EF Core
-│       └── Contracts/DID.Contracts/    # RabbitMQ event DTOs
-├── docker-compose.infra.yml            # PostgreSQL, RabbitMQ, Foundry Anvil, blockchain tooling
+│       │   ├── DID.Shared.Domain/
+│       │   ├── DID.Shared.Application/
+│       │   └── DID.Shared.Infrastructure/
+│       └── zkp-service/                # Circuit build toolchain only (not a runtime service)
+│           ├── src/circuits/           # ageVerification.circom · graduationYearRange.circom · countryMembership.circom
+│           ├── scripts/                # setup-circuits.mjs · generate-eu-merkle.mjs
+│           ├── circuits_compiled/      # compiled .wasm files
+│           └── keys/                   # .zkey · verification_key.json · eu-country-merkle.json
+├── docker-compose.infra.yml            # PostgreSQL, RabbitMQ, Foundry Anvil
 ├── docker-compose.services.yml         # Microservice containers
-├── docs/TESTING_GUIDE.md               # Step-by-step testing instructions
-└── CLAUDE.md                           # AI coding assistant instructions
+├── docs/
+│   ├── IMPLEMENTATION_PLAN_V2.md       # Full feature plan with ✅/⚠️ status
+│   ├── TESTING_GUIDE.md                # Step-by-step testing instructions
+│   └── TEST_ACCOUNTS.md                # Anvil test wallet accounts
+└── questions_for_hevi.md               # Open questions for thesis author
 ```
 
 ## Quick Start
@@ -176,21 +237,11 @@ did-wallet-thesis/
 docker compose -f docker-compose.infra.yml up -d
 ```
 
-This starts the persistent infrastructure layer:
+Starts: PostgreSQL, RabbitMQ, Foundry Anvil local chain.
 
-- PostgreSQL
-- RabbitMQ
-- Foundry Anvil local chain
+Foundry Anvil stores blockchain state in the `foundry_data` Docker volume — deployed contracts and accreditation data survive restarts.
 
-Foundry Anvil stores its local blockchain state in the `foundry_data` Docker volume. This means deployed contracts and on-chain accreditation data survive normal container restarts.
-
-Do not run this unless you intentionally want to wipe all persisted infrastructure data:
-
-```bash
-docker compose -f docker-compose.infra.yml down -v
-```
-
-`down -v` deletes the Docker volumes for Postgres, RabbitMQ, and Foundry Anvil.
+> **Warning:** `docker compose -f docker-compose.infra.yml down -v` wipes all volumes (Postgres, RabbitMQ, Foundry Anvil).
 
 ### 2. Build Smart Contracts
 
@@ -198,31 +249,22 @@ docker compose -f docker-compose.infra.yml down -v
 docker compose -f docker-compose.infra.yml --profile tools run --rm contract-builder
 ```
 
-This runs `forge build` inside the `blockchain/` workspace.
-
 ### 3. Deploy Smart Contracts
 
-Deploy contracts only when starting from a fresh Anvil state:
+Deploy only when starting from a fresh Anvil state:
 
 ```bash
 docker compose -f docker-compose.infra.yml --profile tools run --rm contract-deployer
 ```
 
-The deployer runs:
+The deployer runs `forge script script/Deploy.s.sol --rpc-url http://foundry:8545 --broadcast`.
 
-```bash
-forge script script/Deploy.s.sol --rpc-url http://foundry:8545 --broadcast
+Default dev private key (Anvil account #0 — local only, never use in production):
 ```
-
-The local deployer uses Anvil's default development private key unless `ANVIL_PRIVATE_KEY` is set:
-
-```text
 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ```
 
-This key is only for local development. Never use real private keys in this setup.
-
-Expected local contract addresses:
+Expected contract addresses after fresh deployment:
 
 | Contract | Address |
 |----------|---------|
@@ -230,23 +272,11 @@ Expected local contract addresses:
 | `AccreditationRegistry.sol` | `0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0` |
 | `CredentialRegistry.sol` | `0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9` |
 
-Because Anvil state is persisted, contracts do not need to be redeployed after normal restarts.
-
 ### 4. Export Contract ABIs
-
-The .NET services read contract ABIs from:
-
-```text
-blockchain/abis/
-```
-
-After changing or rebuilding contracts, export ABIs with:
 
 ```bash
 docker compose -f docker-compose.infra.yml --profile tools run --rm abi-exporter
 ```
-
-This runs `node export-abis.js` inside the `blockchain/` workspace.
 
 ### 5. Start Application Services
 
@@ -254,21 +284,25 @@ This runs `node export-abis.js` inside the `blockchain/` workspace.
 docker compose -f docker-compose.services.yml up -d --build
 ```
 
-Open `http://localhost:4200` and sign in with one of the default Foundry Anvil development private keys.
+Admin client: `http://localhost:4200`
+
+Sign in with one of the Foundry Anvil development private keys listed in [docs/TEST_ACCOUNTS.md](docs/TEST_ACCOUNTS.md).
 
 ### 6. Mobile Wallet
 
 ```bash
-cd DID.WalletThesis/src/mobile-wallet
+docker compose -f docker-compose.services.yml up -d --build admin-client
 npm install
-npx expo start --ios
+npx expo run:ios
 ```
 
-See [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) for detailed end-to-end testing instructions with test accounts and expected behaviors.
+> **⚠️ Expo Go is not sufficient** — `react-native-argon2` and snarkjs WASM require a native build (`npx expo run:ios`).
+
+See [docs/USER_TESTING_GUIDE.md](docs/USER_TESTING_GUIDE.md) for full end-to-end testing instructions.
 
 ### Daily Development Flow
 
-If the Anvil state already exists and contracts are already deployed, the usual startup flow is:
+When Anvil state already exists and contracts are deployed:
 
 ```bash
 docker compose -f docker-compose.infra.yml up -d
@@ -284,80 +318,72 @@ docker compose -f docker-compose.infra.yml stop
 
 ## Common Commands
 
-### Start infrastructure
-
-```bash
-docker compose -f docker-compose.infra.yml up -d
-```
-
-### Stop infrastructure but keep data
-
-```bash
-docker compose -f docker-compose.infra.yml stop
-```
-
-### Wipe all infrastructure data
-
-```bash
-docker compose -f docker-compose.infra.yml down -v
-```
-
-### Build contracts
-
-```bash
-docker compose -f docker-compose.infra.yml --profile tools run --rm contract-builder
-```
-
-### Deploy contracts
-
-```bash
-docker compose -f docker-compose.infra.yml --profile tools run --rm contract-deployer
-```
-
-### Export ABIs
-
-```bash
-docker compose -f docker-compose.infra.yml --profile tools run --rm abi-exporter
-```
-
-### Start application services
-
-```bash
-docker compose -f docker-compose.services.yml up -d --build
-```
+| Action | Command |
+|--------|---------|
+| Start infrastructure | `docker compose -f docker-compose.infra.yml up -d` |
+| Stop infrastructure (keep data) | `docker compose -f docker-compose.infra.yml stop` |
+| Wipe all data | `docker compose -f docker-compose.infra.yml down -v` |
+| Build contracts | `docker compose -f docker-compose.infra.yml --profile tools run --rm contract-builder` |
+| Deploy contracts | `docker compose -f docker-compose.infra.yml --profile tools run --rm contract-deployer` |
+| Export ABIs | `docker compose -f docker-compose.infra.yml --profile tools run --rm abi-exporter` |
+| Start services | `docker compose -f docker-compose.services.yml up -d --build` |
+| Run blockchain tests | `cd blockchain && forge test` |
 
 ### Verify contract deployment
 
 ```bash
-docker run --rm -it   --entrypoint cast   --network did-infra   ghcr.io/foundry-rs/foundry:latest   code 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9   --rpc-url http://foundry:8545
+docker run --rm -it \
+  --entrypoint cast \
+  --network did-infra \
+  ghcr.io/foundry-rs/foundry:latest \
+  code 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 \
+  --rpc-url http://foundry:8545
 ```
 
-If the output is not `0x`, the contract exists on the local chain.
+Non-`0x` output means the contract exists on the local chain.
+
+## Implementation Status
+
+See [docs/IMPLEMENTATION_PLAN_V2.md](docs/IMPLEMENTATION_PLAN_V2.md) for the full annotated feature checklist.
+
+**Summary:**
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| A | Mobile wallet: account types, Argon2id PIN, registration wizard, navigation | ~95% done |
+| B | Smart contracts: BusinessRegistry/Enterprise, ZkpVerifierRegistry, all 3 circuits | ~90% done |
+| C | Admin client + .NET: enterprise approvals, Chamber provisioning, DID.Verification removed | ✅ Done |
+| D | Presentation pipeline: on-device ZKP, Master's / Foreign ID / Job application flows | ✅ Done |
+| E | Polish, demo scripts, SECURITY.md, ARF alignment | ~10% done |
+
+Open questions for the thesis author are in [questions_for_hevi.md](questions_for_hevi.md).
 
 ## Technical Details
 
-- **DID method:** `did:ethr:sepolia` with Secp256k1 keys
+- **DID method:** `did:ethr` with Secp256k1 keys
 - **Credential format:** W3C Verifiable Credentials with JWT proofs
+- **ZKP scheme:** Groth16 (via snarkjs / circom)
 - **Mobile storage:** SQLite via expo-sqlite + TypeORM, keys in expo-secure-store
 - **Event bus:** RabbitMQ + MassTransit
-- **Blockchain interaction:** Nethereum (.NET), ethers.js (Angular/Wallet), Foundry Anvil for local development
+- **Blockchain interaction:** Nethereum (.NET), ethers.js (Angular / Mobile Wallet), Foundry Anvil for local development
 
 ## Troubleshooting
 
 | Problem | Fix |
-|---|---|
+|---------|-----|
 | `eth_call` fails | Make sure Foundry Anvil is running: `docker compose -f docker-compose.infra.yml up -d foundry` |
-| Contract code returns `0x` | Contracts are not deployed on the current Anvil state. Run `docker compose -f docker-compose.infra.yml --profile tools run --rm contract-deployer`. |
-| Chain resets to block `0` after restart | Check that `foundry_data` was not deleted with `docker compose -f docker-compose.infra.yml down -v`. |
-| Services cannot reach blockchain | Make sure service configs use `http://foundry:8545` for container-to-container RPC. |
-| Browser cannot reach blockchain | Use `http://localhost:8545` from the host/browser. |
-| ABI errors in .NET services | Rebuild contracts and run `docker compose -f docker-compose.infra.yml --profile tools run --rm abi-exporter`. |
+| Contract code returns `0x` | Contracts not deployed. Run `contract-deployer` profile. |
+| Chain resets to block `0` after restart | `foundry_data` volume was deleted. Re-deploy contracts. |
+| Services cannot reach blockchain | Use `http://foundry:8545` for container-to-container RPC. |
+| Browser / mobile cannot reach blockchain | Use `http://localhost:8545` from host. |
+| ABI errors in .NET services | Rebuild contracts and run `abi-exporter`. |
+| Mobile wallet PIN fails after reinstall | `expo-secure-store` data is tied to the app install — expected behavior; create a new wallet. |
 
 ## Standards Alignment
 
 **Implemented:** W3C DID Core 1.0, W3C VC Data Model 1.1, did:ethr Method Specification, EIP-1056.
 
-**Planned:** OpenID4VP, OpenID4VCI, SD-JWT, eIDAS 2.0 / EBSI Trust Framework.
+**Planned / partial:** OpenID4VP, OpenID4VCI, SD-JWT, eIDAS 2.0 / EBSI Trust Framework, EUDI ARF.
 
 ## License
 
