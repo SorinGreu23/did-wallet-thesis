@@ -22,6 +22,7 @@ public record PresentationChallengeDto(
 public record SubmitPresentationDto(
     string SessionId,
     string[] CredentialIds,
+    bool OverallValid = true,
     ZkpProofDto? ZkpProof = null);
 
 public record ZkpProofDto(

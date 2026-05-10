@@ -16,7 +16,6 @@ COPY src/Services/DID.Accreditation/DID.Accreditation.csproj src/Services/DID.Ac
 COPY src/Services/DID.BlockchainSync/DID.BlockchainSync.csproj src/Services/DID.BlockchainSync/
 COPY src/Services/DID.Credential/DID.Credential.csproj       src/Services/DID.Credential/
 COPY src/Services/DID.Presentation/DID.Presentation.csproj   src/Services/DID.Presentation/
-COPY src/Services/DID.Verification/DID.Verification.csproj   src/Services/DID.Verification/
 COPY src/Services/DID.Notification/DID.Notification.csproj   src/Services/DID.Notification/
 COPY src/Services/DID.Audit/DID.Audit.csproj                  src/Services/DID.Audit/
 COPY src/Contracts/DID.Contracts/DID.Contracts.csproj                          src/Contracts/DID.Contracts/

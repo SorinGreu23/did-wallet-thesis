@@ -1,0 +1,159 @@
+{
+  "merkleRoot": "8428341660130688306333484504011921408645278038482389394981986252670980317908",
+  "merkleRootHex": "0x12a245b7422e392ad07b857cc278bb03f394efbf68fc973ba39839413a03e2d4",
+  "depth": 5,
+  "countries": [
+    {
+      "code": "AT",
+      "numeric": 40,
+      "leafIndex": 0
+    },
+    {
+      "code": "BE",
+      "numeric": 56,
+      "leafIndex": 1
+    },
+    {
+      "code": "BG",
+      "numeric": 100,
+      "leafIndex": 2
+    },
+    {
+      "code": "CY",
+      "numeric": 196,
+      "leafIndex": 3
+    },
+    {
+      "code": "CZ",
+      "numeric": 203,
+      "leafIndex": 4
+    },
+    {
+      "code": "DE",
+      "numeric": 276,
+      "leafIndex": 5
+    },
+    {
+      "code": "DK",
+      "numeric": 208,
+      "leafIndex": 6
+    },
+    {
+      "code": "EE",
+      "numeric": 233,
+      "leafIndex": 7
+    },
+    {
+      "code": "GR",
+      "numeric": 300,
+      "leafIndex": 8
+    },
+    {
+      "code": "ES",
+      "numeric": 724,
+      "leafIndex": 9
+    },
+    {
+      "code": "FI",
+      "numeric": 246,
+      "leafIndex": 10
+    },
+    {
+      "code": "FR",
+      "numeric": 250,
+      "leafIndex": 11
+    },
+    {
+      "code": "HR",
+      "numeric": 191,
+      "leafIndex": 12
+    },
+    {
+      "code": "HU",
+      "numeric": 348,
+      "leafIndex": 13
+    },
+    {
+      "code": "IE",
+      "numeric": 372,
+      "leafIndex": 14
+    },
+    {
+      "code": "IT",
+      "numeric": 380,
+      "leafIndex": 15
+    },
+    {
+      "code": "LT",
+      "numeric": 440,
+      "leafIndex": 16
+    },
+    {
+      "code": "LU",
+      "numeric": 442,
+      "leafIndex": 17
+    },
+    {
+      "code": "LV",
+      "numeric": 428,
+      "leafIndex": 18
+    },
+    {
+      "code": "MT",
+      "numeric": 470,
+      "leafIndex": 19
+    },
+    {
+      "code": "NL",
+      "numeric": 528,
+      "leafIndex": 20
+    },
+    {
+      "code": "PL",
+      "numeric": 616,
+      "leafIndex": 21
+    },
+    {
+      "code": "PT",
+      "numeric": 620,
+      "leafIndex": 22
+    },
+    {
+      "code": "RO",
+      "numeric": 642,
+      "leafIndex": 23
+    },
+    {
+      "code": "SE",
+      "numeric": 752,
+      "leafIndex": 24
+    },
+    {
+      "code": "SI",
+      "numeric": 705,
+      "leafIndex": 25
+    },
+    {
+      "code": "SK",
+      "numeric": 703,
+      "leafIndex": 26
+    }
+  ],
+  "testVector": {
+    "countryCode": 276,
+    "pathElements": [
+      "203",
+      "10192193890393321126120036380462429765526137401751115924407507758398055223060",
+      "9373115667192454002352178625506352040735125267778926874225014125673822739869",
+      "18795185329235259942129583918326826579732369816690005143648294129051092876863",
+      "9501313888505906025680385040005636129784487672822046622379253915667456081614"
+    ],
+    "pathIndices": [
+      1,
+      0,
+      1,
+      0,
+      0
+    ]
+  }
+}

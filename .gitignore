@@ -47,3 +47,16 @@ CLAUDE.md
 **/appsettings.*.json
 !**/appsettings.json
 !**/appsettings.Development.json
+
+# Foundry generated files
+blockchain/out/
+blockchain/cache/
+blockchain/broadcast/
+blockchain/.anvil/
+
+# Old/generated blockchain deps
+blockchain/node_modules/
+
+# JS deps
+DID.WalletThesis/src/zkp-service/node_modules/
+DID.WalletThesis/src/mobile-wallet/node_modules/

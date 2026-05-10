@@ -7,6 +7,7 @@ import { firstValueFrom } from 'rxjs';
 import { AuthSession, AuthState, SCOPE_HIERARCHY } from './auth.models';
 import { SignerService } from './signer.service';
 import { NavigationStateService } from '../services/navigation-state.service';
+import { extractApiError } from '../utils/api-error';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -77,11 +78,7 @@ export class AuthService {
       this.state.set('error');
       this.signer.clear();
 
-      const message =
-        err?.error?.errors?.[0]?.message ??
-        err?.error?.message ??
-        err?.message ??
-        'Authentication failed';
+      const message = extractApiError(err, 'Authentication failed');
       this.error.set(message);
 
       throw err;
@@ -119,10 +116,12 @@ export class AuthService {
       case 'EURoot':
         return '/member-states';
       case 'MemberState':
-        return '/ministries';
+        return '/government';
       case 'Ministry':
       case 'Institution':
         return '/universities';
+      case 'BusinessRegistry':
+        return '/enterprises';
       default:
         return '/login';
     }

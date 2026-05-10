@@ -1,7 +1,7 @@
 import { Routes } from '@angular/router';
 import { ShellComponent } from './layout/shell/shell.component';
 import { authGuard } from './core/auth/auth.guard';
-import { scopeGuard } from './core/auth/scope.guard';
+import { scopeGuard, homeRedirectGuard } from './core/auth/scope.guard';
 
 export const routes: Routes = [
   {
@@ -16,23 +16,23 @@ export const routes: Routes = [
     component: ShellComponent,
     canActivate: [authGuard],
     children: [
-      { path: '', redirectTo: 'member-states', pathMatch: 'full' },
+      { path: '', canActivate: [homeRedirectGuard], children: [] },
       {
         path: 'member-states',
         loadComponent: () =>
           import('./features/member-states/member-states.component').then(
             (m) => m.MemberStatesComponent,
           ),
-        data: { minimumScope: 'EURoot' },
+        data: { allowedScopes: ['EURoot'] },
         canActivate: [scopeGuard],
       },
       {
-        path: 'ministries',
+        path: 'government',
         loadComponent: () =>
-          import('./features/ministries/ministries.component').then(
-            (m) => m.MinistriesComponent,
+          import('./features/government/government.component').then(
+            (m) => m.GovernmentComponent,
           ),
-        data: { minimumScope: 'MemberState' },
+        data: { allowedScopes: ['MemberState'] },
         canActivate: [scopeGuard],
       },
       {
@@ -41,7 +41,16 @@ export const routes: Routes = [
           import('./features/universities/universities.component').then(
             (m) => m.UniversitiesComponent,
           ),
-        data: { minimumScope: 'Institution' },
+        data: { allowedScopes: ['Ministry', 'Institution'] },
+        canActivate: [scopeGuard],
+      },
+      {
+        path: 'enterprises',
+        loadComponent: () =>
+          import('./features/enterprises/enterprises.component').then(
+            (m) => m.EnterprisesComponent,
+          ),
+        data: { allowedScopes: ['MemberState', 'BusinessRegistry', 'EURoot'] },
         canActivate: [scopeGuard],
       },
     ],

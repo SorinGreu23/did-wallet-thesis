@@ -7,7 +7,7 @@ export interface HierarchyNode {
   accreditationId: string;
 }
 
-// Hardhat Account #0 — deployer of EURootAuthority.sol
+// Foundry Anvil Account #0 — deployer of EURootAuthority.sol
 export const EU_ROOT_LABEL = 'EU Root Authority';
 
 @Injectable({ providedIn: 'root' })
@@ -25,7 +25,7 @@ export class NavigationStateService {
 
     const ms = this.memberState();
     if (ms) {
-      crumbs.push({ label: ms.label, route: '/ministries' });
+      crumbs.push({ label: ms.label, route: '/government' });
     }
 
     const min = this.ministry();

@@ -34,5 +34,11 @@
     "secure": false,
     "changeOrigin": true,
     "logLevel": "info"
+  },
+  "/api/enterprise-registrations": {
+    "target": "http://localhost:5211",
+    "secure": false,
+    "changeOrigin": true,
+    "logLevel": "info"
   }
 }

@@ -6,7 +6,9 @@ import "./EURootAuthority.sol";
 /**
  * @title AccreditationRegistry
  * @notice Hierarchical accreditation registry with on-chain trust chain validation
- * @dev Enforces hierarchy: EU Root → Member State → Ministry → Institution
+ * @dev Enforces hierarchy:
+ *      EU Root → Member State → Ministry → Institution → Department
+ *      EU Root → Member State → BusinessRegistry → Enterprise
  */
 contract AccreditationRegistry {
     // ============ State Variables ============
@@ -44,10 +46,12 @@ contract AccreditationRegistry {
 
     enum AccreditationScope {
         None,
-        MemberState,      // Issued by EU Root to member states
-        Ministry,         // Issued by member states to ministries
-        Institution,      // Issued by ministries to institutions
-        Department        // Issued by institutions to departments (optional)
+        MemberState,       // Issued by EU Root to member states
+        Ministry,          // Issued by member states to ministries
+        Institution,       // Issued by ministries to institutions
+        Department,        // Issued by institutions to departments (optional)
+        BusinessRegistry,  // Issued by member states to chambers/business registries
+        Enterprise         // Issued by business registries to enterprises
     }
 
     // ============ Events ============
@@ -112,13 +116,15 @@ contract AccreditationRegistry {
         _validateIssuerAuthorization(msg.sender, scope, parentAccreditationId);
 
         // Generate accreditation ID
-        bytes32 accreditationId = keccak256(abi.encodePacked(
-            msg.sender,
-            subject,
-            scope,
-            permissionsHash,
-            block.timestamp
-        ));
+        bytes32 accreditationId = keccak256(
+            abi.encodePacked(
+                msg.sender,
+                subject,
+                scope,
+                permissionsHash,
+                block.timestamp
+            )
+        );
 
         // Check if accreditation already exists
         if (accreditations[accreditationId].exists) {
@@ -165,9 +171,9 @@ contract AccreditationRegistry {
         if (!accred.exists) revert AccreditationNotFound();
         if (accred.revoked) revert AccreditationAlreadyRevoked();
 
-        // Only issuer or root authority can revoke
+        // Only the original issuer or the EU root owner can revoke
         require(
-            msg.sender == owner || rootAuthority.isMemberState(msg.sender),
+            msg.sender == owner || msg.sender == accred.issuer,
             "Unauthorized to revoke"
         );
 
@@ -197,22 +203,57 @@ contract AccreditationRegistry {
         } else if (accred.scope == AccreditationScope.Ministry) {
             // Ministry issued directly by the root signer (no parent) is trusted
             if (accred.parentAccreditationId == bytes32(0)) return accred.issuer == owner;
+
             Accreditation memory parent = accreditations[accred.parentAccreditationId];
+
             if (!parent.exists || parent.revoked) return false;
             if (parent.scope != AccreditationScope.MemberState) return false;
             if (parent.subject != accred.issuer) return false;
+
             return validateTrustChain(accred.parentAccreditationId);
         } else if (accred.scope == AccreditationScope.Institution) {
             // Institution must have valid parent (ministry)
             if (accred.parentAccreditationId == bytes32(0)) return false;
+
             Accreditation memory parent = accreditations[accred.parentAccreditationId];
+
+            if (!parent.exists || parent.revoked) return false;
             if (parent.scope != AccreditationScope.Ministry) return false;
+            if (parent.subject != accred.issuer) return false;
+
             return validateTrustChain(accred.parentAccreditationId);
         } else if (accred.scope == AccreditationScope.Department) {
             // Department must have valid parent (institution)
             if (accred.parentAccreditationId == bytes32(0)) return false;
+
             Accreditation memory parent = accreditations[accred.parentAccreditationId];
+
+            if (!parent.exists || parent.revoked) return false;
             if (parent.scope != AccreditationScope.Institution) return false;
+            if (parent.subject != accred.issuer) return false;
+
+            return validateTrustChain(accred.parentAccreditationId);
+        } else if (accred.scope == AccreditationScope.BusinessRegistry) {
+            // BusinessRegistry must have valid parent (member state)
+            if (accred.parentAccreditationId == bytes32(0)) return false;
+
+            Accreditation memory parent = accreditations[accred.parentAccreditationId];
+
+            if (!parent.exists || parent.revoked) return false;
+            if (parent.scope != AccreditationScope.MemberState) return false;
+            if (parent.subject != accred.issuer) return false;
+
+            return validateTrustChain(accred.parentAccreditationId);
+        } else if (accred.scope == AccreditationScope.Enterprise) {
+            // Enterprise must have valid parent (business registry)
+            if (accred.parentAccreditationId == bytes32(0)) return false;
+
+            Accreditation memory parent = accreditations[accred.parentAccreditationId];
+
+            if (!parent.exists || parent.revoked) return false;
+            if (parent.scope != AccreditationScope.BusinessRegistry) return false;
+            if (parent.subject != accred.issuer) return false;
+
             return validateTrustChain(accred.parentAccreditationId);
         }
 
@@ -225,16 +266,21 @@ contract AccreditationRegistry {
      * @param scope Required scope
      * @return bool True if the address has a valid accreditation
      */
-    function hasValidAccreditation(address subject, AccreditationScope scope) external view returns (bool) {
+    function hasValidAccreditation(
+        address subject,
+        AccreditationScope scope
+    ) external view returns (bool) {
         bytes32[] memory accreds = accreditationsBySubject[subject];
 
         for (uint256 i = 0; i < accreds.length; i++) {
             Accreditation memory accred = accreditations[accreds[i]];
 
-            if (accred.scope == scope &&
+            if (
+                accred.scope == scope &&
                 !accred.revoked &&
                 (accred.expiresAt == 0 || accred.expiresAt > block.timestamp) &&
-                validateTrustChain(accreds[i])) {
+                validateTrustChain(accreds[i])
+            ) {
                 return true;
             }
         }
@@ -252,10 +298,13 @@ contract AccreditationRegistry {
         bytes32[] memory chain = new bytes32[](chainLength);
 
         bytes32 currentId = accreditationId;
+
         for (uint256 i = chainLength; i > 0; i--) {
             chain[i - 1] = currentId;
+
             Accreditation memory accred = accreditations[currentId];
             currentId = accred.parentAccreditationId;
+
             if (currentId == bytes32(0)) break;
         }
 
@@ -287,6 +336,7 @@ contract AccreditationRegistry {
      */
     function getAccreditation(bytes32 accreditationId) external view returns (Accreditation memory) {
         if (!accreditations[accreditationId].exists) revert AccreditationNotFound();
+
         return accreditations[accreditationId];
     }
 
@@ -304,7 +354,7 @@ contract AccreditationRegistry {
         bytes32 parentAccreditationId
     ) private view {
         // The contract owner (EU Root backend signer) can issue at any scope
-        bool isRootDeployer = (issuer == owner);
+        bool isRootDeployer = issuer == owner;
 
         if (scope == AccreditationScope.MemberState) {
             if (!isRootDeployer) revert NotMemberState();
@@ -312,7 +362,9 @@ contract AccreditationRegistry {
             if (!isRootDeployer) {
                 // Issuer must be the subject of a valid, non-revoked MemberState accreditation
                 if (parentAccreditationId == bytes32(0)) revert InvalidParentAccreditation();
+
                 Accreditation memory parent = accreditations[parentAccreditationId];
+
                 if (!parent.exists) revert InvalidParentAccreditation();
                 if (parent.scope != AccreditationScope.MemberState) revert InvalidScope();
                 if (parent.subject != issuer) revert UnauthorizedIssuer();
@@ -320,16 +372,38 @@ contract AccreditationRegistry {
             }
         } else if (scope == AccreditationScope.Institution) {
             if (parentAccreditationId == bytes32(0)) revert InvalidParentAccreditation();
+
             Accreditation memory parent = accreditations[parentAccreditationId];
+
             if (!parent.exists) revert InvalidParentAccreditation();
             if (parent.scope != AccreditationScope.Ministry) revert InvalidScope();
             if (parent.subject != issuer && !isRootDeployer) revert UnauthorizedIssuer();
             if (!validateTrustChain(parentAccreditationId)) revert InvalidTrustChain();
         } else if (scope == AccreditationScope.Department) {
             if (parentAccreditationId == bytes32(0)) revert InvalidParentAccreditation();
+
             Accreditation memory parent = accreditations[parentAccreditationId];
+
             if (!parent.exists) revert InvalidParentAccreditation();
             if (parent.scope != AccreditationScope.Institution) revert InvalidScope();
+            if (parent.subject != issuer && !isRootDeployer) revert UnauthorizedIssuer();
+            if (!validateTrustChain(parentAccreditationId)) revert InvalidTrustChain();
+        } else if (scope == AccreditationScope.BusinessRegistry) {
+            if (parentAccreditationId == bytes32(0)) revert InvalidParentAccreditation();
+
+            Accreditation memory parent = accreditations[parentAccreditationId];
+
+            if (!parent.exists) revert InvalidParentAccreditation();
+            if (parent.scope != AccreditationScope.MemberState) revert InvalidScope();
+            if (parent.subject != issuer && !isRootDeployer) revert UnauthorizedIssuer();
+            if (!validateTrustChain(parentAccreditationId)) revert InvalidTrustChain();
+        } else if (scope == AccreditationScope.Enterprise) {
+            if (parentAccreditationId == bytes32(0)) revert InvalidParentAccreditation();
+
+            Accreditation memory parent = accreditations[parentAccreditationId];
+
+            if (!parent.exists) revert InvalidParentAccreditation();
+            if (parent.scope != AccreditationScope.BusinessRegistry) revert InvalidScope();
             if (parent.subject != issuer && !isRootDeployer) revert UnauthorizedIssuer();
             if (!validateTrustChain(parentAccreditationId)) revert InvalidTrustChain();
         } else {
@@ -348,6 +422,7 @@ contract AccreditationRegistry {
 
         while (currentId != bytes32(0)) {
             length++;
+
             Accreditation memory accred = accreditations[currentId];
             currentId = accred.parentAccreditationId;
 

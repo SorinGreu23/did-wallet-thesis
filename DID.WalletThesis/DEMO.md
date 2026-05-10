@@ -16,41 +16,45 @@ End-to-end walkthrough for testing the blockchain-driven accreditation flow.
 
 ```bash
 # from repo root
-docker-compose up postgres rabbitmq hardhat -d
+docker compose -f docker-compose.infra.yml up -d
 ```
 
-**Create databases** (one-time, or after a full Docker reset):
+This starts:
 
-```bash
-docker exec -it did-postgres psql -U did_user -d did_wallet -c "
-  CREATE DATABASE did_identity;
-  CREATE DATABASE did_accreditation;
-  CREATE DATABASE did_blockchainsync;
-"
-```
+- PostgreSQL
+- RabbitMQ
+- Foundry Anvil local chain
+
+Anvil state is persisted in the `foundry_data` Docker volume. Normal stop / up cycles keep deployed contracts and on-chain accreditation data.
 
 ---
 
 ## Part 2 — Deploy Smart Contracts
 
-Run this every time the Hardhat container restarts (its state is ephemeral):
+Deploy only when starting from a fresh Anvil state:
 
 ```bash
-cd blockchain
-npm install        # first time only
-npx hardhat run scripts/deploy.ts --network localhost
+docker run --rm -it \
+  --entrypoint forge \
+  --network did-infra \
+  -v "$PWD:/workspace" \
+  -w /workspace/blockchain \
+  ghcr.io/foundry-rs/foundry:latest \
+  script script/Deploy.s.sol \
+    --rpc-url http://foundry:8545 \
+    --broadcast \
+    --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ```
 
-Expected output:
-```
-✅ EURootAuthority deployed to:      0x5FbDB2315678afecb367f032d93F642f64180aa3
-✅ AccreditationRegistry deployed to: 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
-✅ CredentialRegistry deployed to:    0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9
-```
+Expected contracts:
 
-> Contract addresses are deterministic — they always match the values already in `BlockchainSync/appsettings.json`.
+| Contract | Address |
+|---|---|
+| `EURootAuthority.sol` | `0x5FbDB2315678afecb367f032d93F642f64180aa3` |
+| `AccreditationRegistry.sol` | `0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0` |
+| `CredentialRegistry.sol` | `0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9` |
 
-The deploy script also bootstraps `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266` (Hardhat account #0) as member state **"RO"**, which authorises it to issue accreditations.
+The deploy script bootstraps `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266` as the initial RO member state.
 
 ---
 
@@ -82,58 +86,20 @@ Service URLs:
 
 ## Part 4 — Trigger Blockchain Events
 
-Open the Hardhat console:
+Use the admin client at `http://localhost:4200` to issue and revoke accreditations through the UI. Sign in with one of the Foundry Anvil development private keys.
+
+## Optional — Verify Contract Deployment with Cast
 
 ```bash
-cd blockchain
-npx hardhat console --network localhost
+docker run --rm -it \
+  --entrypoint cast \
+  --network did-infra \
+  ghcr.io/foundry-rs/foundry:latest \
+  code 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 \
+  --rpc-url http://foundry:8545
 ```
 
-### Issue a Ministry accreditation
-
-```js
-const registry = await ethers.getContractAt(
-  "AccreditationRegistry",
-  "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
-)
-
-const tx = await registry.issueAccreditation(
-  "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", // subject: Hardhat account #1
-  2,               // scope: 2 = Ministry
-  ethers.ZeroHash, // no parent accreditation
-  ethers.ZeroHash, // permissions hash
-  0                // no expiry
-)
-
-const receipt = await tx.wait()
-console.log("Block:", receipt.blockNumber, "Tx:", receipt.hash)
-```
-
-### Issue an Institution accreditation (requires Ministry parent)
-
-```js
-// First get the accreditation ID from the Ministry tx above
-const filter = registry.filters.AccreditationIssued()
-const events = await registry.queryFilter(filter)
-const ministryId = events[0].args.id
-
-const tx2 = await registry.connect(
-  (await ethers.getSigners())[1]  // account #1 is now a Ministry, issues to account #2
-).issueAccreditation(
-  "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC", // subject: Hardhat account #2
-  3,          // scope: 3 = Institution
-  ministryId, // parent = the Ministry accreditation
-  ethers.ZeroHash,
-  0
-)
-await tx2.wait()
-```
-
-### Revoke an accreditation
-
-```js
-await (await registry.revokeAccreditation(ministryId)).wait()
-```
+If the output is not `0x`, the contract exists on the persisted local chain.
 
 ---
 
@@ -158,7 +124,7 @@ GET http://localhost:5211/api/accreditations?subjectDid=0x70997970C51812dc3A010C
 
 ## Part 6 — Demo-Only Shortcut (no blockchain needed)
 
-For a quick demo without running Hardhat/BlockchainSync, use the direct API:
+For a quick demo without running Foundry Anvil/BlockchainSync, use the direct API:
 
 ### Create DIDs
 ```
@@ -215,7 +181,7 @@ GET http://localhost:5211/api/accreditations/{accreditationId}/verify
 
 ---
 
-## Hardhat Test Accounts
+## Foundry Anvil Test Accounts
 
 | # | Address | Private Key |
 |---|---|---|
@@ -230,6 +196,6 @@ GET http://localhost:5211/api/accreditations/{accreditationId}/verify
 | Problem | Fix |
 |---|---|
 | `did_blockchainsync does not exist` | Run the CREATE DATABASE commands in Part 1 |
-| Contract call reverts | Re-deploy contracts (`npx hardhat run scripts/deploy.ts --network localhost`) |
+| Contract call reverts | Check that Foundry Anvil is running and that the contracts exist with `cast code`. If the chain was wiped with `down -v`, redeploy using `forge script`. |
 | Accreditation not appearing after contract call | Check BlockchainSync logs — it may still be processing |
 | `value too long for type character varying(42)` | Use only valid 42-char Ethereum addresses |

@@ -28,6 +28,7 @@ services:
     networks:
       - did-infra
       - did-services
+      - did-admin
 
   accreditation:
     build:
@@ -42,10 +43,10 @@ services:
       RabbitMQ__Host: rabbitmq
       RabbitMQ__Username: did_user
       RabbitMQ__Password: did_password
-      Blockchain__RpcUrl: "http://hardhat:8545"
+      Blockchain__RpcUrl: "http://foundry:8545"
       Blockchain__BrowserRpcUrl: "http://localhost:8545"
       Blockchain__AbisDirectory: /app/abis
-      Blockchain__Contracts__AccreditationRegistry: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
+      Blockchain__Contracts__AccreditationRegistry: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
     ports:
       - "5211:8080"
     volumes:
@@ -53,6 +54,7 @@ services:
     networks:
       - did-infra
       - did-services
+      - did-admin
 
   blockchain-sync:
     build:
@@ -67,10 +69,10 @@ services:
       RabbitMQ__Host: rabbitmq
       RabbitMQ__Username: did_user
       RabbitMQ__Password: did_password
-      Blockchain__RpcUrl: "http://hardhat:8545"
+      Blockchain__RpcUrl: "http://foundry:8545"
       Blockchain__AbisDirectory: /app/abis
-      Blockchain__Contracts__AccreditationRegistry: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
-      Blockchain__Contracts__CredentialRegistry: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
+      Blockchain__Contracts__AccreditationRegistry: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
+      Blockchain__Contracts__CredentialRegistry: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
     volumes:
       - ./blockchain/abis:/app/abis:ro
     networks:
@@ -90,9 +92,9 @@ services:
       RabbitMQ__Host: rabbitmq
       RabbitMQ__Username: did_user
       RabbitMQ__Password: did_password
-      Blockchain__RpcUrl: "http://hardhat:8545"
+      Blockchain__RpcUrl: "http://foundry:8545"
       Blockchain__AbisDirectory: /app/abis
-      Blockchain__Contracts__CredentialRegistry: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
+      Blockchain__Contracts__CredentialRegistry: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
     ports:
       - "5214:8080"
     volumes:
@@ -100,6 +102,7 @@ services:
     networks:
       - did-infra
       - did-services
+      - did-admin
 
   presentation:
     build:
@@ -110,50 +113,24 @@ services:
     container_name: did-presentation
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      VerificationService__BaseUrl: "http://did-verification:8080"
     ports:
       - "5217:8080"
     networks:
       - did-services
-    depends_on:
-      - verification
 
-  zkp-service:
+  admin-client:
     build:
-      context: ./zkp-service
-    container_name: did-zkp-service
-    environment:
-      PORT: "3000"
-    ports:
-      - "3001:3000"
-    networks:
-      - did-services
-
-  verification:
-    build:
-      context: ./DID.WalletThesis
+      context: ./DID.WalletThesis/src/admin-client
       dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: DID.Verification
-    container_name: did-verification
-    environment:
-      ASPNETCORE_ENVIRONMENT: Production
-      RabbitMQ__Host: rabbitmq
-      RabbitMQ__Username: did_user
-      RabbitMQ__Password: did_password
-      Blockchain__RpcUrl: "http://hardhat:8545"
-      Blockchain__AbisDirectory: /app/abis
-      Blockchain__Contracts__CredentialRegistry: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
-      ZkpService__BaseUrl: "http://did-zkp-service:3000"
+    container_name: did-admin-client
     ports:
-      - "5216:8080"
-    volumes:
-      - ./blockchain/abis:/app/abis:ro
+      - "4200:80"
     networks:
-      - did-infra
-      - did-services
+      - did-admin
     depends_on:
-      - zkp-service
+      - accreditation
+      - identity
+      - credential
 
 networks:
   did-infra:
@@ -162,4 +139,7 @@ networks:
   did-services:
     driver: bridge
     name: did-services
+  did-admin:
+    driver: bridge
+    name: did-admin
 

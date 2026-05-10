@@ -1,0 +1,15 @@
+{
+  "name": "zkp-circuit-tools",
+  "version": "1.0.0",
+  "description": "Circuit build toolchain — compile circom circuits and run trusted setup ceremonies. Not a runtime service.",
+  "scripts": {
+    "setup-circuits": "node scripts/setup-circuits.mjs",
+    "generate-merkle": "node scripts/generate-eu-merkle.mjs"
+  },
+  "dependencies": {
+    "snarkjs": "^0.7.3"
+  },
+  "devDependencies": {
+    "circomlibjs": "^0.1.7"
+  }
+}
