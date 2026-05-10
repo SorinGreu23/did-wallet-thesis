@@ -1,6 +1,6 @@
 # EU Decentralized Digital Identity System
 
-Note: Outdated file, will be updated via the next pull request.
+Last updated: May 10, 2026
 
 Bachelor's Thesis — Computer Science, Alexandru Ioan Cuza University, Iasi
 
