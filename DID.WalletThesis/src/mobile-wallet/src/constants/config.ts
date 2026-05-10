@@ -1,6 +1,6 @@
-// For iOS Simulator, use the Mac's local network IP instead of localhost.
-// Run `ipconfig getifaddr en0` (Wi-Fi) or `en1` (Ethernet) to find your IP.
-const HOST = '192.168.1.12'; // Mac's LAN IP — use this for physical iPhone on the same Wi-Fi
+// Simulators share the host network stack. For a physical device on the same Wi-Fi,
+// switch to the Mac's LAN IP (run `ipconfig getifaddr en0` to find it).
+const HOST = 'localhost';
 
 export const CONFIG = {
   DID_METHOD: 'did:ethr',

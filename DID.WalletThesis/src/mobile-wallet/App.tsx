@@ -8,6 +8,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import MainTabNavigator from "./src/screens/MainTabNavigator";
 import UnlockSplashScreen from "./src/screens/UnlockSplashScreen";
 import WelcomeScreen from "./src/screens/WelcomeScreen";
+import ZkpWebViewBridge from "./src/components/ZkpWebViewBridge";
 
 function AppNavigator() {
   const { isDark, colors } = useTheme();
@@ -40,6 +41,7 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthProvider>
+          <ZkpWebViewBridge />
           <AppNavigator />
         </AuthProvider>
       </ThemeProvider>

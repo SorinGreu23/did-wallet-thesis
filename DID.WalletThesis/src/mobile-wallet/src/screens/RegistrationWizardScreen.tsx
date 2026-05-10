@@ -160,7 +160,12 @@ function PinKeypad({
     onChange: (v: string) => void;
     colors: any;
 }) {
-    const digits = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'];
+    const rows = [
+        ['1', '2', '3'],
+        ['4', '5', '6'],
+        ['7', '8', '9'],
+        ['',  '0', '⌫'],
+    ];
     return (
         <View style={styles.keypad}>
             <View style={styles.pinDots}>
@@ -178,26 +183,30 @@ function PinKeypad({
                 ))}
             </View>
             <View style={styles.keypadGrid}>
-                {digits.map((d, i) => (
-                    <TouchableOpacity
-                        key={i}
-                        style={[
-                            styles.keypadKey,
-                            d === '' && {opacity: 0},
-                            {backgroundColor: d ? colors.surface : 'transparent', borderColor: colors.border},
-                        ]}
-                        disabled={d === ''}
-                        onPress={() => {
-                            if (d === '⌫') {
-                                onChange(value.slice(0, -1));
-                            } else if (value.length < 6) {
-                                onChange(value + d);
-                            }
-                        }}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={[styles.keypadText, {color: colors.text}]}>{d}</Text>
-                    </TouchableOpacity>
+                {rows.map((row, ri) => (
+                    <View key={ri} style={styles.keypadRow}>
+                        {row.map((d, ci) => (
+                            <TouchableOpacity
+                                key={ci}
+                                style={[
+                                    styles.keypadKey,
+                                    d === '' && {opacity: 0},
+                                    {backgroundColor: d ? colors.surface : 'transparent', borderColor: colors.border},
+                                ]}
+                                disabled={d === ''}
+                                onPress={() => {
+                                    if (d === '⌫') {
+                                        onChange(value.slice(0, -1));
+                                    } else if (value.length < 6) {
+                                        onChange(value + d);
+                                    }
+                                }}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={[styles.keypadText, {color: colors.text}]}>{d}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
                 ))}
             </View>
         </View>
@@ -1126,11 +1135,11 @@ const styles = StyleSheet.create({
         borderWidth: 1,
     },
     keypadGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'center',
         gap: 16,
-        maxWidth: 340,
+    },
+    keypadRow: {
+        flexDirection: 'row',
+        gap: 16,
     },
     keypadKey: {
         width: 88,

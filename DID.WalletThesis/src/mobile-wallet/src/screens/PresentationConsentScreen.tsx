@@ -14,6 +14,7 @@ import { useTheme } from '../context/ThemeContext';
 import authService from '../services/authService';
 import credentialService from '../services/credentialService';
 import zkpService from '../services/zkpService';
+import presentationService from '../services/presentationService';
 import {
   decodePresentationRequest,
   PresentationRequest,
@@ -84,37 +85,80 @@ export default function PresentationConsentScreen() {
       const currentYear = new Date().getFullYear();
 
       if (req.circuit === 'ageVerification') {
-        // birthYear derived from birthDate (ISO "YYYY-MM-DD") or default
         const birthYear =
           (profile as any)?.birthDate
             ? parseInt((profile as any).birthDate.slice(0, 4), 10)
-            : 1995;
+            : null;
+
+        if (!birthYear) {
+          throw new Error(
+            'Your date of birth is not set. Please update it in Profile before proceeding.',
+          );
+        }
+
+        const age = currentYear - birthYear;
+        if (age < req.threshold) {
+          throw new Error(
+            `Age requirement not met: this request requires you to be at least ${req.threshold} years old (you are ${age}).`,
+          );
+        }
+
         const { proof, publicSignals } = await zkpService.prove('ageVerification', {
           birthYear: String(birthYear),
           currentYear: String(currentYear),
           threshold: String(req.threshold),
         });
+
+        const valid = await zkpService.verify('ageVerification', proof, publicSignals);
+        if (!valid) {
+          throw new Error('Age proof verification failed. Cannot submit this presentation.');
+        }
+
         return { circuit: 'ageVerification', proof, publicSignals };
       }
 
       if (req.circuit === 'graduationYearRange') {
-        const graduationYear = (profile as any)?.graduationYear ?? 2020;
+        const graduationYear = (profile as any)?.graduationYear ?? null;
+
+        if (!graduationYear) {
+          throw new Error(
+            'Your graduation year is not set. Please update it in Profile before proceeding.',
+          );
+        }
+
+        if (graduationYear < req.minYear || graduationYear > req.maxYear) {
+          throw new Error(
+            `Graduation year requirement not met: must be between ${req.minYear} and ${req.maxYear} (yours is ${graduationYear}).`,
+          );
+        }
+
         const { proof, publicSignals } = await zkpService.prove('graduationYearRange', {
           graduationYear: String(graduationYear),
           minYear: String(req.minYear),
           maxYear: String(req.maxYear),
         });
+
+        const valid = await zkpService.verify('graduationYearRange', proof, publicSignals);
+        if (!valid) {
+          throw new Error('Graduation year proof verification failed. Cannot submit this presentation.');
+        }
+
         return { circuit: 'graduationYearRange', proof, publicSignals };
       }
 
       if (req.circuit === 'countryMembership') {
-        // DE = 276 as placeholder; actual path comes from eu-country-merkle.json
         const { proof, publicSignals } = await zkpService.prove('countryMembership', {
           countryCode: '276',
           merkleRoot: req.merkleRoot,
           pathElements: Array(10).fill('0'),
           pathIndices: Array(10).fill('0'),
         });
+
+        const valid = await zkpService.verify('countryMembership', proof, publicSignals);
+        if (!valid) {
+          throw new Error('Country membership proof verification failed. Cannot submit this presentation.');
+        }
+
         return { circuit: 'countryMembership', proof, publicSignals };
       }
 
@@ -228,6 +272,14 @@ export default function PresentationConsentScreen() {
           body: JSON.stringify(response),
         });
       }
+
+      await presentationService.save({
+        id: request.id,
+        purpose: request.purpose,
+        verifierDid: request.verifierDid,
+        response,
+        submittedAt: response.submittedAt,
+      });
 
       setLoading(false);
       Alert.alert(

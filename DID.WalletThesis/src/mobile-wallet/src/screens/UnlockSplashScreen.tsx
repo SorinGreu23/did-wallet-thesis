@@ -252,16 +252,20 @@ export default function UnlockSplashScreen({ onAuthenticated }: UnlockSplashScre
                 ))}
               </View>
               <View style={styles.keypadGrid}>
-                {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((d, i) => (
-                  <TouchableOpacity
-                    key={i}
-                    style={[styles.keypadKey, d === '' && { opacity: 0 }, { backgroundColor: d ? colors.background : 'transparent', borderColor: colors.border }]}
-                    disabled={d === '' || loading}
-                    onPress={() => void handlePinDigit(d)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.keypadText, { color: colors.text }]}>{d}</Text>
-                  </TouchableOpacity>
+                {[['1','2','3'],['4','5','6'],['7','8','9'],['','0','⌫']].map((row, ri) => (
+                  <View key={ri} style={styles.keypadRow}>
+                    {row.map((d, ci) => (
+                      <TouchableOpacity
+                        key={ci}
+                        style={[styles.keypadKey, d === '' && { opacity: 0 }, { backgroundColor: d ? colors.background : 'transparent', borderColor: colors.border }]}
+                        disabled={d === '' || loading}
+                        onPress={() => void handlePinDigit(d)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.keypadText, { color: colors.text }]}>{d}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 ))}
               </View>
               <TouchableOpacity onPress={() => { setShowPinFallback(false); setPin(''); setError(null); }}>
@@ -448,9 +452,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   keypadGrid: {
+    gap: 10,
+    alignItems: "center",
+  },
+  keypadRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
     gap: 10,
   },
   keypadKey: {
