@@ -25,7 +25,7 @@ A blockchain-anchored, privacy-preserving digital identity prototype demonstrati
    │ Accreditation       │ │ Mobile Wallet                              │
    │ Platform            │ │                                            │
    │                     │ │ React Native/Expo | Veramo | SQLite        │
-   │ Angular 21 + .NET 10│ │ expo-secure-store | snarkjs (on-device)   │
+   │ Angular 21 + .NET 10│ │ expo-secure-store | snarkjs via WebView    │
    │ DID-Auth + RBAC     │ │ Groth16 ZKP proofs never leave the device  │
    └─────────────────────┘ └────────────────────────────────────────────┘
 
@@ -95,11 +95,13 @@ The citizen-controlled component. Holds keys locally, manages DIDs, credentials,
 | Enterprise registration request + polling | ✅ Done |
 | Bottom tab navigator (`@react-navigation/bottom-tabs`) | ✅ Done |
 | Account-type-conditional tabs (Wallet hidden for University/Enterprise) | ✅ Done |
-| On-device ZKP proving (`snarkjs` + bundled circuit assets) | ✅ Done |
+| On-device ZKP proving via hidden WebView bridge (snarkjs + WASM, Hermes-compatible) | ✅ Done |
 | Presentation request schema + `eudi-pres://` QR encoding | ✅ Done |
-| `PresentationConsentScreen` (holder side) | ✅ Done |
+| `PresentationConsentScreen` (holder side) with pre-proof validation | ✅ Done |
 | `IncomingPresentationScreen` (verifier side) | ✅ Done |
 | `chainVerifier` + `credentialIssuer` helpers | ✅ Done |
+| Verifiable Presentation history persisted in AsyncStorage | ✅ Done |
+| Unified Apple Wallet-style card stack (VCs + VPs combined) | ✅ Done |
 
 **Stack:** React Native, Expo, Veramo Framework, SQLite (TypeORM), expo-secure-store, ethers.js.
 
@@ -122,9 +124,9 @@ Deployed on local Foundry Anvil with deterministic development addresses:
 | Contract | Address | Purpose |
 |----------|---------|---------|
 | `EURootAuthority.sol` | `0x5FbDB2315678afecb367f032d93F642f64180aa3` | Root of trust, multi-sig governance |
-| `AccreditationRegistry.sol` | `0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0` | Hierarchical trust chain (all scopes incl. BusinessRegistry, Enterprise) |
-| `CredentialRegistry.sol` | `0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9` | Credential status, issuer accreditation validation |
-| `ZkpVerifierRegistry.sol` | see `blockchain/deployments/latest.json` | On-chain vKey hash anchoring for ZKP circuits |
+| `AccreditationRegistry.sol` | `0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512` | Hierarchical trust chain (all scopes incl. BusinessRegistry, Enterprise) |
+| `CredentialRegistry.sol` | `0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0` | Credential status, issuer accreditation validation |
+| `ZkpVerifierRegistry.sol` | `0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9` | On-chain vKey hash anchoring for ZKP circuits |
 
 ### Accreditation Scopes
 
@@ -184,11 +186,14 @@ did-wallet-thesis/
 │       │   └── src/
 │       │       ├── screens/            # WelcomeScreen, AccountTypeChooserScreen,
 │       │       │                       # RegistrationWizardScreen, UnlockSplashScreen,
-│       │       │                       # MainTabNavigator, HomeScreen, WalletScreen,
+│       │       │                       # MainTabNavigator, HomeScreen, CredentialsScreen,
 │       │       │                       # ActionsStackNavigator, ActionsStubScreen,
 │       │       │                       # PresentationConsentScreen, IncomingPresentationScreen
+│       │       ├── components/         # ZkpWebViewBridge (hidden WebView WASM sandbox)
 │       │       ├── context/            # RegistrationContext, AuthContext, ThemeContext
-│       │       ├── services/           # pinService (Argon2id), euGeoService, zkpService,
+│       │       ├── services/           # pinService (Argon2id), euGeoService,
+│       │       │                       # zkpService + zkpBridge (WebView ZKP bridge),
+│       │       │                       # presentationService (VP history),
 │       │       │                       # chainVerifier, credentialIssuer,
 │       │       │                       # accreditationLookupService, authService, walletService
 │       │       └── types/              # WalletProfile, presentation.ts (request/response schema)
@@ -201,7 +206,7 @@ did-wallet-thesis/
 │       │   ├── DID.BlockchainSync/     # Event polling + RabbitMQ publisher
 │       │   ├── DID.Identity/           # DID generation service
 │       │   ├── DID.Credential/         # Credential API
-│       │   ├── DID.Presentation/       # Presentation handling (on-device verification)
+│       │   ├── DID.Presentation/       # Presentation relay (verification runs on-device)
 │       │   ├── DID.Notification/       # Notification service
 │       │   └── DID.Audit/              # Audit trail
 │       ├── Shared/
@@ -216,7 +221,6 @@ did-wallet-thesis/
 ├── docker-compose.infra.yml            # PostgreSQL, RabbitMQ, Foundry Anvil
 ├── docker-compose.services.yml         # Microservice containers
 ├── docs/
-│   ├── IMPLEMENTATION_PLAN_V2.md       # Full feature plan with ✅/⚠️ status
 │   ├── TESTING_GUIDE.md                # Step-by-step testing instructions
 │   └── TEST_ACCOUNTS.md                # Anvil test wallet accounts
 └── questions_for_hevi.md               # Open questions for thesis author
@@ -269,8 +273,9 @@ Expected contract addresses after fresh deployment:
 | Contract | Address |
 |----------|---------|
 | `EURootAuthority.sol` | `0x5FbDB2315678afecb367f032d93F642f64180aa3` |
-| `AccreditationRegistry.sol` | `0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0` |
-| `CredentialRegistry.sol` | `0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9` |
+| `AccreditationRegistry.sol` | `0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512` |
+| `CredentialRegistry.sol` | `0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0` |
+| `ZkpVerifierRegistry.sol` | `0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9` |
 
 ### 4. Export Contract ABIs
 
@@ -336,7 +341,7 @@ docker run --rm -it \
   --entrypoint cast \
   --network did-infra \
   ghcr.io/foundry-rs/foundry:latest \
-  code 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 \
+  code 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0 \
   --rpc-url http://foundry:8545
 ```
 
@@ -344,19 +349,13 @@ Non-`0x` output means the contract exists on the local chain.
 
 ## Implementation Status
 
-See [docs/IMPLEMENTATION_PLAN_V2.md](docs/IMPLEMENTATION_PLAN_V2.md) for the full annotated feature checklist.
-
-**Summary:**
-
 | Phase | Description | Status |
 |-------|-------------|--------|
-| A | Mobile wallet: account types, Argon2id PIN, registration wizard, navigation | ~95% done |
-| B | Smart contracts: BusinessRegistry/Enterprise, ZkpVerifierRegistry, all 3 circuits | ~90% done |
+| A | Mobile wallet: account types, Argon2id PIN, registration wizard, navigation | ✅ Done |
+| B | Smart contracts: BusinessRegistry/Enterprise, ZkpVerifierRegistry, all 3 circuits | ✅ Done |
 | C | Admin client + .NET: enterprise approvals, Chamber provisioning, DID.Verification removed | ✅ Done |
-| D | Presentation pipeline: on-device ZKP, Master's / Foreign ID / Job application flows | ✅ Done |
+| D | Presentation pipeline: on-device ZKP via WebView bridge, Master's / Foreign ID / Job application flows, VP history, unified wallet card stack | ✅ Done |
 | E | Polish, demo scripts, SECURITY.md, ARF alignment | ~10% done |
-
-Open questions for the thesis author are in [questions_for_hevi.md](questions_for_hevi.md).
 
 ## Technical Details
 
