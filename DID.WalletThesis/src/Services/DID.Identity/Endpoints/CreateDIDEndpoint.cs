@@ -19,9 +19,9 @@ public class CreateDIDEndpoint(DIDService service) : Endpoint<CreateDIDRequest, 
             var doc = await service.CreateDIDAsync(req.ControllerAddress, ct);
             await Send.CreatedAtAsync<ResolveDIDEndpoint>(new { did = doc.Id }, doc, cancellation: ct);
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException)
         {
-            AddError(ex.Message);
+            AddError("A DID document already exists for this address.");
             await Send.ErrorsAsync(409, ct);
         }
     }

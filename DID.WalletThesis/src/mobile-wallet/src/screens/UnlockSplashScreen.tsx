@@ -19,7 +19,9 @@ interface UnlockSplashScreenProps {
   onAuthenticated: () => void;
 }
 
-export default function UnlockSplashScreen({ onAuthenticated }: UnlockSplashScreenProps) {
+export default function UnlockSplashScreen({
+  onAuthenticated,
+}: UnlockSplashScreenProps) {
   const { colors, themeAnim } = useTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,10 +84,17 @@ export default function UnlockSplashScreen({ onAuthenticated }: UnlockSplashScre
 
   const detectBiometricLabel = async () => {
     try {
-      const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
-      if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {
+      const types =
+        await LocalAuthentication.supportedAuthenticationTypesAsync();
+      if (
+        types.includes(
+          LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION,
+        )
+      ) {
         setBiometricLabel("Face ID");
-      } else if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) {
+      } else if (
+        types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)
+      ) {
         setBiometricLabel("Touch ID");
       } else if (types.length > 0) {
         setBiometricLabel("biometrics");
@@ -111,16 +120,18 @@ export default function UnlockSplashScreen({ onAuthenticated }: UnlockSplashScre
         const result = await LocalAuthentication.authenticateAsync({
           promptMessage: "Unlock your EU Identity Wallet",
           fallbackLabel: "",
-          cancelLabel: "Use PIN",
+          cancelLabel: "Cancel",
           disableDeviceFallback: true,
         });
 
         if (!result.success) {
-          if (result.error && result.error !== "user_cancel" && result.error !== "system_cancel") {
+          if (
+            result.error &&
+            result.error !== "user_cancel" &&
+            result.error !== "system_cancel"
+          ) {
             setError("Biometric check did not complete.");
           }
-          // Fall through to PIN
-          setShowPinFallback(true);
           return;
         }
       } else {
@@ -133,14 +144,14 @@ export default function UnlockSplashScreen({ onAuthenticated }: UnlockSplashScre
       onAuthenticated();
     } catch (e: any) {
       setError(e?.message || "Failed to unlock wallet");
-      setShowPinFallback(true);
     } finally {
       setLoading(false);
     }
   };
 
   const handlePinDigit = async (digit: string) => {
-    const next = digit === "⌫" ? pin.slice(0, -1) : pin.length < 6 ? pin + digit : pin;
+    const next =
+      digit === "⌫" ? pin.slice(0, -1) : pin.length < 6 ? pin + digit : pin;
     setPin(next);
     if (next.length === 6) {
       setLoading(true);
@@ -148,7 +159,9 @@ export default function UnlockSplashScreen({ onAuthenticated }: UnlockSplashScre
       try {
         const status = await pinService.getStatus();
         if (status.isLocked) {
-          const remaining = Math.ceil(((status.lockedUntil ?? 0) - Date.now()) / 1000);
+          const remaining = Math.ceil(
+            ((status.lockedUntil ?? 0) - Date.now()) / 1000,
+          );
           setError(`Too many attempts. Try again in ${remaining}s.`);
           setPin("");
           return;
@@ -160,16 +173,18 @@ export default function UnlockSplashScreen({ onAuthenticated }: UnlockSplashScre
         } else {
           const updated = await pinService.getStatus();
           if (updated.offerWipe) {
-            setError("Too many wrong PINs. Consider wiping and re-registering.");
+            setError(
+              "Too many wrong PINs. Consider wiping and re-registering.",
+            );
           } else {
             setError("Incorrect PIN. Try again.");
           }
           setPin("");
         }
       } catch (e: any) {
-        if (e?.message === 'PIN_ALGO_MISMATCH') {
+        if (e?.message === "PIN_ALGO_MISMATCH") {
           await pinService.clearPin();
-          setError('Security upgrade required. Please re-register your PIN.');
+          setError("Security upgrade required. Please re-register your PIN.");
         } else {
           setError(e?.message || "PIN check failed.");
         }
@@ -186,7 +201,7 @@ export default function UnlockSplashScreen({ onAuthenticated }: UnlockSplashScre
   });
 
   return (
-    <Animated.View style={[styles.container, { backgroundColor }]}> 
+    <Animated.View style={[styles.container, { backgroundColor }]}>
       <StatusBar
         barStyle={colors.text === "#111827" ? "dark-content" : "light-content"}
         backgroundColor="transparent"
@@ -194,8 +209,20 @@ export default function UnlockSplashScreen({ onAuthenticated }: UnlockSplashScre
       />
 
       <View style={styles.backdrop} pointerEvents="none">
-        <View style={[styles.backdropOrb, styles.backdropOrbPrimary, { backgroundColor: colors.primaryLight }]} />
-        <View style={[styles.backdropOrb, styles.backdropOrbSecondary, { backgroundColor: colors.primary }]} />
+        <View
+          style={[
+            styles.backdropOrb,
+            styles.backdropOrbPrimary,
+            { backgroundColor: colors.primaryLight },
+          ]}
+        />
+        <View
+          style={[
+            styles.backdropOrb,
+            styles.backdropOrbSecondary,
+            { backgroundColor: colors.primary },
+          ]}
+        />
       </View>
 
       <Animated.View
@@ -204,20 +231,47 @@ export default function UnlockSplashScreen({ onAuthenticated }: UnlockSplashScre
           { opacity: fadeAnim, transform: [{ translateY: translateAnim }] },
         ]}
       >
-        <Animated.View style={[styles.halo, { backgroundColor: colors.primaryLight, transform: [{ scale: haloAnim }] }]}>
+        <Animated.View
+          style={[
+            styles.halo,
+            {
+              backgroundColor: colors.primaryLight,
+              transform: [{ scale: haloAnim }],
+            },
+          ]}
+        >
           <View style={[styles.badge, { backgroundColor: colors.primary }]}>
             <Feather name="shield" size={32} color="#ffffff" />
           </View>
         </Animated.View>
 
-        <Text style={[styles.eyebrow, { color: colors.primary }]}>SECURE ACCESS</Text>
-        <Text style={[styles.title, { color: colors.text }]}>Welcome back{profile ? `, ${profile.accountType === 'personal' ? profile.firstName : profile.legalName}` : ""}</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Use {biometricLabel} to continue to your EU Identity Wallet.</Text>
-
-        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+        <Text style={[styles.eyebrow, { color: colors.primary }]}>
+          SECURE ACCESS
+        </Text>
+        <Text style={[styles.title, { color: colors.text }]}>
+          Welcome back
+          {profile
+            ? `, ${profile.accountType === "personal" ? profile.firstName : profile.legalName}`
+            : ""}
+        </Text>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
           <View style={styles.cardHeader}>
-            <View style={[styles.cardIcon, { backgroundColor: colors.primaryLight }]}>
-              <Feather name={showPinFallback ? "lock" : "smartphone"} size={18} color={colors.primary} />
+            <View
+              style={[
+                styles.cardIcon,
+                { backgroundColor: colors.primaryLight },
+              ]}
+            >
+              <Feather
+                name={showPinFallback ? "lock" : "smartphone"}
+                size={18}
+                color={colors.primary}
+              />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.cardTitle, { color: colors.text }]}>
@@ -232,47 +286,71 @@ export default function UnlockSplashScreen({ onAuthenticated }: UnlockSplashScre
           </View>
 
           {error ? (
-            <View style={[styles.errorBox, { backgroundColor: colors.primaryLight }]}> 
+            <View
+              style={[
+                styles.errorBox,
+                { backgroundColor: colors.primaryLight },
+              ]}
+            >
               <Feather name="alert-circle" size={16} color={colors.primary} />
-              <Text style={[styles.errorText, { color: colors.text }]}>{error}</Text>
+              <Text style={[styles.errorText, { color: colors.text }]}>
+                {error}
+              </Text>
             </View>
           ) : null}
 
           {showPinFallback ? (
             <>
               <View style={styles.pinDots}>
-                {[0,1,2,3,4,5].map((i) => (
+                {[0, 1, 2, 3, 4, 5].map((i) => (
                   <View
                     key={i}
                     style={[
                       styles.pinDot,
-                      { backgroundColor: i < pin.length ? colors.primary : colors.border, borderColor: colors.border },
+                      {
+                        backgroundColor:
+                          i < pin.length ? colors.primary : colors.border,
+                        borderColor: colors.border,
+                      },
                     ]}
                   />
                 ))}
               </View>
               <View style={styles.keypadGrid}>
-                {[['1','2','3'],['4','5','6'],['7','8','9'],['','0','⌫']].map((row, ri) => (
+                {[
+                  ["1", "2", "3"],
+                  ["4", "5", "6"],
+                  ["7", "8", "9"],
+                  ["", "0", "⌫"],
+                ].map((row, ri) => (
                   <View key={ri} style={styles.keypadRow}>
                     {row.map((d, ci) => (
                       <TouchableOpacity
                         key={ci}
-                        style={[styles.keypadKey, d === '' && { opacity: 0 }, { backgroundColor: d ? colors.background : 'transparent', borderColor: colors.border }]}
-                        disabled={d === '' || loading}
+                        style={[
+                          styles.keypadKey,
+                          d === "" && { opacity: 0 },
+                          {
+                            backgroundColor: d
+                              ? colors.background
+                              : "transparent",
+                            borderColor: colors.border,
+                          },
+                        ]}
+                        disabled={d === "" || loading}
                         onPress={() => void handlePinDigit(d)}
                         activeOpacity={0.7}
                       >
-                        <Text style={[styles.keypadText, { color: colors.text }]}>{d}</Text>
+                        <Text
+                          style={[styles.keypadText, { color: colors.text }]}
+                        >
+                          {d}
+                        </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 ))}
               </View>
-              <TouchableOpacity onPress={() => { setShowPinFallback(false); setPin(''); setError(null); }}>
-                <Text style={[styles.hint, { color: colors.primary, textAlign: 'center', marginTop: 8 }]}>
-                  Try biometrics instead
-                </Text>
-              </TouchableOpacity>
             </>
           ) : (
             <>
@@ -291,15 +369,11 @@ export default function UnlockSplashScreen({ onAuthenticated }: UnlockSplashScre
                       size={18}
                       color="#ffffff"
                     />
-                    <Text style={styles.buttonText}>Continue with {biometricLabel}</Text>
+                    <Text style={styles.buttonText}>
+                      Continue with {biometricLabel}
+                    </Text>
                   </>
                 )}
-              </TouchableOpacity>
-
-              <TouchableOpacity onPress={() => { setShowPinFallback(true); setError(null); }}>
-                <Text style={[styles.hint, { color: colors.primary, textAlign: 'center', marginTop: 8 }]}>
-                  Use PIN instead
-                </Text>
               </TouchableOpacity>
             </>
           )}

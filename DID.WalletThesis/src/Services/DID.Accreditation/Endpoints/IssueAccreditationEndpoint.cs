@@ -4,7 +4,7 @@ using FastEndpoints;
 
 namespace DID.Accreditation.Endpoints;
 
-public class IssueAccreditationEndpoint(AccreditationService service)
+public class IssueAccreditationEndpoint(IAccreditationService service)
     : Endpoint<IssueAccreditationRequest, AccreditationDto>
 {
     public override void Configure()
@@ -29,24 +29,19 @@ public class IssueAccreditationEndpoint(AccreditationService service)
             await Send.CreatedAtAsync<ResolveAccreditationEndpoint>(
                 new { accreditationId = result.AccreditationId }, result, cancellation: ct);
         }
-        catch (ArgumentOutOfRangeException ex) when (ex.ParamName == "scope")
+        catch (ArgumentOutOfRangeException)
         {
-            AddError(r => r.Scope, ex.Message);
+            AddError(r => r.Scope, "The specified accreditation scope is not valid.");
             await Send.ErrorsAsync(400, ct);
         }
-        catch (ArgumentException ex)
+        catch (ArgumentException)
         {
-            AddError(ex.Message);
+            AddError("The accreditation request contains invalid parameters.");
             await Send.ErrorsAsync(400, ct);
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException)
         {
-            AddError(ex.Message);
-            await Send.ErrorsAsync(400, ct);
-        }
-        catch (Exception ex)
-        {
-            AddError(ex.Message);
+            AddError("The accreditation could not be issued. Please verify the parent accreditation is active and you have the required authority.");
             await Send.ErrorsAsync(400, ct);
         }
     }

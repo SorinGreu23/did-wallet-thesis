@@ -10,6 +10,9 @@ public class DIDRepository(IdentityDbContext context)
 {
     public async Task<DecentralizedIdentifier?> GetByDIDAsync(string did, CancellationToken ct = default)
         => await dbSet.Include(x => x.KeyPairs).FirstOrDefaultAsync(x => x.DID == did, ct);
-  public async Task<IEnumerable<KeyPair>> GetKeysByDIDAsync(Guid didId, CancellationToken ct = default)
+    public async Task<IEnumerable<KeyPair>> GetKeysByDIDAsync(Guid didId, CancellationToken ct = default)
         => await context.KeyPairs.Where(x => x.DIDId == didId).ToListAsync(ct);
+
+    public async Task AddKeyAsync(KeyPair keyPair, CancellationToken ct = default)
+        => await context.KeyPairs.AddAsync(keyPair, ct);
 }

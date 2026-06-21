@@ -1,6 +1,0 @@
-@DID.Audit_HostAddress = http://localhost:5037
-
-GET {{DID.Audit_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###

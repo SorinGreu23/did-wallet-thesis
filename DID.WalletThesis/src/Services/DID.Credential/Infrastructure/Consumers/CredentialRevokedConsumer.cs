@@ -5,7 +5,7 @@ using MassTransit;
 namespace DID.Credential.Infrastructure.Consumers;
 
 public class CredentialRevokedConsumer(
-    CredentialService service,
+    ICredentialService service,
     ILogger<CredentialRevokedConsumer> logger) : IConsumer<CredentialRevokedEvent>
 {
     public async Task Consume(ConsumeContext<CredentialRevokedEvent> context)

@@ -19,10 +19,11 @@ services:
     container_name: did-identity
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=did_identity;Username=did_user;Password=did_password"
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=did_identity;Username=${POSTGRES_USER:-did_user};Password=${POSTGRES_PASSWORD}"
       RabbitMQ__Host: rabbitmq
-      RabbitMQ__Username: did_user
-      RabbitMQ__Password: did_password
+      RabbitMQ__Username: ${RABBITMQ_USER:-did_user}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD}
+      Auth__JwtSecret: ${JWT_SECRET}
     ports:
       - "5259:8080"
     networks:
@@ -39,12 +40,14 @@ services:
     container_name: did-accreditation
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=did_accreditation;Username=did_user;Password=did_password"
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=did_accreditation;Username=${POSTGRES_USER:-did_user};Password=${POSTGRES_PASSWORD}"
       RabbitMQ__Host: rabbitmq
-      RabbitMQ__Username: did_user
-      RabbitMQ__Password: did_password
+      RabbitMQ__Username: ${RABBITMQ_USER:-did_user}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD}
+      Auth__JwtSecret: ${JWT_SECRET}
       Blockchain__RpcUrl: "http://foundry:8545"
       Blockchain__BrowserRpcUrl: "http://localhost:8545"
+      Blockchain__PrivateKey: ${BLOCKCHAIN_PRIVATE_KEY}
       Blockchain__AbisDirectory: /app/abis
       Blockchain__Contracts__AccreditationRegistry: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
     ports:
@@ -65,11 +68,12 @@ services:
     container_name: did-blockchain-sync
     environment:
       DOTNET_ENVIRONMENT: Production
-      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=did_blockchainsync;Username=did_user;Password=did_password"
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=did_blockchainsync;Username=${POSTGRES_USER:-did_user};Password=${POSTGRES_PASSWORD}"
       RabbitMQ__Host: rabbitmq
-      RabbitMQ__Username: did_user
-      RabbitMQ__Password: did_password
+      RabbitMQ__Username: ${RABBITMQ_USER:-did_user}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD}
       Blockchain__RpcUrl: "http://foundry:8545"
+      Blockchain__PrivateKey: ${BLOCKCHAIN_PRIVATE_KEY}
       Blockchain__AbisDirectory: /app/abis
       Blockchain__Contracts__AccreditationRegistry: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
       Blockchain__Contracts__CredentialRegistry: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
@@ -88,11 +92,13 @@ services:
     container_name: did-credential
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=did_credential;Username=did_user;Password=did_password"
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=did_credential;Username=${POSTGRES_USER:-did_user};Password=${POSTGRES_PASSWORD}"
       RabbitMQ__Host: rabbitmq
-      RabbitMQ__Username: did_user
-      RabbitMQ__Password: did_password
+      RabbitMQ__Username: ${RABBITMQ_USER:-did_user}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD}
+      Auth__JwtSecret: ${JWT_SECRET}
       Blockchain__RpcUrl: "http://foundry:8545"
+      Blockchain__PrivateKey: ${BLOCKCHAIN_PRIVATE_KEY}
       Blockchain__AbisDirectory: /app/abis
       Blockchain__Contracts__CredentialRegistry: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
     ports:
@@ -104,19 +110,7 @@ services:
       - did-services
       - did-admin
 
-  presentation:
-    build:
-      context: ./DID.WalletThesis
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: DID.Presentation
-    container_name: did-presentation
-    environment:
-      ASPNETCORE_ENVIRONMENT: Production
-    ports:
-      - "5217:8080"
-    networks:
-      - did-services
+
 
   admin-client:
     build:

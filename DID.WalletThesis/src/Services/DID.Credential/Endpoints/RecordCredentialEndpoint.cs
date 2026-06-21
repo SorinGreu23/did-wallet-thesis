@@ -8,7 +8,7 @@ namespace DID.Credential.Endpoints;
 /// Records a credential whose on-chain transaction was signed and submitted
 /// entirely by the caller's browser wallet. The private key never reaches the server.
 /// </summary>
-public class RecordCredentialEndpoint(CredentialService service)
+public class RecordCredentialEndpoint(ICredentialService service)
     : Endpoint<RecordCredentialRequest, CredentialDto>
 {
     public override void Configure()
@@ -31,22 +31,15 @@ public class RecordCredentialEndpoint(CredentialService service)
                 req.IssuerName,
                 ct);
 
-            await Send.CreatedAtAsync<ResolveCredentialEndpoint>(
-                new { credentialId = result.CredentialId }, result, cancellation: ct);
+            await Send.OkAsync(result, cancellation: ct);
         }
-        catch (KeyNotFoundException ex)
+        catch (KeyNotFoundException)
         {
-            AddError(ex.Message);
-            await Send.ErrorsAsync(400, ct);
+            await Send.NotFoundAsync(ct);
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException)
         {
-            AddError(ex.Message);
-            await Send.ErrorsAsync(400, ct);
-        }
-        catch (Exception ex)
-        {
-            AddError(ex.Message);
+            AddError("The credential could not be recorded. Please verify the transaction hash is valid and the on-chain data matches.");
             await Send.ErrorsAsync(400, ct);
         }
     }

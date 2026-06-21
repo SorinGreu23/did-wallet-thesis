@@ -5,378 +5,655 @@
       <app-breadcrumb />
       <h1 class="text-2xl font-bold text-gray-900">Universities</h1>
       @if (isInstitutionSession() && diplomaUniversity(); as uni) {
-      <p class="text-sm text-gray-500">
-        Signed in as
-        <span class="font-medium text-gray-700">{{ uni.name || uni.scope }}</span>.
-        Review your diploma emissions and issue new diplomas from this university account.
-      </p>
+        <p class="text-sm text-gray-500">
+          Review your diploma emissions and issue new diplomas from this university account.
+        </p>
       } @else if (navState.ministry(); as min) {
-      <p class="text-sm text-gray-500">
-        Universities accredited by
-        <span class="font-medium text-gray-700">{{ min.label }}</span>.
-      </p>
+        <p class="text-sm text-gray-500">
+          Universities accredited by
+          <span class="font-medium text-gray-700">{{ min.label }}</span
+          >.
+        </p>
       }
     </div>
     @if (navState.ministry() && !isInstitutionSession()) {
-    <button type="button" (click)="openForm()"
-      class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#003399] text-white text-sm font-semibold hover:bg-[#002277] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#003399] transition-colors shadow-sm">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-      </svg>
-      Register University
-    </button>
+      <button
+        type="button"
+        (click)="openForm()"
+        class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#003399] text-white text-sm font-semibold hover:bg-[#002277] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#003399] transition-colors shadow-sm"
+      >
+        <svg
+          class="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M12 4v16m8-8H4"
+          />
+        </svg>
+        Register University
+      </button>
     }
   </div>
 
   <!-- Error banner -->
   @if (error()) {
-  <div role="alert" class="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-red-700">
-    <svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-        d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-    <p class="text-sm font-medium">{{ error() }}</p>
-  </div>
+    <div
+      role="alert"
+      class="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-red-700"
+    >
+      <svg
+        class="w-5 h-5 shrink-0 mt-0.5"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+      <p class="text-sm font-medium">{{ error() }}</p>
+    </div>
   }
 
   <!-- No context warning -->
   @if (!contextLoading() && !navState.ministry() && !authenticatedUniversity()) {
-  <div class="rounded-xl border border-amber-200 bg-amber-50 p-5 text-amber-700 text-sm">
-    No ministry context available.
-  </div>
+    <div class="rounded-xl border border-amber-200 bg-amber-50 p-5 text-amber-700 text-sm">
+      No ministry context available.
+    </div>
   }
 
   <!-- Registration form -->
   @if (showForm()) {
-  <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
-      <h2 class="text-sm font-semibold text-gray-800">Issue University Accreditation</h2>
-      <button type="button" (click)="closeForm()" class="text-gray-400 hover:text-gray-600 transition-colors"
-        aria-label="Close form">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
-    <form [formGroup]="form" (ngSubmit)="submit()" class="p-5 space-y-4" novalidate>
-      <div class="grid grid-cols-2 gap-4">
-        <!-- Name -->
-        <div>
-          <label for="uni-name" class="block text-sm font-medium text-gray-700 mb-1">
-            University Name <span class="text-red-500" aria-hidden="true">*</span>
-          </label>
-          <input id="uni-name" type="text" formControlName="name" placeholder="e.g. University of Bucharest"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-[#003399] focus:outline-none focus:ring-2 focus:ring-[#003399]/20 transition"
-            [class.border-red-400]="form.controls.name.invalid && form.controls.name.touched" autocomplete="off" />
-          @if (form.controls.name.invalid && form.controls.name.touched) {
-          <p class="mt-1 text-xs text-red-600" role="alert">Name is required (min 2 characters).</p>
-          }
-        </div>
-
-        <!-- Ethereum Address -->
-        <div>
-          <label for="uni-addr" class="block text-sm font-medium text-gray-700 mb-1">
-            Ethereum Address <span class="text-red-500" aria-hidden="true">*</span>
-          </label>
-          <input id="uni-addr" type="text" formControlName="ethereumAddress" placeholder="0x..."
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono text-gray-900 placeholder-gray-400 focus:border-[#003399] focus:outline-none focus:ring-2 focus:ring-[#003399]/20 transition"
-            [class.border-red-400]="form.controls.ethereumAddress.invalid && form.controls.ethereumAddress.touched"
-            autocomplete="off" spellcheck="false" />
-          @if (form.controls.ethereumAddress.invalid && form.controls.ethereumAddress.touched) {
-          <p class="mt-1 text-xs text-red-600" role="alert">Enter a valid Ethereum address (0x + 40 hex chars).</p>
-          }
-        </div>
-      </div>
-
-      <!-- Ministry wallet signs the tx automatically (key stays in-memory from login) -->
-      <p class="text-xs text-gray-400">
-        Signing will use the <span class="font-medium text-gray-600">{{ navState.ministry()?.label }}</span> wallet you logged in with.
-        A DID will be created automatically from the Ethereum address.
-      </p>
-
-      <!-- Submit -->
-      <div class="flex items-center justify-end gap-3 pt-1">
-        <button type="button" (click)="closeForm()"
-          class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-gray-400">
-          Cancel
-        </button>
-        <button type="submit" [disabled]="submitting()"
-          class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#003399] rounded-lg hover:bg-[#002277] disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#003399] shadow-sm">
-          @if (submitting()) {
-          <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
+        <h2 class="text-sm font-semibold text-gray-800">Issue University Accreditation</h2>
+        <button
+          type="button"
+          (click)="closeForm()"
+          class="text-gray-400 hover:text-gray-600 transition-colors"
+          aria-label="Close form"
+        >
+          <svg
+            class="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M6 18L18 6M6 6l12 12"
+            />
           </svg>
-          Issuing…
-          } @else {
-          Register University
-          }
         </button>
       </div>
+      <form [formGroup]="form" (ngSubmit)="submit()" class="p-5 space-y-4" novalidate>
+        <div class="grid grid-cols-2 gap-4">
+          <!-- Name -->
+          <div>
+            <label for="uni-name" class="block text-sm font-medium text-gray-700 mb-1">
+              University Name <span class="text-red-500" aria-hidden="true">*</span>
+            </label>
+            <input
+              id="uni-name"
+              type="text"
+              formControlName="name"
+              placeholder="e.g. University of Bucharest"
+              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-[#003399] focus:outline-none focus:ring-2 focus:ring-[#003399]/20 transition"
+              [class.border-red-400]="form.controls.name.invalid && form.controls.name.touched"
+              autocomplete="off"
+            />
+            @if (form.controls.name.invalid && form.controls.name.touched) {
+              <p class="mt-1 text-xs text-red-600" role="alert">
+                Name is required (min 2 characters).
+              </p>
+            }
+          </div>
 
-      <!-- TX confirmation -->
-      @if (lastIssued()) {
-      <app-tx-badge [txHash]="lastIssued()!.transactionHash" [blockNumber]="lastIssued()!.blockNumber"
-        [accreditationId]="lastIssued()!.accreditationId" />
-      }
-    </form>
-  </div>
+          <!-- Ethereum Address -->
+          <div>
+            <label for="uni-addr" class="block text-sm font-medium text-gray-700 mb-1">
+              Ethereum Address <span class="text-red-500" aria-hidden="true">*</span>
+            </label>
+            <input
+              id="uni-addr"
+              type="text"
+              formControlName="ethereumAddress"
+              placeholder="0x..."
+              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono text-gray-900 placeholder-gray-400 focus:border-[#003399] focus:outline-none focus:ring-2 focus:ring-[#003399]/20 transition"
+              [class.border-red-400]="
+                form.controls.ethereumAddress.invalid && form.controls.ethereumAddress.touched
+              "
+              autocomplete="off"
+              spellcheck="false"
+            />
+            @if (form.controls.ethereumAddress.invalid && form.controls.ethereumAddress.touched) {
+              <p class="mt-1 text-xs text-red-600" role="alert">
+                Enter a valid Ethereum address (0x + 40 hex chars).
+              </p>
+            }
+          </div>
+        </div>
+
+        <!-- Ministry wallet signs the tx automatically (key stays in-memory from login) -->
+        <p class="text-xs text-gray-400">
+          Signing will use the
+          <span class="font-medium text-gray-600">{{ navState.ministry()?.label }}</span> wallet you
+          logged in with. A DID will be created automatically from the Ethereum address.
+        </p>
+
+        <!-- Submit -->
+        <div class="flex items-center justify-end gap-3 pt-1">
+          <button
+            type="button"
+            (click)="closeForm()"
+            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-gray-400"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            [disabled]="submitting()"
+            class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#003399] rounded-lg hover:bg-[#002277] disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#003399] shadow-sm"
+          >
+            @if (submitting()) {
+              <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                />
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+              Issuing…
+            } @else {
+              Register University
+            }
+          </button>
+        </div>
+
+        <!-- TX confirmation -->
+        @if (lastIssued()) {
+          <app-tx-badge
+            [txHash]="lastIssued()!.transactionHash"
+            [blockNumber]="lastIssued()!.blockNumber"
+            [accreditationId]="lastIssued()!.accreditationId"
+          />
+        }
+      </form>
+    </div>
   }
 
   <!-- Table -->
   @if (navState.ministry() && !isInstitutionSession()) {
-  <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-      <h2 class="text-sm font-semibold text-gray-800">
-        Accredited Universities
-        @if (!loading()) {
-        <span
-          class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-          {{ universities().length }}
-        </span>
-        }
-      </h2>
-      <button type="button" (click)="load()" [disabled]="loading()"
-        class="text-sm text-[#003399] hover:text-[#002277] font-medium disabled:opacity-40 transition-colors"
-        aria-label="Refresh list">
-        Refresh
-      </button>
-    </div>
-
-    @if (loading()) {
-    <div class="flex items-center justify-center py-16" role="status" aria-live="polite">
-      <svg class="w-7 h-7 animate-spin text-[#003399]" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-      </svg>
-      <span class="sr-only">Loading universities…</span>
-    </div>
-    } @else if (universities().length === 0) {
-    <app-empty-state message="No universities registered yet"
-      hint="Click 'Register University' to issue the first university accreditation." />
-    } @else {
-    <table class="w-full text-sm">
-      <thead>
-        <tr class="bg-gray-50 border-b border-gray-100">
-          <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
-          <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-          <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Issued</th>
-          <th class="px-6 py-3"></th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-gray-100">
-        @for (uni of universities(); track uni.accreditationId) {
-        <tr class="hover:bg-gray-50 transition-colors">
-          <td class="px-6 py-4 font-semibold text-gray-900">{{ uni.name || uni.scope }}</td>
-          <td class="px-6 py-4">
-            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border {{ statusClass(uni.status) }}">
-              {{ uni.status }}
+    <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <h2 class="text-sm font-semibold text-gray-800">
+          Accredited Universities
+          @if (!loading()) {
+            <span
+              class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600"
+            >
+              {{ universities().length }}
             </span>
-          </td>
-          <td class="px-6 py-4 text-xs text-gray-500">{{ uni.issuedAt | date:'dd MMM yyyy' }}</td>
-          <td class="px-6 py-4 text-right">
-            <div class="inline-flex items-center gap-3">
-              <button type="button" (click)="inspect(uni)"
-                class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">
-                Inspect
-              </button>
-            </div>
-          </td>
-        </tr>
-        }
-      </tbody>
-    </table>
-    }
-  </div>
-  }
-
-  @if (selected()) {
-    <app-accreditation-detail-panel [accreditation]="selected()" [trustChain]="trustChainForSelected()"
-      [verification]="verification()" [verifying]="verifying()" [revoking]="revoking()" (verify)="verifySelected()"
-      (revoke)="revokeSelected()" (close)="closeDetails()" />
-  }
-
-  @if (diplomaUniversity(); as uni) {
-  <div class="rounded-xl border border-indigo-200 bg-indigo-50 shadow-sm overflow-hidden">
-    <div class="flex items-center justify-between px-5 py-4 border-b border-indigo-100">
-      <div>
-        <h2 class="text-sm font-semibold text-indigo-800">University Diplomas</h2>
-        <p class="text-xs text-indigo-600 mt-0.5">Issuing as <span class="font-medium">{{ uni.name || uni.scope }}</span> and reviewing diploma emissions.</p>
-      </div>
-      @if (!isInstitutionSession()) {
-      <button type="button" (click)="closeDiplomaForm()"
-        class="text-indigo-400 hover:text-indigo-600 transition-colors" aria-label="Close">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-      }
-    </div>
-
-    <form [formGroup]="diplomaForm" (ngSubmit)="issueDiploma()" class="p-5 space-y-4" novalidate>
-      <!-- Registered holders dropdown -->
-      @if (registeredHolders().length > 0) {
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Select Registered Holder</label>
-        <div class="grid gap-2 max-h-40 overflow-y-auto rounded-lg border border-gray-200 p-2 bg-white">
-          @for (holder of registeredHolders(); track holder.did) {
-          <button type="button" (click)="selectHolder(holder)"
-            class="flex items-center justify-between px-3 py-2 rounded-lg text-left text-sm transition-colors hover:bg-indigo-50 border border-transparent"
-            [class.border-indigo-300]="diplomaForm.controls.holderAddress.value === holder.controllerAddress"
-            [class.bg-indigo-50]="diplomaForm.controls.holderAddress.value === holder.controllerAddress">
-            <div class="min-w-0">
-              <span class="font-medium text-gray-800 block truncate">{{ holder.displayName || 'Unknown' }}</span>
-              <span class="text-xs text-gray-500 font-mono block truncate">{{ holder.controllerAddress }}</span>
-            </div>
-            @if (holder.email) {
-            <span class="text-xs text-gray-400 shrink-0 ml-2">{{ holder.email }}</span>
-            }
-          </button>
           }
-        </div>
-        <p class="mt-1 text-xs text-gray-400">Click a holder to auto-fill the form, or type manually below.</p>
-      </div>
-      }
-
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">
-            Student Name <span class="text-red-500" aria-hidden="true">*</span>
-          </label>
-          <input type="text" formControlName="studentName" placeholder="e.g. Ion Popescu"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-            [class.border-red-400]="diplomaForm.controls.studentName.invalid && diplomaForm.controls.studentName.touched"
-            autocomplete="off" />
-          @if (diplomaForm.controls.studentName.invalid && diplomaForm.controls.studentName.touched) {
-          <p class="mt-1 text-xs text-red-600" role="alert">Name is required (min 2 characters).</p>
-          }
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">
-            Holder Address <span class="text-red-500" aria-hidden="true">*</span>
-          </label>
-          <input type="text" formControlName="holderAddress" placeholder="0x..."
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-            [class.border-red-400]="diplomaForm.controls.holderAddress.invalid && diplomaForm.controls.holderAddress.touched"
-            autocomplete="off" spellcheck="false" />
-          @if (diplomaForm.controls.holderAddress.invalid && diplomaForm.controls.holderAddress.touched) {
-          <p class="mt-1 text-xs text-red-600" role="alert">Enter a valid Ethereum address (0x + 40 hex chars).</p>
-          }
-        </div>
-      </div>
-
-      <div class="flex items-center justify-between pt-1">
-        <p class="text-xs text-gray-400">
-          Credential type: <span class="font-medium text-gray-600">DiplomaCredential</span> · Issuer accreditation linked on-chain. Signed by your session wallet.
-        </p>
-        <button type="submit" [disabled]="issuingDiploma()"
-          class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-          @if (issuingDiploma()) {
-          <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          Issuing…
-          } @else {
-          Issue Diploma
-          }
+        </h2>
+        <button
+          type="button"
+          (click)="load()"
+          [disabled]="loading()"
+          class="text-sm text-[#003399] hover:text-[#002277] font-medium disabled:opacity-40 transition-colors"
+          aria-label="Refresh list"
+        >
+          Refresh
         </button>
       </div>
 
-      @if (lastIssuedDiploma()) {
-      <app-tx-badge [txHash]="lastIssuedDiploma()!.transactionHash" [blockNumber]="lastIssuedDiploma()!.blockNumber"
-        [accreditationId]="lastIssuedDiploma()!.credentialId" />
-      }
-    </form>
-  </div>
-
-  <!-- Issued diplomas -->
-  <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-      <h2 class="text-sm font-semibold text-gray-800">
-        Issued Diplomas
-        @if (!loadingDiplomas()) {
-        <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-          {{ diplomas().length }}
-        </span>
-        }
-      </h2>
-      <button type="button" (click)="loadDiplomas(uni)" [disabled]="loadingDiplomas()"
-        class="text-sm text-[#003399] hover:text-[#002277] font-medium disabled:opacity-40 transition-colors">
-        Refresh
-      </button>
-    </div>
-
-    @if (loadingDiplomas()) {
-    <div class="flex items-center justify-center py-10">
-      <svg class="w-6 h-6 animate-spin text-[#003399]" fill="none" viewBox="0 0 24 24">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-      </svg>
-    </div>
-    } @else if (diplomas().length === 0) {
-    <p class="px-5 py-8 text-sm text-gray-400 text-center">No diplomas issued yet.</p>
-    } @else {
-    <table class="w-full text-sm">
-      <thead>
-        <tr class="bg-gray-50 border-b border-gray-100">
-          <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Holder DID</th>
-          <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-          <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Issued</th>
-          <th class="px-6 py-3"></th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-gray-100">
-        @for (d of diplomas(); track d.credentialId) {
-        <tr class="hover:bg-gray-50 transition-colors" [class.bg-red-50]="revokingCredentialId() === d.credentialId">
-          <td class="px-6 py-4 min-w-0">
-            <span class="font-mono text-xs text-gray-600 block truncate" [title]="d.holderDID">{{ d.holderDID }}</span>
-          </td>
-          <td class="px-6 py-4">
-            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border {{ statusClass(d.status) }}">
-              {{ d.status }}
-            </span>
-          </td>
-          <td class="px-6 py-4 text-xs text-gray-500">{{ d.issuedAt | date:'dd MMM yyyy' }}</td>
-          <td class="px-6 py-4 text-right">
-            @if (d.status !== 'Revoked') {
-              @if (revokingCredentialId() === d.credentialId) {
-              <button type="button" (click)="cancelRevoke()"
-                class="px-2 py-1 text-xs font-semibold text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">
-                Cancel
-              </button>
-              } @else {
-              <button type="button" (click)="startRevoke(d.credentialId)"
-                class="px-3 py-1.5 text-xs font-semibold text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors">
-                Revoke
-              </button>
-              }
+      @if (loading()) {
+        <div class="flex items-center justify-center py-16" role="status" aria-live="polite">
+          <svg
+            class="w-7 h-7 animate-spin text-[#003399]"
+            fill="none"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="4"
+            />
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+            />
+          </svg>
+          <span class="sr-only">Loading universities…</span>
+        </div>
+      } @else if (universities().length === 0) {
+        <app-empty-state
+          message="No universities registered yet"
+          hint="Click 'Register University' to issue the first university accreditation."
+        />
+      } @else {
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 border-b border-gray-100">
+              <th
+                class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"
+              >
+                Name
+              </th>
+              <th
+                class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"
+              >
+                Status
+              </th>
+              <th
+                class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"
+              >
+                Issued
+              </th>
+              <th class="px-6 py-3"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            @for (uni of universities(); track uni.accreditationId) {
+              <tr class="hover:bg-gray-50 transition-colors">
+                <td class="px-6 py-4 font-semibold text-gray-900">{{ uni.name || uni.scope }}</td>
+                <td class="px-6 py-4">
+                  <span
+                    class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border {{
+                      statusClass(uni.status)
+                    }}"
+                  >
+                    {{ uni.status }}
+                  </span>
+                </td>
+                <td class="px-6 py-4 text-xs text-gray-500">
+                  {{ uni.issuedAt | date: 'dd MMM yyyy' }}
+                </td>
+                <td class="px-6 py-4 text-right">
+                  <div class="inline-flex items-center gap-3">
+                    <button
+                      type="button"
+                      (click)="inspect(uni)"
+                      class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
+                    >
+                      Inspect
+                    </button>
+                  </div>
+                </td>
+              </tr>
             }
-          </td>
-        </tr>
-        }
-      </tbody>
-    </table>
-
-    @if (revokingCredentialId()) {
-    <div class="px-4 py-3 border-t border-red-100 bg-red-50 flex items-center gap-3">
-      <input type="password" [value]="revokeKey()" (input)="revokeKey.set($any($event.target).value)"
-        placeholder="University private key (0x...)"
-        class="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-mono focus:border-red-400 focus:outline-none min-w-0" />
-      <input type="text" [value]="revokeReason()" (input)="revokeReason.set($any($event.target).value)"
-        placeholder="Reason"
-        class="w-32 rounded-lg border border-gray-300 px-3 py-1.5 text-xs focus:outline-none" />
-      <button type="button" (click)="confirmRevoke(revokingCredentialId()!)"
-        class="px-3 py-1.5 text-xs font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors shrink-0">
-        Confirm Revoke
-      </button>
-      <button type="button" (click)="cancelRevoke()"
-        class="px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors shrink-0">
-        Cancel
-      </button>
+          </tbody>
+        </table>
+      }
     </div>
-    }
-    }
-  </div>
+  }
+
+  @if (selected()) {
+    <app-accreditation-detail-panel
+      [accreditation]="selected()"
+      [trustChain]="trustChainForSelected()"
+      [verification]="verification()"
+      [verifying]="verifying()"
+      [revoking]="revoking()"
+      (verify)="verifySelected()"
+      (revoke)="revokeSelected()"
+      (close)="closeDetails()"
+    />
+  }
+
+  @if (diplomaUniversity(); as uni) {
+    <div class="rounded-xl border border-indigo-200 bg-indigo-50 shadow-sm overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-indigo-100">
+        <div>
+          <h2 class="text-sm font-semibold text-indigo-800">University Diplomas</h2>
+          <p class="text-xs text-indigo-600 mt-0.5">
+            Issuing as <span class="font-medium">{{ uni.name || uni.scope }}</span> and reviewing
+            diploma emissions.
+          </p>
+        </div>
+        @if (!isInstitutionSession()) {
+          <button
+            type="button"
+            (click)="closeDiplomaForm()"
+            class="text-indigo-400 hover:text-indigo-600 transition-colors"
+            aria-label="Close"
+          >
+            <svg
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        }
+      </div>
+
+      <form [formGroup]="diplomaForm" (ngSubmit)="issueDiploma()" class="p-5 space-y-4" novalidate>
+        <!-- Registered holders dropdown -->
+        @if (registeredHolders().length > 0) {
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Select Personal Wallet Holder</label
+            >
+            <div
+              class="grid gap-2 max-h-40 overflow-y-auto rounded-lg border border-gray-200 p-2 bg-white"
+            >
+              @for (holder of registeredHolders(); track holder.did) {
+                <button
+                  type="button"
+                  (click)="selectHolder(holder)"
+                  class="flex items-center justify-between px-3 py-2 rounded-lg text-left text-sm transition-colors hover:bg-indigo-50 border border-transparent"
+                  [class.border-indigo-300]="
+                    diplomaForm.controls.holderAddress.value === holder.controllerAddress
+                  "
+                  [class.bg-indigo-50]="
+                    diplomaForm.controls.holderAddress.value === holder.controllerAddress
+                  "
+                >
+                  <div class="min-w-0">
+                    <span class="font-medium text-gray-800 block truncate">{{
+                      holder.displayName || 'Unknown'
+                    }}</span>
+                    <span class="text-xs text-gray-500 font-mono block truncate">{{
+                      holder.controllerAddress
+                    }}</span>
+                  </div>
+                  @if (holder.email) {
+                    <span class="text-xs text-gray-400 shrink-0 ml-2">{{ holder.email }}</span>
+                  }
+                </button>
+              }
+            </div>
+            <p class="mt-1 text-xs text-gray-400">
+              Only registered personal wallet accounts are eligible for diploma issuance.
+            </p>
+          </div>
+        }
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              Student Name <span class="text-red-500" aria-hidden="true">*</span>
+            </label>
+            <input
+              type="text"
+              formControlName="studentName"
+              placeholder="e.g. Ion Popescu"
+              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              [class.border-red-400]="
+                diplomaForm.controls.studentName.invalid && diplomaForm.controls.studentName.touched
+              "
+              autocomplete="off"
+            />
+            @if (
+              diplomaForm.controls.studentName.invalid && diplomaForm.controls.studentName.touched
+            ) {
+              <p class="mt-1 text-xs text-red-600" role="alert">
+                Name is required (min 2 characters).
+              </p>
+            }
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              Holder Address <span class="text-red-500" aria-hidden="true">*</span>
+            </label>
+            <input
+              type="text"
+              formControlName="holderAddress"
+              placeholder="0x..."
+              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              [class.border-red-400]="
+                diplomaForm.controls.holderAddress.invalid &&
+                diplomaForm.controls.holderAddress.touched
+              "
+              autocomplete="off"
+              spellcheck="false"
+            />
+            @if (
+              diplomaForm.controls.holderAddress.invalid &&
+              diplomaForm.controls.holderAddress.touched
+            ) {
+              <p class="mt-1 text-xs text-red-600" role="alert">
+                Enter a valid Ethereum address (0x + 40 hex chars).
+              </p>
+            }
+          </div>
+        </div>
+
+        @if (!hasSigner()) {
+          <div class="rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <p class="text-sm font-semibold text-amber-800">Connect MetaMask to issue diplomas</p>
+            <p class="mt-1 text-xs text-amber-700">
+              Select the same University account used to authenticate. MetaMask keeps the private
+              key and asks you to approve each transaction.
+            </p>
+            <button
+              type="button"
+              (click)="connectSigner()"
+              [disabled]="connectingSigner()"
+              class="mt-3 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              {{ connectingSigner() ? 'Connecting…' : 'Connect MetaMask' }}
+            </button>
+          </div>
+        }
+
+        <div class="flex items-center justify-between pt-1">
+          <button
+            type="submit"
+            [disabled]="issuingDiploma() || !hasSigner()"
+            class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+          >
+            @if (issuingDiploma()) {
+              <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                />
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+              Issuing…
+            } @else {
+              Issue Diploma
+            }
+          </button>
+        </div>
+
+        @if (lastIssuedDiploma()) {
+          <app-tx-badge
+            [txHash]="lastIssuedDiploma()!.transactionHash"
+            [blockNumber]="lastIssuedDiploma()!.blockNumber"
+            [accreditationId]="lastIssuedDiploma()!.credentialId"
+          />
+        }
+      </form>
+    </div>
+
+    <!-- Issued diplomas -->
+    <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <h2 class="text-sm font-semibold text-gray-800">
+          Issued Diplomas
+          @if (!loadingDiplomas()) {
+            <span
+              class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600"
+            >
+              {{ diplomas().length }}
+            </span>
+          }
+        </h2>
+        <button
+          type="button"
+          (click)="loadDiplomas(uni)"
+          [disabled]="loadingDiplomas()"
+          class="text-sm text-[#003399] hover:text-[#002277] font-medium disabled:opacity-40 transition-colors"
+        >
+          Refresh
+        </button>
+      </div>
+
+      @if (loadingDiplomas()) {
+        <div class="flex items-center justify-center py-10">
+          <svg class="w-6 h-6 animate-spin text-[#003399]" fill="none" viewBox="0 0 24 24">
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="4"
+            />
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+            />
+          </svg>
+        </div>
+      } @else if (diplomas().length === 0) {
+        <p class="px-5 py-8 text-sm text-gray-400 text-center">No diplomas issued yet.</p>
+      } @else {
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 border-b border-gray-100">
+              <th
+                class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"
+              >
+                Holder DID
+              </th>
+              <th
+                class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"
+              >
+                Status
+              </th>
+              <th
+                class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"
+              >
+                Issued
+              </th>
+              <th class="px-6 py-3"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            @for (d of diplomas(); track d.credentialId) {
+              <tr
+                class="hover:bg-gray-50 transition-colors"
+                [class.bg-red-50]="revokingCredentialId() === d.credentialId"
+              >
+                <td class="px-6 py-4 min-w-0">
+                  <span
+                    class="font-mono text-xs text-gray-600 block truncate"
+                    [title]="d.holderDID"
+                    >{{ d.holderDID }}</span
+                  >
+                </td>
+                <td class="px-6 py-4">
+                  <span
+                    class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border {{
+                      statusClass(d.status)
+                    }}"
+                  >
+                    {{ d.status }}
+                  </span>
+                </td>
+                <td class="px-6 py-4 text-xs text-gray-500">
+                  {{ d.issuedAt | date: 'dd MMM yyyy' }}
+                </td>
+                <td class="px-6 py-4 text-right">
+                  @if (d.status !== 'Revoked') {
+                    @if (revokingCredentialId() === d.credentialId) {
+                      <button
+                        type="button"
+                        (click)="cancelRevoke()"
+                        class="px-2 py-1 text-xs font-semibold text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    } @else {
+                      <button
+                        type="button"
+                        (click)="startRevoke(d.credentialId)"
+                        class="px-3 py-1.5 text-xs font-semibold text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
+                      >
+                        Revoke
+                      </button>
+                    }
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+
+        @if (revokingCredentialId()) {
+          <div class="px-4 py-3 border-t border-red-100 bg-red-50 flex items-center gap-3">
+            <span class="flex-1 text-xs text-red-700">MetaMask will prompt you to sign the revocation transaction.</span>
+            <input
+              type="text"
+              [value]="revokeReason()"
+              (input)="revokeReason.set($any($event.target).value)"
+              placeholder="Reason"
+              class="w-32 rounded-lg border border-gray-300 px-3 py-1.5 text-xs focus:outline-none"
+            />
+            <button
+              type="button"
+              (click)="confirmRevoke(revokingCredentialId()!)"
+              class="px-3 py-1.5 text-xs font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors shrink-0"
+            >
+              Confirm Revoke
+            </button>
+            <button
+              type="button"
+              (click)="cancelRevoke()"
+              class="px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors shrink-0"
+            >
+              Cancel
+            </button>
+          </div>
+        }
+      }
+    </div>
   }
 </div>

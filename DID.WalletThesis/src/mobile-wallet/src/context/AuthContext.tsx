@@ -1,92 +1,104 @@
-import React, {createContext, useCallback, useContext, useEffect, useRef, useState} from "react";
-import {AppState, AppStateStatus} from "react-native";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { AppState, AppStateStatus } from "react-native";
 import authService from "../services/authService";
 
 type AuthState = "loading" | "unauthenticated" | "authenticated";
 
 interface AuthContextValue {
-    state: AuthState;
-    /** True if the device already has a wallet (returning user). */
-    hasWallet: boolean;
-    /** Called after successful wallet creation or biometric unlock. */
-    onAuthenticated: () => void;
-    /** Sign out — clears the session but keeps the wallet. */
-    signOut: () => Promise<void>;
+  state: AuthState;
+  /** True if the device already has a wallet (returning user). */
+  hasWallet: boolean;
+  /** Called after successful wallet creation or biometric unlock. */
+  onAuthenticated: () => void;
+  /** Sign out — clears the session but keeps the wallet. */
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue>({
-    state: "loading",
-    hasWallet: false,
-    onAuthenticated: () => {
-    },
-    signOut: async () => {
-    },
+  state: "loading",
+  hasWallet: false,
+  onAuthenticated: () => {},
+  signOut: async () => {},
 });
 
-export function AuthProvider({children}: { children: React.ReactNode }) {
-    const [state, setState] = useState<AuthState>("loading");
-    const [hasWallet, setHasWallet] = useState(false);
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [state, setState] = useState<AuthState>("loading");
+  const [hasWallet, setHasWallet] = useState(false);
 
-    const appState = useRef<AppStateStatus>(AppState.currentState);
-    const stateRef = useRef<AuthState>("loading");
-    const hasWalletRef = useRef(false);
+  const appState = useRef<AppStateStatus>(AppState.currentState);
+  const stateRef = useRef<AuthState>("loading");
+  const hasWalletRef = useRef(false);
 
-    useEffect(() => {
-        stateRef.current = state;
-    }, [state]);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
-    useEffect(() => {
-        hasWalletRef.current = hasWallet;
-    }, [hasWallet]);
+  useEffect(() => {
+    hasWalletRef.current = hasWallet;
+  }, [hasWallet]);
 
-    useEffect(() => {
-        (async () => {
-            const walletExists = await authService.hasWallet();
-            setHasWallet(walletExists);
-            setState("unauthenticated");
-        })();
-    }, []);
+  useEffect(() => {
+    (async () => {
+      if (__DEV__ && process.env.EXPO_PUBLIC_RESET_WALLET === "1") {
+        await authService.resetDevelopmentData();
+        console.log("[WalletReset] Local wallet state cleared.");
+      }
 
-    useEffect(() => {
-        const subscription = AppState.addEventListener("change", async (nextAppState) => {
-            const previousAppState = appState.current;
-            appState.current = nextAppState;
+      const walletExists = await authService.hasWallet();
+      setHasWallet(walletExists);
+      setState("unauthenticated");
+    })();
+  }, []);
 
-            // Only lock when the app truly goes to background.
-            // "inactive" is triggered by system overlays (biometric prompts,
-            // control centre, etc.) and should NOT clear the session.
-            const leavingApp =
-                previousAppState === "active" &&
-                nextAppState === "background";
+  useEffect(() => {
+    const subscription = AppState.addEventListener(
+      "change",
+      async (nextAppState) => {
+        appState.current = nextAppState;
 
-            if (!leavingApp) return;
-            if (!hasWalletRef.current) return;
-            if (stateRef.current !== "authenticated") return;
+        // iOS commonly transitions active → inactive → background when the
+        // user switches apps or locks the screen. Lock on the background
+        // state itself so both direct and intermediate transitions work.
+        // Do not lock on "inactive", which is also used for system overlays
+        // such as biometric prompts and Control Centre.
+        if (nextAppState !== "background") return;
+        if (!hasWalletRef.current) return;
+        if (stateRef.current !== "authenticated") return;
 
-            await authService.clearSession();
-            setState("unauthenticated");
-        });
-
-        return () => {
-            subscription.remove();
-        };
-    }, []);
-
-    const onAuthenticated = useCallback(() => {
-        setHasWallet(true);
-        setState("authenticated");
-    }, []);
-
-    const signOut = useCallback(async () => {
         await authService.clearSession();
         setState("unauthenticated");
-    }, []);
-
-    return (
-        <AuthContext.Provider value={{state, hasWallet, onAuthenticated, signOut}}>
-            {children}
-        </AuthContext.Provider>
+      },
     );
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  const onAuthenticated = useCallback(() => {
+    setHasWallet(true);
+    setState("authenticated");
+  }, []);
+
+  const signOut = useCallback(async () => {
+    await authService.clearSession();
+    setState("unauthenticated");
+  }, []);
+
+  return (
+    <AuthContext.Provider
+      value={{ state, hasWallet, onAuthenticated, signOut }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export const useAuth = () => useContext(AuthContext);

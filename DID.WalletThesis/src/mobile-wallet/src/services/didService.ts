@@ -4,6 +4,7 @@ import { computePublicKey } from "@ethersproject/signing-key";
 import { getAddress } from "ethers";
 import { getAgent, initializeAgent } from "../agents/veramoAgent";
 import authService from "./authService";
+import { CONFIG } from "../constants/config";
 
 export interface DIDInfo {
   did: string;
@@ -33,7 +34,8 @@ class DIDService {
   async initialize() {
     if (!this.initialized) {
       const secretKey = await authService.getSecretKey();
-      if (!secretKey) throw new Error("Wallet not created. No secret key found.");
+      if (!secretKey)
+        throw new Error("Wallet not created. No secret key found.");
       await initializeAgent(secretKey);
       this.initialized = true;
     }
@@ -43,7 +45,9 @@ class DIDService {
     await this.initialize();
     const agent = getAgent();
 
-    const existing = await agent.didManagerFind({ alias: WALLET_IDENTITY_ALIAS });
+    const existing = await agent.didManagerFind({
+      alias: WALLET_IDENTITY_ALIAS,
+    });
     if (existing.length > 0) {
       const id = existing[0];
       return {
@@ -98,6 +102,58 @@ class DIDService {
         publicKeyHex: k.publicKeyHex,
       })),
     };
+  }
+
+  async updateRegisteredProfile(
+    did: string,
+    controllerAddress: string,
+    displayName: string,
+    email: string,
+  ): Promise<void> {
+    const identity = await this.getDID(did);
+    const kid = identity.keys[0]?.kid;
+    if (!kid) throw new Error("No signing key is available for this identity");
+
+    const timestamp = Math.floor(Date.now() / 1000);
+    const message = `${controllerAddress.toLowerCase()}:${timestamp}`;
+    const signature = await getAgent().keyManagerSign({
+      keyRef: kid,
+      data: message,
+      algorithm: "eth_signMessage",
+      encoding: "utf-8",
+    });
+
+    const response = await fetch(
+      `${CONFIG.IDENTITY_SERVICE_URL}/api/identities/register`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          did,
+          controllerAddress,
+          displayName,
+          email,
+          accountType: "personal",
+          timestamp,
+          signature,
+          publicKeyHex: identity.keys[0].publicKeyHex,
+          keyType: identity.keys[0].type,
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      const message =
+        payload?.errors && typeof payload.errors === "object"
+          ? Object.values(payload.errors).flat().find(Boolean)
+          : payload?.message;
+      throw new Error(
+        typeof message === "string"
+          ? message
+          : `Profile update failed (${response.status})`,
+      );
+    }
   }
 }
 

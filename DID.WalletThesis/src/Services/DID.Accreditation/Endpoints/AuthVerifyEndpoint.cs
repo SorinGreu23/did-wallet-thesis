@@ -10,6 +10,7 @@ public class AuthVerifyEndpoint(AuthService authService)
     {
         Post("/api/auth/verify");
         AllowAnonymous();
+        Options(x => x.RequireRateLimiting("auth"));
     }
 
     public override async Task HandleAsync(VerifyRequest req, CancellationToken ct)
@@ -19,14 +20,14 @@ public class AuthVerifyEndpoint(AuthService authService)
             var response = await authService.VerifyChallengeAsync(req.Did, req.Nonce, req.Signature);
             await Send.OkAsync(response, ct);
         }
-        catch (UnauthorizedAccessException ex)
+        catch (UnauthorizedAccessException)
         {
-            AddError(ex.Message);
+            AddError("Authentication failed. Please check your credentials and try again.");
             await Send.ErrorsAsync(401, ct);
         }
-        catch (ForbiddenAccessException ex)
+        catch (ForbiddenAccessException)
         {
-            AddError(ex.Message);
+            AddError("You do not have permission to access this system.");
             await Send.ErrorsAsync(403, ct);
         }
     }

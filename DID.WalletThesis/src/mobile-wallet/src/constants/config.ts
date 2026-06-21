@@ -1,6 +1,20 @@
-// Simulators share the host network stack. For a physical device on the same Wi-Fi,
-// switch to the Mac's LAN IP (run `ipconfig getifaddr en0` to find it).
-const HOST = 'localhost';
+import Constants from 'expo-constants';
+
+function getDevelopmentHost(): string {
+  const configuredHost = process.env.EXPO_PUBLIC_DEV_HOST?.trim();
+  if (configuredHost) return configuredHost;
+
+  // Expo supplies the Metro host at runtime. Unlike a shell environment
+  // variable, this remains correct after Fast Refresh and app relaunches.
+  const runtimeHost = Constants.expoConfig?.hostUri
+    ?.replace(/^[a-z]+:\/\//i, '')
+    .split(':')[0]
+    .trim();
+
+  return runtimeHost || 'localhost';
+}
+
+const HOST = getDevelopmentHost();
 
 export const CONFIG = {
   DID_METHOD: 'did:ethr',
@@ -11,8 +25,6 @@ export const CONFIG = {
   IDENTITY_SERVICE_URL: `http://${HOST}:5259`,
   CREDENTIAL_SERVICE_URL: `http://${HOST}:5214`,
   ACCREDITATION_SERVICE_URL: `http://${HOST}:5211`,
-  VERIFICATION_SERVICE_URL: `http://${HOST}:5216`,
-  PRESENTATION_SERVICE_URL: `http://${HOST}:5217`,
 };
 
 export const COLORS = {

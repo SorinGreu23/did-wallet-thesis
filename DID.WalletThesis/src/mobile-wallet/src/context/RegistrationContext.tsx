@@ -8,6 +8,7 @@ export interface RegistrationState {
   // Personal
   firstName: string;
   lastName: string;
+  birthDate: string;
   // University / Enterprise
   legalName: string;
   fiscalCode: string;
@@ -29,6 +30,7 @@ const INITIAL_STATE: RegistrationState = {
   accountType: null,
   firstName: '',
   lastName: '',
+  birthDate: '',
   legalName: '',
   fiscalCode: '',
   email: '',

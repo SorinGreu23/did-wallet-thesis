@@ -111,29 +111,8 @@ class CredentialService {
 
     // 2. On-chain status check via DID.Verification
     // The credentialId is stored in credentialSubject.credentialId for on-chain-backed credentials.
-    const credentialId = (credential.credentialSubject as any)?.credentialId as string | undefined;
-    if (!credentialId) {
-      // Locally-issued credential only — no on-chain record to check
-      return { verified: localVerified };
-    }
-
-    try {
-      const response = await fetch(`${CONFIG.VERIFICATION_SERVICE_URL}/api/verify/credential`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credentialId }),
-      });
-
-      if (!response.ok) {
-        return { verified: false, error: `Verification service returned ${response.status}` };
-      }
-
-      const onChain: OnChainVerificationResult = await response.json();
-      return { verified: localVerified && onChain.isValid, onChain };
-    } catch (error: any) {
-      // Network error — fall back to local result and surface the warning
-      return { verified: localVerified, error: `On-chain check unavailable: ${error.message}` };
-    }
+    // (Verification service removed as it was missing/unused)
+    return { verified: localVerified };
   }
 
   async createPresentation(
@@ -178,9 +157,13 @@ class CredentialService {
 
     const encoded = encodeURIComponent(holderDid);
     const response = await fetch(
-      `http://localhost:5214/api/credentials?holderDid=${encoded}`,
+      `${CONFIG.CREDENTIAL_SERVICE_URL}/api/credentials?holderDid=${encoded}`,
     );
-    if (!response.ok) throw new Error(`Backend returned ${response.status} for ${holderDid}`);
+    if (!response.ok) {
+      throw new Error(
+        `Credential sync returned ${response.status} from ${CONFIG.CREDENTIAL_SERVICE_URL}`,
+      );
+    }
 
     const credentials: any[] = await response.json();
 
@@ -191,7 +174,9 @@ class CredentialService {
       if (proof?.type === "EthereumOnChainProof") {
         try {
           await agent.dataStoreDeleteVerifiableCredential({ hash: stored.hash });
-        } catch { /* ignore */ }
+        } catch (e) {
+          console.warn('[CredentialService] Failed to delete stale VC from local store:', e);
+        }
       }
     }
 
@@ -219,7 +204,9 @@ class CredentialService {
         await agent.dataStoreSaveVerifiableCredential({
           verifiableCredential: vc as any,
         });
-      } catch { /* ignore */ }
+      } catch (e) {
+        console.warn('[CredentialService] Failed to save VC to local store:', e);
+      }
     }
 
     return credentials.length;

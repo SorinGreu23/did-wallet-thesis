@@ -12,7 +12,7 @@ public class ListAccreditationsRequest
     public string? Scope { get; set; }
 }
 
-public class ListAccreditationsEndpoint(AccreditationService service)
+public class ListAccreditationsEndpoint(IAccreditationService service)
     : Endpoint<ListAccreditationsRequest, List<AccreditationDto>>
 {
     public override void Configure()

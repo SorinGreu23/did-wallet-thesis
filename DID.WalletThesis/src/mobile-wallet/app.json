@@ -16,7 +16,12 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSFaceIDUsageDescription": "EU Identity Wallet uses Face ID to protect your identity data."
+        "NSFaceIDUsageDescription": "EU Identity Wallet uses Face ID to protect your identity data.",
+        "NSLocalNetworkUsageDescription": "EU Identity Wallet connects to development services running on your Mac.",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": false,
+          "NSAllowsLocalNetworking": true
+        }
       },
       "bundleIdentifier": "com.anonymous.didwallet"
     },

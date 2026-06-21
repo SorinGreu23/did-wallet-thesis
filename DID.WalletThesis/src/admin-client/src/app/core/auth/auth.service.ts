@@ -24,30 +24,49 @@ export class AuthService {
   readonly error = signal<string | null>(null);
 
   readonly scope = computed(() => this.session()?.scope ?? null);
+  readonly hasSigner = this.signer.hasSigner;
+  readonly walletAvailable = this.signer.walletAvailable;
 
   constructor() {
+    this.signer.providerEvents$.subscribe((event) => {
+      const session = this.session();
+      if (!session) return;
+
+      if (event.type === 'disconnect') {
+        this.logout();
+        return;
+      }
+
+      if (event.type === 'accountsChanged') {
+        const activeAccount = event.accounts[0];
+        if (!activeAccount || activeAccount.toLowerCase() !== session.ethAddress.toLowerCase()) {
+          this.logout();
+          return;
+        }
+
+        void this.signer.restore(session.ethAddress);
+      }
+    });
+
     this.restoreSession();
   }
 
-  async login(privateKey: string): Promise<void> {
+  async login(): Promise<void> {
     try {
       this.error.set(null);
 
-      // Step 1 — derive address and DID
-      this.state.set('challenging');
-      const address = await this.signer.initialize(privateKey);
+      this.state.set('connecting');
+      const address = await this.signer.connect();
       const did = `did:ethr:sepolia:${address.toLowerCase()}`;
 
-      // Step 2 — request challenge nonce
+      this.state.set('challenging');
       const { nonce } = await firstValueFrom(
         this.http.post<{ nonce: string }>('/api/auth/challenge', { did }),
       );
 
-      // Step 3 — sign the nonce locally
       this.state.set('signing');
       const signature = await this.signer.signMessage(nonce);
 
-      // Step 4 — verify signature on backend
       this.state.set('verifying');
       const result = await firstValueFrom(
         this.http.post<{
@@ -58,7 +77,6 @@ export class AuthService {
         }>('/api/auth/verify', { did, nonce, signature }),
       );
 
-      // Step 5 — store session
       const authSession: AuthSession = {
         token: result.token,
         did,
@@ -71,8 +89,6 @@ export class AuthService {
       this.navigationState.resetToRoot();
       this.session.set(authSession);
       this.saveSession(authSession);
-      this.saveSignerKey(privateKey);
-
       this.state.set('authenticated');
     } catch (err: any) {
       this.state.set('error');
@@ -92,7 +108,6 @@ export class AuthService {
     this.signer.clear();
     this.navigationState.resetToRoot();
     this.clearSession();
-    this.clearSignerKey();
     this.router.navigate(['/login']);
   }
 
@@ -109,6 +124,12 @@ export class AuthService {
     const currentScope = this.session()?.scope;
     if (!currentScope) return false;
     return (SCOPE_HIERARCHY[currentScope] ?? 0) >= (SCOPE_HIERARCHY[requiredScope] ?? 0);
+  }
+
+  async connectSigner(): Promise<void> {
+    const session = this.session();
+    if (!session) throw new Error('No authenticated session');
+    await this.signer.connect(true, session.ethAddress);
   }
 
   getHomeRoute(): string {
@@ -129,7 +150,7 @@ export class AuthService {
 
   private saveSession(s: AuthSession): void {
     if (!this.isBrowser) return;
-    localStorage.setItem(
+    sessionStorage.setItem(
       AuthService.STORAGE_KEY,
       JSON.stringify({ ...s, expiresAt: s.expiresAt.toISOString() }),
     );
@@ -137,25 +158,16 @@ export class AuthService {
 
   private clearSession(): void {
     if (!this.isBrowser) return;
+    sessionStorage.removeItem(AuthService.STORAGE_KEY);
+    // Remove any legacy values from localStorage or sessionStorage.
     localStorage.removeItem(AuthService.STORAGE_KEY);
-  }
-
-  private static readonly SIGNER_KEY = 'auth_signer';
-
-  private saveSignerKey(key: string): void {
-    if (!this.isBrowser) return;
-    sessionStorage.setItem(AuthService.SIGNER_KEY, key);
-  }
-
-  private clearSignerKey(): void {
-    if (!this.isBrowser) return;
-    sessionStorage.removeItem(AuthService.SIGNER_KEY);
+    sessionStorage.removeItem('auth_signer');
   }
 
   private restoreSession(): void {
     if (!this.isBrowser) return;
     try {
-      const raw = localStorage.getItem(AuthService.STORAGE_KEY);
+      const raw = sessionStorage.getItem(AuthService.STORAGE_KEY);
       if (!raw) return;
 
       const parsed = JSON.parse(raw);
@@ -163,21 +175,14 @@ export class AuthService {
 
       if (expiresAt <= new Date()) {
         this.clearSession();
-        this.clearSignerKey();
         return;
       }
 
       this.session.set({ ...parsed, expiresAt });
       this.state.set('authenticated');
-
-      // Restore the in-memory signer from sessionStorage (survives refresh, not tab close)
-      const signerKey = sessionStorage.getItem(AuthService.SIGNER_KEY);
-      if (signerKey) {
-        void this.signer.initialize(signerKey);
-      }
+      void this.signer.restore(parsed.ethAddress);
     } catch {
       this.clearSession();
-      this.clearSignerKey();
     }
   }
 }

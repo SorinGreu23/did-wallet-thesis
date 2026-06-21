@@ -23,5 +23,6 @@ export interface RegisteredIdentity {
   controllerAddress: string;
   displayName: string | null;
   email: string | null;
+  accountType: 'personal' | 'university' | 'enterprise' | null;
   registeredAt: string;
 }

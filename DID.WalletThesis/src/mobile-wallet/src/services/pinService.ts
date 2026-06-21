@@ -13,8 +13,9 @@ const MAX_FAILURES_BEFORE_COOLDOWN = 5;
 const MAX_FAILURES_BEFORE_WIPE_OFFER = 10;
 const COOLDOWN_MS = 30_000;
 
-// 'argon2id' in native builds, 'sha256' in Expo Go (__DEV__)
-const CURRENT_ALGO = __DEV__ ? 'sha256' : 'argon2id';
+const CURRENT_ALGO = 'argon2id';
+// Lower cost in dev so the feedback loop stays fast; security is unchanged.
+const ARGON2_ITERATIONS = __DEV__ ? 1 : 3;
 
 function toHex(buf: Uint8Array): string {
   return Array.from(buf)
@@ -27,30 +28,17 @@ async function randomHex(byteLength: number): Promise<string> {
   return toHex(bytes);
 }
 
-async function deriveArgon2id(pin: string, saltHex: string): Promise<string> {
-  // Dynamic import: native module only present in custom dev-client / EAS builds.
+async function derivePinHash(pin: string, saltHex: string): Promise<string> {
   const argon2 = (await import('react-native-argon2')).default;
   const result = await argon2(pin, saltHex, {
-    iterations: 3,
-    memory: 65536, // 64 MiB
+    iterations: ARGON2_ITERATIONS,
+    memory: 65536,
     parallelism: 1,
     hashLength: 32,
     mode: 'argon2id',
     saltEncoding: 'hex',
   });
   return result.rawHash as string;
-}
-
-async function deriveSha256(pin: string, saltHex: string): Promise<string> {
-  return Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      `${saltHex}:${pin}`,
-  );
-}
-
-async function derivePinHash(pin: string, saltHex: string): Promise<string> {
-  if (__DEV__) return deriveSha256(pin, saltHex);
-  return deriveArgon2id(pin, saltHex);
 }
 
 export interface PinStatus {

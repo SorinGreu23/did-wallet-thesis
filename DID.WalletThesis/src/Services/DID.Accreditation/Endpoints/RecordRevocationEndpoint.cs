@@ -15,7 +15,7 @@ public class RecordRevocationRequest
 /// entirely by the caller's browser wallet (member state or ministry).
 /// The private key never reaches the server.
 /// </summary>
-public class RecordRevocationEndpoint(AccreditationService service)
+public class RecordRevocationEndpoint(IAccreditationService service)
     : Endpoint<RecordRevocationRequest>
 {
     public override void Configure()
@@ -34,14 +34,9 @@ public class RecordRevocationEndpoint(AccreditationService service)
             else
                 await Send.NoContentAsync(ct);
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException)
         {
-            AddError(ex.Message);
-            await Send.ErrorsAsync(400, ct);
-        }
-        catch (Exception ex)
-        {
-            AddError(ex.Message);
+            AddError("The revocation could not be recorded. Please verify the transaction hash and accreditation status.");
             await Send.ErrorsAsync(400, ct);
         }
     }

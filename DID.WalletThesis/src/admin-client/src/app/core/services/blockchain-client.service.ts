@@ -31,6 +31,7 @@ const ACCREDITATION_REGISTRY_ABI = [
 
 const CREDENTIAL_REGISTRY_ABI = [
   'function recordCredential(address holder, bytes32 credentialHash, string credentialType, bytes32 issuerAccreditationId, uint256 expiresAt) returns (bytes32)',
+  'function revokeCredential(bytes32 credentialId, string reason)',
 ];
 
 @Injectable({ providedIn: 'root' })
@@ -65,14 +66,9 @@ export class BlockchainClientService {
       throw new Error('SIGNER_LOST');
     }
 
-    const provider = new ethers.JsonRpcProvider(rpcUrl);
-    const wallet = this.signer.getConnectedWallet(provider);
+    const wallet = this.signer.getTransactionSigner();
 
-    const contract = new ethers.Contract(
-      contractAddress,
-      ACCREDITATION_REGISTRY_ABI,
-      wallet,
-    );
+    const contract = new ethers.Contract(contractAddress, ACCREDITATION_REGISTRY_ABI, wallet);
 
     const parentBytes: string = parentAccreditationId
       ? parentAccreditationId.startsWith('0x')
@@ -109,14 +105,9 @@ export class BlockchainClientService {
       throw new Error('SIGNER_LOST');
     }
 
-    const provider = new ethers.JsonRpcProvider(rpcUrl);
-    const wallet = this.signer.getConnectedWallet(provider);
+    const wallet = this.signer.getTransactionSigner();
 
-    const contract = new ethers.Contract(
-      contractAddress,
-      ACCREDITATION_REGISTRY_ABI,
-      wallet,
-    );
+    const contract = new ethers.Contract(contractAddress, ACCREDITATION_REGISTRY_ABI, wallet);
 
     const idBytes: string = accreditationId.startsWith('0x')
       ? accreditationId
@@ -124,6 +115,32 @@ export class BlockchainClientService {
 
     const tx = await contract['revokeAccreditation'](idBytes);
 
+    return tx.hash as string;
+  }
+
+  /**
+   * Signs and submits a `revokeCredential` transaction directly from the
+   * MetaMask wallet — the private key never leaves the browser.
+   *
+   * @returns the transaction hash
+   */
+  async revokeCredential(credentialId: string, reason: string): Promise<string> {
+    const contractAddress = this.config.credentialRegistryAddress();
+
+    if (!contractAddress) {
+      throw new Error('Blockchain configuration not loaded yet');
+    }
+
+    if (!this.signer.hasSigner()) {
+      throw new Error('SIGNER_LOST');
+    }
+
+    const wallet = this.signer.getTransactionSigner();
+    const contract = new ethers.Contract(contractAddress, CREDENTIAL_REGISTRY_ABI, wallet);
+
+    const idBytes: string = credentialId.startsWith('0x') ? credentialId : `0x${credentialId}`;
+
+    const tx = await contract['revokeCredential'](idBytes, reason);
     return tx.hash as string;
   }
 
@@ -151,14 +168,9 @@ export class BlockchainClientService {
       throw new Error('SIGNER_LOST');
     }
 
-    const provider = new ethers.JsonRpcProvider(rpcUrl);
-    const wallet = this.signer.getConnectedWallet(provider);
+    const wallet = this.signer.getTransactionSigner();
 
-    const contract = new ethers.Contract(
-      contractAddress,
-      CREDENTIAL_REGISTRY_ABI,
-      wallet,
-    );
+    const contract = new ethers.Contract(contractAddress, CREDENTIAL_REGISTRY_ABI, wallet);
 
     const accreditationBytes: string = issuerAccreditationId
       ? issuerAccreditationId.startsWith('0x')
