@@ -11,7 +11,7 @@ public class ListCredentialsRequest
     public string? HolderDid { get; set; }
 }
 
-public class ListCredentialsEndpoint(CredentialService service)
+public class ListCredentialsEndpoint(ICredentialService service)
     : Endpoint<ListCredentialsRequest, List<CredentialDto>>
 {
     public override void Configure()

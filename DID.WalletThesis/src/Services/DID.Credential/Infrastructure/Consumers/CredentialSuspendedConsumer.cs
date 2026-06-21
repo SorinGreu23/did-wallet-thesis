@@ -5,7 +5,7 @@ using MassTransit;
 namespace DID.Credential.Infrastructure.Consumers;
 
 public class CredentialSuspendedConsumer(
-    CredentialService service,
+    ICredentialService service,
     ILogger<CredentialSuspendedConsumer> logger) : IConsumer<CredentialSuspendedEvent>
 {
     public async Task Consume(ConsumeContext<CredentialSuspendedEvent> context)

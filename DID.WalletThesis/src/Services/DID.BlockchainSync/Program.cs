@@ -23,6 +23,7 @@ builder.Services.AddSerilog((_, lc) => lc
 builder.Services.Configure<BlockchainOptions>(
     builder.Configuration.GetSection(BlockchainOptions.SectionName));
 builder.Services.AddSingleton<IBlockchainService, BlockchainService>();
+builder.Services.AddSingleton<IBlockchainRpcClient>(sp => sp.GetRequiredService<IBlockchainService>());
 
 // Database
 builder.Services.AddDbContext<SyncDbContext>(options =>

@@ -11,8 +11,6 @@ export const CONFIG = {
   IDENTITY_SERVICE_URL: `http://${HOST}:5259`,
   CREDENTIAL_SERVICE_URL: `http://${HOST}:5214`,
   ACCREDITATION_SERVICE_URL: `http://${HOST}:5211`,
-  VERIFICATION_SERVICE_URL: `http://${HOST}:5216`,
-  PRESENTATION_SERVICE_URL: `http://${HOST}:5217`,
 };
 
 export const COLORS = {

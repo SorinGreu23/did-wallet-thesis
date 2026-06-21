@@ -10,6 +10,7 @@ public class AuthChallengeEndpoint(AuthService authService)
     {
         Post("/api/auth/challenge");
         AllowAnonymous();
+        Options(x => x.RequireRateLimiting("auth"));
     }
 
     public override Task HandleAsync(ChallengeRequest req, CancellationToken ct)
@@ -19,9 +20,9 @@ public class AuthChallengeEndpoint(AuthService authService)
             var response = authService.CreateChallenge(req.Did);
             return Send.OkAsync(response, ct);
         }
-        catch (ArgumentException ex)
+        catch (ArgumentException)
         {
-            AddError(ex.Message);
+            AddError("The provided DID is invalid or not recognized.");
             return Send.ErrorsAsync(400, ct);
         }
     }

@@ -37,14 +37,12 @@ public record IssueCredentialRequest(
 
 public record RevokeCredentialRequest(
     string RevokedByDID,
-    string Reason,
-    string? RevokedByPrivateKey = null
+    string Reason
 );
 
 public record SuspendCredentialRequest(
     string SuspendedByDID,
-    string Reason,
-    string? SuspendedByPrivateKey = null
+    string Reason
 );
 
 public record RecordCredentialRequest(

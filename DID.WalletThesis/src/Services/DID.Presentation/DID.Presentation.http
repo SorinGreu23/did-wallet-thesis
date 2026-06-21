@@ -1,6 +1,0 @@
-@DID.Presentation_HostAddress = http://localhost:5269
-
-GET {{DID.Presentation_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###

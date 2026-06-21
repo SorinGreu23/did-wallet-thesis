@@ -66,6 +66,8 @@ export class UniversitiesComponent implements OnInit {
   readonly revokingCredentialId = signal<string | null>(null);
   readonly revokeKey = signal('');
   readonly revokeReason = signal('Duplicate');
+  readonly hasSigner = this.auth.hasSigner;
+  readonly connectingSigner = signal(false);
 
   readonly registeredHolders = signal<RegisteredIdentity[]>([]);
   readonly loadingHolders = signal(false);
@@ -140,9 +142,7 @@ export class UniversitiesComponent implements OnInit {
 
         return true;
       } catch (err: any) {
-        this.error.set(
-          extractApiError(err, 'Failed to resolve university context'),
-        );
+        this.error.set(extractApiError(err, 'Failed to resolve university context'));
         return false;
       }
     }
@@ -182,9 +182,7 @@ export class UniversitiesComponent implements OnInit {
 
         return true;
       } catch (err: any) {
-        this.error.set(
-          extractApiError(err, 'Failed to resolve ministry context'),
-        );
+        this.error.set(extractApiError(err, 'Failed to resolve ministry context'));
         return false;
       }
     }
@@ -268,7 +266,10 @@ export class UniversitiesComponent implements OnInit {
     this.loadingDiplomas.set(true);
     this.diplomas.set([]);
     this.credentialService.listByIssuer(university.subjectDID).subscribe({
-      next: (data) => { this.diplomas.set(data); this.loadingDiplomas.set(false); },
+      next: (data) => {
+        this.diplomas.set(data);
+        this.loadingDiplomas.set(false);
+      },
       error: () => this.loadingDiplomas.set(false),
     });
   }
@@ -287,13 +288,15 @@ export class UniversitiesComponent implements OnInit {
     const university = this.diplomaUniversity();
     const key = this.revokeKey();
     if (!university || !key) return;
-    this.credentialService.revoke(credentialId, university.subjectDID, this.revokeReason(), key).subscribe({
-      next: () => {
-        this.revokingCredentialId.set(null);
-        this.loadDiplomas(university);
-      },
-      error: (err) => this.error.set(extractApiError(err, 'Failed to revoke credential')),
-    });
+    this.credentialService
+      .revoke(credentialId, university.subjectDID, this.revokeReason(), key)
+      .subscribe({
+        next: () => {
+          this.revokingCredentialId.set(null);
+          this.loadDiplomas(university);
+        },
+        error: (err) => this.error.set(extractApiError(err, 'Failed to revoke credential')),
+      });
   }
 
   openDiplomaForm(university: Accreditation): void {
@@ -322,7 +325,7 @@ export class UniversitiesComponent implements OnInit {
 
   loadRegisteredHolders(): void {
     this.loadingHolders.set(true);
-    this.identityService.listRegistered().subscribe({
+    this.identityService.listRegistered('personal').subscribe({
       next: (holders) => {
         this.registeredHolders.set(holders);
         this.loadingHolders.set(false);
@@ -358,21 +361,23 @@ export class UniversitiesComponent implements OnInit {
     const selected = this.selected();
     if (!selected) return;
     this.revoking.set(true);
-    this.accreditationService.revokeViaClientWallet(selected.accreditationId, selected.issuerDID).subscribe({
-      next: () => {
-        this.revoking.set(false);
-        this.load();
-        this.verifySelected();
-      },
-      error: (err) => {
-        if (err?.message === 'SIGNER_LOST') {
-          this.auth.logout();
-          return;
-        }
-        this.error.set(extractApiError(err, 'Failed to revoke accreditation'));
-        this.revoking.set(false);
-      },
-    });
+    this.accreditationService
+      .revokeViaClientWallet(selected.accreditationId, selected.issuerDID)
+      .subscribe({
+        next: () => {
+          this.revoking.set(false);
+          this.load();
+          this.verifySelected();
+        },
+        error: (err) => {
+          if (err?.message === 'SIGNER_LOST') {
+            this.auth.logout();
+            return;
+          }
+          this.error.set(extractApiError(err, 'Failed to revoke accreditation'));
+          this.revoking.set(false);
+        },
+      });
   }
 
   trustChainForSelected(): AccreditationChainNode[] {
@@ -408,16 +413,44 @@ export class UniversitiesComponent implements OnInit {
     return this.auth.scope() === 'Institution';
   }
 
+  async connectSigner(): Promise<void> {
+    this.connectingSigner.set(true);
+    this.error.set(null);
+
+    try {
+      await this.auth.connectSigner();
+    } catch (err) {
+      this.error.set(extractApiError(err, 'Failed to connect MetaMask'));
+    } finally {
+      this.connectingSigner.set(false);
+    }
+  }
+
   issueDiploma(): void {
     if (this.diplomaForm.invalid) {
       this.diplomaForm.markAllAsTouched();
       return;
     }
+
+    const holderAddress = this.diplomaForm.controls.holderAddress.value?.toLowerCase();
+    const registeredPersonalHolder = this.registeredHolders().some(
+      (holder) => holder.controllerAddress.toLowerCase() === holderAddress,
+    );
+    if (!registeredPersonalHolder) {
+      this.error.set('Diplomas can only be issued to registered personal wallet accounts.');
+      return;
+    }
+
+    if (!this.hasSigner()) {
+      this.error.set('Connect the authenticated University account in MetaMask before issuing.');
+      return;
+    }
+
     const university = this.diplomaUniversity();
     if (!university) return;
 
     this.issuingDiploma.set(true);
-    const { holderAddress, studentName } = this.diplomaForm.getRawValue();
+    const { holderAddress: selectedHolderAddress, studentName } = this.diplomaForm.getRawValue();
 
     // Deterministic credential hash from student name + university + timestamp
     const raw = `${studentName}|${university.accreditationId}|${Date.now()}`;
@@ -429,24 +462,30 @@ export class UniversitiesComponent implements OnInit {
         .padEnd(64, '0')
         .slice(0, 64);
 
-    this.credentialService.issueViaClientWallet(
-      university.subjectDID,
-      holderAddress!,
-      'DiplomaCredential',
-      credentialHash,
-      university.accreditationId,
-      university.name ?? null,
-    ).subscribe({
-      next: (result) => {
-        this.lastIssuedDiploma.set(result);
-        this.issuingDiploma.set(false);
-        this.loadDiplomas(university);
-        this.diplomaForm.reset();
-      },
-      error: (err) => {
-          this.error.set(extractApiError(err, 'Failed to issue diploma'));
-        this.issuingDiploma.set(false);
-      },
-    });
+    this.credentialService
+      .issueViaClientWallet(
+        university.subjectDID,
+        selectedHolderAddress!,
+        'DiplomaCredential',
+        credentialHash,
+        university.accreditationId,
+        university.name ?? null,
+      )
+      .subscribe({
+        next: (result) => {
+          this.lastIssuedDiploma.set(result);
+          this.issuingDiploma.set(false);
+          this.loadDiplomas(university);
+          this.diplomaForm.reset();
+        },
+        error: (err) => {
+          if (err?.message === 'SIGNER_LOST') {
+            this.error.set('MetaMask is not connected to the authenticated University account.');
+          } else {
+            this.error.set(extractApiError(err, 'Failed to issue diploma'));
+          }
+          this.issuingDiploma.set(false);
+        },
+      });
   }
 }

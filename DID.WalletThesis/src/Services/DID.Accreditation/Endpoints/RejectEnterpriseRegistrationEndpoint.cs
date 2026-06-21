@@ -35,9 +35,9 @@ public class RejectEnterpriseRegistrationEndpoint(EnterpriseRegistrationService 
         {
             await Send.NotFoundAsync(ct);
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException)
         {
-            AddError(ex.Message);
+            AddError("The registration request cannot be rejected in its current state.");
             await Send.ErrorsAsync(400, ct);
         }
     }

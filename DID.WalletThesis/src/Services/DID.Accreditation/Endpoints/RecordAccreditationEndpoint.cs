@@ -8,7 +8,7 @@ namespace DID.Accreditation.Endpoints;
 /// Records an accreditation whose on-chain transaction was signed and submitted
 /// entirely by the caller's browser wallet. The private key never reaches the server.
 /// </summary>
-public class RecordAccreditationEndpoint(AccreditationService service)
+public class RecordAccreditationEndpoint(IAccreditationService service)
     : Endpoint<RecordAccreditationRequest, AccreditationDto>
 {
     public override void Configure()
@@ -33,19 +33,13 @@ public class RecordAccreditationEndpoint(AccreditationService service)
             await Send.CreatedAtAsync<ResolveAccreditationEndpoint>(
                 new { accreditationId = result.AccreditationId }, result, cancellation: ct);
         }
-        catch (KeyNotFoundException ex)
+        catch (KeyNotFoundException)
         {
-            AddError(ex.Message);
-            await Send.ErrorsAsync(400, ct);
+            await Send.NotFoundAsync(ct);
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException)
         {
-            AddError(ex.Message);
-            await Send.ErrorsAsync(400, ct);
-        }
-        catch (Exception ex)
-        {
-            AddError(ex.Message);
+            AddError("The accreditation could not be recorded. Please verify the transaction hash is valid and the on-chain data matches.");
             await Send.ErrorsAsync(400, ct);
         }
     }

@@ -121,8 +121,9 @@ contract CredentialRegistry {
         // Validate issuer has valid institution-level accreditation
         _validateIssuerAuthorization(msg.sender, issuerAccreditationId);
 
-        // Generate credential ID
-        bytes32 credentialId = keccak256(abi.encodePacked(
+        // Generate credential ID — abi.encode (not encodePacked) to avoid hash collisions
+        // when credentialType (a dynamic string) shares a packed prefix with another value.
+        bytes32 credentialId = keccak256(abi.encode(
             msg.sender,
             holder,
             credentialHash,

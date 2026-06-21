@@ -33,7 +33,10 @@ public record RegisterIdentityRequest(
   string DID,
   string ControllerAddress,
   string? DisplayName,
-  string? Email
+  string? Email,
+  string? AccountType,
+  long Timestamp = 0,
+  string? Signature = null
 );
 
 public record RegisteredIdentityDto(
@@ -41,5 +44,6 @@ public record RegisteredIdentityDto(
   string ControllerAddress,
   string? DisplayName,
   string? Email,
+  string? AccountType,
   DateTime RegisteredAt
 );

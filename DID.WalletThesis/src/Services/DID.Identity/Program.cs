@@ -7,7 +7,9 @@ using DID.Shared.Infrastructure.EventBus;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using MassTransit;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -37,10 +39,36 @@ builder.Services.AddMassTransit(x =>
 builder.Services.AddScoped<DID.Shared.Application.Interfaces.IEventBus>(sp =>
     new RabbitMQEventBus(sp.GetRequiredService<IPublishEndpoint>()));
 builder.Services.AddScoped<DIDService>();
+
+var jwtSecret = builder.Configuration["Auth:JwtSecret"] ?? throw new InvalidOperationException(
+    "Auth:JwtSecret must be set via environment variable or secrets manager.");
+var keyBytes = System.Text.Encoding.UTF8.GetBytes(jwtSecret);
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Auth:Issuer"] ?? "did-accreditation",
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["Auth:Audience"] ?? "did-accreditation",
+            ClockSkew = TimeSpan.Zero,
+        };
+    });
+
+builder.Services.AddAuthorization();
+
+var allowedOriginsIdentity = builder.Configuration["Cors:AllowedOrigins"]
+    ?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    ?? ["http://localhost:4200"];
+
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
-        policy.AllowAnyOrigin()
+        policy.WithOrigins(allowedOriginsIdentity)
               .AllowAnyHeader()
               .AllowAnyMethod());
 });
@@ -56,9 +84,10 @@ builder.Services.SwaggerDocument(o =>
     };
 });
 
-var app = builder.Build();
+builder.WebHost.ConfigureKestrel(k =>
+    k.Limits.MaxRequestBodySize = 512 * 1024);
 
-app.UseSwaggerGen();
+var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
@@ -66,7 +95,18 @@ using (var scope = app.Services.CreateScope())
     await db.Database.MigrateAsync();
 }
 
-app.UseCors();
+app.UseDefaultExceptionHandler();
 app.UseHttpsRedirection();
+app.Use(async (ctx, next) =>
+{
+    ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    ctx.Response.Headers["X-Frame-Options"] = "DENY";
+    ctx.Response.Headers["Referrer-Policy"] = "no-referrer";
+    await next();
+});
+app.UseCors();
+app.UseAuthentication();
+app.UseAuthorization();
+if (app.Environment.IsDevelopment()) app.UseSwaggerGen();
 app.UseFastEndpoints();
 await app.RunAsync();

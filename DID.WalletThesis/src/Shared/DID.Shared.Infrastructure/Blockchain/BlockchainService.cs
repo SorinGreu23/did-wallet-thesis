@@ -102,6 +102,14 @@ public class BlockchainService : IBlockchainService
     {
       try
       {
+        // Skip the poll if fromBlock is ahead of the chain tip (Anvil doesn't auto-mine).
+        var chainTip = await _web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
+        if (fromBlock.BlockNumber is not null && fromBlock.BlockNumber.Value > chainTip.Value)
+        {
+          await Task.Delay(PollIntervalMs, ct);
+          continue;
+        }
+
         var filter = eventHandler.CreateFilterInput(fromBlock, BlockParameter.CreateLatest());
         var logs = await eventHandler.GetAllChangesAsync(filter);
 
@@ -151,7 +159,10 @@ public class BlockchainService : IBlockchainService
 
   public async Task<string> WaitForConfirmationAsync(string txHash, CancellationToken ct = default)
   {
-    while (!ct.IsCancellationRequested)
+    using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+    cts.CancelAfter(TimeSpan.FromSeconds(60));
+
+    while (!cts.Token.IsCancellationRequested)
     {
       var receipt = await _web3.Eth.Transactions.GetTransactionReceipt
           .SendRequestAsync(txHash);
@@ -168,10 +179,11 @@ public class BlockchainService : IBlockchainService
             $"Transaction {txHash} failed with status {receipt.Status.Value}");
       }
 
-      await Task.Delay(1_000, ct);
+      await Task.Delay(1_000, cts.Token);
     }
 
-    throw new OperationCanceledException($"Waiting for {txHash} was cancelled");
+    throw new TimeoutException(
+        $"Transaction {txHash} was not confirmed within 60 seconds. It may still be pending.");
   }
 
   // ──────────────────── helpers ────────────────────

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { AuthService } from '../../core/auth/auth.service';
@@ -13,6 +13,8 @@ import { SCOPE_HIERARCHY } from '../../core/auth/auth.models';
 export class ShellComponent {
   readonly auth = inject(AuthService);
   readonly stars = Array(12).fill(0);
+  readonly connectingWallet = signal(false);
+  readonly walletError = signal<string | null>(null);
 
   get truncatedDid(): string {
     const did = this.auth.session()?.did;
@@ -59,5 +61,17 @@ export class ShellComponent {
 
   logout(): void {
     this.auth.logout();
+  }
+
+  async connectWallet(): Promise<void> {
+    this.connectingWallet.set(true);
+    this.walletError.set(null);
+    try {
+      await this.auth.connectSigner();
+    } catch (err) {
+      this.walletError.set(err instanceof Error ? err.message : 'Failed to connect MetaMask');
+    } finally {
+      this.connectingWallet.set(false);
+    }
   }
 }

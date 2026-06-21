@@ -4,7 +4,7 @@ using FastEndpoints;
 
 namespace DID.Credential.Endpoints;
 
-public class IssueCredentialEndpoint(CredentialService service)
+public class IssueCredentialEndpoint(ICredentialService service)
     : Endpoint<IssueCredentialRequest, CredentialDto>
 {
     public override void Configure()
@@ -24,7 +24,6 @@ public class IssueCredentialEndpoint(CredentialService service)
             req.IssuerName,
             req.ExpiresAt,
             ct);
-        await Send.CreatedAtAsync<ResolveCredentialEndpoint>(
-            new { credentialId = result.CredentialId }, result, cancellation: ct);
+        await Send.OkAsync(result, cancellation: ct);
     }
 }

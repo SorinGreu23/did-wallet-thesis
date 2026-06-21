@@ -2,7 +2,7 @@
 // Generates a depth-5 Poseidon Merkle tree over the 27 EU ISO-3166-1 numeric codes.
 // Leaves are the country codes directly (not hashed). Internal nodes = Poseidon(left, right).
 // Pads to 32 leaves with 0 values.
-// Outputs the Merkle root and a test vector for Germany (DE=276).
+// Outputs the Merkle root and precomputed paths for ALL 27 EU countries.
 
 import { buildPoseidon } from 'circomlibjs';
 import { writeFileSync, mkdirSync } from 'fs';
@@ -78,14 +78,7 @@ for (let lvl = 0; lvl < DEPTH; lvl++) {
 const merkleRoot = levels[DEPTH][0];
 const merkleRootHex = '0x' + merkleRoot.toString(16);
 
-console.log('\n=== EU Country Merkle Tree ===');
-console.log(`Depth:       ${DEPTH}`);
-console.log(`Leaves:      ${TREE_SIZE} (${EU_COUNTRIES.length} EU + ${TREE_SIZE - EU_COUNTRIES.length} padding)`);
-console.log(`Merkle Root: ${merkleRoot.toString()}`);
-console.log(`Root (hex):  ${merkleRootHex}`);
-
-// Compute path for Germany (DE=276), leaf index 5
-const DE_INDEX = EU_COUNTRIES.findIndex(c => c.code === 'DE'); // should be 5
+console.log(`\nEU Merkle Tree: depth=${DEPTH}, root=${merkleRoot.toString()}`);
 
 function getMerklePath(leafIndex) {
     const pathElements = [];
@@ -102,35 +95,37 @@ function getMerklePath(leafIndex) {
     return { pathElements, pathIndices };
 }
 
-const { pathElements, pathIndices } = getMerklePath(DE_INDEX);
+// Compute and verify paths for all 27 countries
+const paths = {};
+for (const c of EU_COUNTRIES) {
+    const leafIndex = EU_COUNTRIES.indexOf(c);
+    const { pathElements, pathIndices } = getMerklePath(leafIndex);
 
-console.log(`\n=== Test Vector: Germany (DE=276), leaf index ${DE_INDEX} ===`);
-console.log('Path elements (sibling hashes):');
-pathElements.forEach((el, i) => console.log(`  [${i}]: ${el.toString()}`));
-console.log('Path indices (0=current is left, 1=current is right):');
-console.log(' ', pathIndices.join(', '));
+    // Verify path reconstructs the root
+    let node = BigInt(c.numeric);
+    for (let i = 0; i < DEPTH; i++) {
+        const left  = pathIndices[i] === 1 ? pathElements[i] : node;
+        const right = pathIndices[i] === 1 ? node : pathElements[i];
+        node = poseidonHash(left, right);
+    }
+    if (node !== merkleRoot) throw new Error(`Path verification failed for ${c.code}`);
 
-// Verify: reconstruct root from DE path
-let node = BigInt(276);
-for (let i = 0; i < DEPTH; i++) {
-    const left  = pathIndices[i] === 1 ? pathElements[i] : node;
-    const right = pathIndices[i] === 1 ? node : pathElements[i];
-    node = poseidonHash(left, right);
+    paths[c.code] = {
+        numeric: c.numeric,
+        leafIndex,
+        pathElements: pathElements.map(e => e.toString()),
+        pathIndices,
+    };
 }
-console.log(`\nVerification (should match root): ${node.toString()}`);
-console.log(`Root matches: ${node === merkleRoot}`);
+
+console.log(`\nVerified paths for all ${EU_COUNTRIES.length} EU countries. Root: ${merkleRoot.toString()}`);
 
 // Build JSON output
 const output = {
     merkleRoot: merkleRoot.toString(),
     merkleRootHex,
     depth: DEPTH,
-    countries: EU_COUNTRIES.map((c, i) => ({ code: c.code, numeric: c.numeric, leafIndex: i })),
-    testVector: {
-        countryCode: 276,
-        pathElements: pathElements.map(e => e.toString()),
-        pathIndices,
-    },
+    paths,
 };
 
 const outPath = `${KEYS_DIR}/eu-country-merkle.json`;

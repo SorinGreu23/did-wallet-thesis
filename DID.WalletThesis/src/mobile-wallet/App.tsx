@@ -12,7 +12,7 @@ import ZkpWebViewBridge from "./src/components/ZkpWebViewBridge";
 
 function AppNavigator() {
   const { isDark, colors } = useTheme();
-  const { state, hasWallet, onAuthenticated, signOut } = useAuth();
+  const { state, hasWallet, onAuthenticated } = useAuth();
 
   if (state === "loading") {
     return (
@@ -25,7 +25,7 @@ function AppNavigator() {
   return (
     <>
       {state === "authenticated" ? (
-        <MainTabNavigator onSignOut={signOut} />
+        <MainTabNavigator />
       ) : hasWallet ? (
         <UnlockSplashScreen onAuthenticated={onAuthenticated} />
       ) : (

@@ -36,6 +36,10 @@ namespace DID.Identity.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("AccountType")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("DID")
                         .IsRequired()
                         .HasMaxLength(200)

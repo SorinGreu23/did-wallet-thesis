@@ -13,7 +13,9 @@ import { keccak256, toUtf8Bytes } from 'ethers';
 import { useTheme } from '../context/ThemeContext';
 import authService from '../services/authService';
 import credentialService from '../services/credentialService';
-import zkpService from '../services/zkpService';
+import didService from '../services/didService';
+import zkpService, { getMerklePathForCountry } from '../services/zkpService';
+import { getAgent } from '../agents/veramoAgent';
 import presentationService from '../services/presentationService';
 import {
   decodePresentationRequest,
@@ -147,11 +149,20 @@ export default function PresentationConsentScreen() {
       }
 
       if (req.circuit === 'countryMembership') {
+        const countryIso2 = (profile as any)?.country as string | undefined;
+        if (!countryIso2) {
+          throw new Error(
+            'Your country is not set. Please update it in Profile before proceeding.',
+          );
+        }
+
+        const merklePath = getMerklePathForCountry(countryIso2);
+
         const { proof, publicSignals } = await zkpService.prove('countryMembership', {
-          countryCode: '276',
+          countryCode: String(merklePath.numeric),
           merkleRoot: req.merkleRoot,
-          pathElements: Array(10).fill('0'),
-          pathIndices: Array(10).fill('0'),
+          pathElements: merklePath.pathElements,
+          pathIndices: merklePath.pathIndices,
         });
 
         const valid = await zkpService.verify('countryMembership', proof, publicSignals);
@@ -257,7 +268,22 @@ export default function PresentationConsentScreen() {
         submittedAt: new Date().toISOString(),
       };
 
-      const signature = keccak256(toUtf8Bytes(JSON.stringify(responsePayload)));
+      const payloadHash = keccak256(toUtf8Bytes(JSON.stringify(responsePayload)));
+      const identity = await didService.getOrCreateIdentity();
+      const kid = identity.keys[0]?.kid;
+      let signature = payloadHash;
+      if (kid) {
+        try {
+          signature = await getAgent().keyManagerSign({
+            keyRef: kid,
+            data: payloadHash,
+            algorithm: 'eth_signMessage',
+            encoding: 'hex',
+          });
+        } catch (e) {
+          console.warn('[PresentationConsent] ECDSA sign failed, falling back to hash:', e);
+        }
+      }
 
       const response: PresentationResponse = {
         ...responsePayload,

@@ -32,9 +32,9 @@ public class SubmitEnterpriseRegistrationEndpoint(EnterpriseRegistrationService 
             await Send.CreatedAtAsync<GetEnterpriseRegistrationEndpoint>(
                 new { requestId = result.RequestId }, result, cancellation: ct);
         }
-        catch (ArgumentException ex)
+        catch (ArgumentException)
         {
-            AddError(ex.Message);
+            AddError("The registration request contains invalid data. Please check all required fields.");
             await Send.ErrorsAsync(400, ct);
         }
     }

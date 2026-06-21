@@ -5,7 +5,7 @@ using MassTransit;
 namespace DID.Accreditation.Infrastructure.Consumers;
 
 public class AccreditationRevokedConsumer(
-    AccreditationService service,
+    IAccreditationService service,
     ILogger<AccreditationRevokedConsumer> logger) : IConsumer<AccreditationRevokedEvent>
 {
     public async Task Consume(ConsumeContext<AccreditationRevokedEvent> context)

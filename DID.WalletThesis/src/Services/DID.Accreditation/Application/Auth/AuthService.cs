@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -6,8 +5,12 @@ using System.Text;
 using System.Text.RegularExpressions;
 using DID.Accreditation.Domain;
 using DID.Accreditation.Domain.Interfaces;
+using DID.Shared.Application.Constants;
+using DID.Shared.Application.Enums;
 using DID.Shared.Application.Interfaces;
+using DID.Shared.Application.Utils;
 using DID.Shared.Infrastructure.Options;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Nethereum.Signer;
@@ -17,17 +20,17 @@ namespace DID.Accreditation.Application.Auth;
 
 public partial class AuthService(
     IServiceScopeFactory scopeFactory,
-    IBlockchainService blockchain,
+    IBlockchainRpcClient blockchain,
     IOptions<AuthOptions> authOptions,
     IOptions<BlockchainOptions> blockchainOptions,
+    IMemoryCache cache,
     ILogger<AuthService> logger)
 {
-    private const string DidPrefix = "did:ethr:sepolia:";
+    private const string ChallengeCachePrefix = "challenge:";
 
     private static readonly Regex DidPattern = DidPatternRegex();
 
-    private readonly ConcurrentDictionary<string, PendingChallenge> _challenges = new();
-    private readonly string _euRootAddress = NormalizeAddress(new Account(blockchainOptions.Value.PrivateKey).Address);
+    private readonly string _euRootAddress = BlockchainAddressUtils.NormalizeAddress(new Account(blockchainOptions.Value.PrivateKey).Address);
 
     public ChallengeResponse CreateChallenge(string did)
     {
@@ -38,7 +41,10 @@ public partial class AuthService(
         var nonce = GenerateNonce();
         var expiresAt = DateTime.UtcNow.AddMinutes(authOptions.Value.ChallengeExpiryMinutes);
 
-        _challenges[nonce] = new PendingChallenge(nonce, did.ToLowerInvariant(), expiresAt);
+        cache.Set(
+            ChallengeCachePrefix + nonce,
+            new PendingChallenge(nonce, did.ToLowerInvariant(), expiresAt),
+            expiresAt);
 
         logger.LogInformation("Created auth challenge for DID {Did}, expires at {ExpiresAt}", did, expiresAt);
         return new ChallengeResponse(nonce, expiresAt);
@@ -48,8 +54,10 @@ public partial class AuthService(
     {
         var normalizedDid = did.ToLowerInvariant();
 
-        if (!_challenges.TryRemove(nonce, out var challenge))
+        var cacheKey = ChallengeCachePrefix + nonce;
+        if (!cache.TryGetValue(cacheKey, out PendingChallenge? challenge) || challenge is null)
             throw new UnauthorizedAccessException("Invalid or already-used nonce");
+        cache.Remove(cacheKey);
 
         if (challenge.ExpiresAt < DateTime.UtcNow)
             throw new UnauthorizedAccessException("Challenge has expired");
@@ -62,7 +70,7 @@ public partial class AuthService(
         string recoveredAddress;
         try
         {
-            recoveredAddress = NormalizeAddress(signer.EncodeUTF8AndEcRecover(nonce, signature));
+            recoveredAddress = BlockchainAddressUtils.NormalizeAddress(signer.EncodeUTF8AndEcRecover(nonce, signature));
         }
         catch (Exception ex)
         {
@@ -71,7 +79,7 @@ public partial class AuthService(
         }
 
         // Verify recovered address matches the DID address component
-        var didAddress = ExtractAddress(normalizedDid);
+        var didAddress = BlockchainAddressUtils.ExtractAddress(normalizedDid);
         if (!string.Equals(recoveredAddress, didAddress, StringComparison.OrdinalIgnoreCase))
             throw new UnauthorizedAccessException(
                 "Recovered address does not match DID. The signature was not created by the DID's private key.");
@@ -96,7 +104,7 @@ public partial class AuthService(
             return ("EURoot", null);
 
         // First try the local DB (fast path)
-        var subjectDid = $"{DidPrefix}{address}";
+        var subjectDid = $"{SmartContractConstants.DidPrefix}{address}";
 
         using var scope = scopeFactory.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<IAccreditationRepository>();
@@ -121,13 +129,13 @@ public partial class AuthService(
         {
             // Check if the address is a member state via EURootAuthority.isMemberState()
             var isMemberState = await blockchain.CallContractAsync<bool>(
-                "EURootAuthority", "isMemberState", address);
+                SmartContractConstants.Contracts.EURootAuthority, SmartContractConstants.EURootFunctions.IsMemberState, address);
             if (isMemberState)
                 return ("MemberState", null);
 
             // Check accreditations on AccreditationRegistry
             var accreditationIds = await blockchain.CallContractAsync<List<byte[]>>(
-                "AccreditationRegistry", "getAccreditationsBySubject", address);
+                SmartContractConstants.Contracts.AccreditationRegistry, SmartContractConstants.AccreditationFunctions.GetAccreditationsBySubject, address);
 
             if (accreditationIds is null || accreditationIds.Count == 0)
                 return (null, null);
@@ -136,19 +144,12 @@ public partial class AuthService(
             foreach (var idBytes in accreditationIds)
             {
                 var accreditation = await blockchain.CallContractAsync<AccreditationOutput>(
-                    "AccreditationRegistry", "getAccreditation", idBytes);
+                    SmartContractConstants.Contracts.AccreditationRegistry, SmartContractConstants.AccreditationFunctions.GetAccreditation, idBytes);
 
                 if (accreditation is null || accreditation.Revoked || !accreditation.Exists)
                     continue;
 
-                var scopeName = accreditation.Scope switch
-                {
-                    1 => "MemberState",
-                    2 => "Ministry",
-                    3 => "Institution",
-                    4 => "Department",
-                    _ => null
-                };
+                var scopeName = AccreditationScopeExtensions.ToScopeStringOrNull((byte)accreditation.Scope);
 
                 if (scopeName is not null)
                 {
@@ -166,14 +167,11 @@ public partial class AuthService(
         }
     }
 
-    private static int ScopeRank(string scope) => scope switch
-    {
-        "MemberState" => 1,
-        "Ministry" => 2,
-        "Institution" => 3,
-        "Department" => 4,
-        _ => 99
-    };
+    private static int ScopeRank(string scope) =>
+        Enum.GetValues<AccreditationScope>()
+            .Select((v, _) => new { Rank = (int)v, Name = v.ToScopeString() })
+            .FirstOrDefault(x => string.Equals(x.Name, scope, StringComparison.OrdinalIgnoreCase))
+            ?.Rank ?? 99;
 
     private string GenerateJwt(string did, string ethAddress, string scope, string? accreditationId)
     {
@@ -192,8 +190,12 @@ public partial class AuthService(
         if (accreditationId is not null)
             claims.Add(new Claim("accreditation_id", accreditationId));
 
+        var now = DateTime.UtcNow;
         var token = new JwtSecurityToken(
-            expires: DateTime.UtcNow.AddMinutes(authOptions.Value.TokenExpiryMinutes),
+            issuer: authOptions.Value.Issuer,
+            audience: authOptions.Value.Audience,
+            notBefore: now,
+            expires: now.AddMinutes(authOptions.Value.TokenExpiryMinutes),
             claims: claims,
             signingCredentials: credentials);
 
@@ -206,20 +208,6 @@ public partial class AuthService(
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 
-    private static string ExtractAddress(string didOrAddress)
-    {
-        var candidate = didOrAddress.Trim();
-        if (candidate.StartsWith(DidPrefix, StringComparison.OrdinalIgnoreCase))
-            candidate = candidate[DidPrefix.Length..];
-        return NormalizeAddress(candidate);
-    }
-
-    private static string NormalizeAddress(string address)
-    {
-        if (!address.StartsWith("0x", StringComparison.OrdinalIgnoreCase) || address.Length != 42)
-            throw new ArgumentException($"Invalid Ethereum address: {address}", nameof(address));
-        return address.ToLowerInvariant();
-    }
 
     [GeneratedRegex(@"^did:ethr:sepolia:0x[0-9a-fA-F]{40}$")]
     private static partial Regex DidPatternRegex();

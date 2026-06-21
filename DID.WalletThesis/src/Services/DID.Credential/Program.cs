@@ -25,9 +25,10 @@ builder.Services.AddDbContext<CredentialDbContext>(options =>
 builder.Services.Configure<BlockchainOptions>(
     builder.Configuration.GetSection(BlockchainOptions.SectionName));
 builder.Services.AddSingleton<IBlockchainService, BlockchainService>();
+builder.Services.AddSingleton<IBlockchainRpcClient>(sp => sp.GetRequiredService<IBlockchainService>());
 
 builder.Services.AddScoped<ICredentialRepository, CredentialRepository>();
-builder.Services.AddScoped<CredentialService>();
+builder.Services.AddScoped<ICredentialService, CredentialService>();
 
 builder.Services.AddMassTransit(x =>
 {
@@ -46,13 +47,18 @@ builder.Services.AddMassTransit(x =>
     });
 });
 
+var allowedOriginsCredential = builder.Configuration["Cors:AllowedOrigins"]
+    ?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    ?? ["http://localhost:4200"];
+
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
-        policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+        policy.WithOrigins(allowedOriginsCredential).AllowAnyHeader().AllowAnyMethod()));
 
 builder.Services.AddFastEndpoints();
 
-var jwtSecret = builder.Configuration["Auth:JwtSecret"] ?? "THIS_IS_A_DEV_SECRET_CHANGE_IN_PRODUCTION_MIN_32_CHARS!!";
+var jwtSecret = builder.Configuration["Auth:JwtSecret"] ?? throw new InvalidOperationException(
+    "Auth:JwtSecret must be set via environment variable or secrets manager.");
 var keyBytes = System.Text.Encoding.UTF8.GetBytes(jwtSecret);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -62,8 +68,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
-            ValidateIssuer = false,
-            ValidateAudience = false,
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Auth:Issuer"] ?? "did-accreditation",
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["Auth:Audience"] ?? "did-accreditation",
             ClockSkew = TimeSpan.Zero,
         };
     });
@@ -84,9 +92,10 @@ builder.Services.SwaggerDocument(o =>
     };
 });
 
-var app = builder.Build();
+builder.WebHost.ConfigureKestrel(k =>
+    k.Limits.MaxRequestBodySize = 512 * 1024);
 
-app.UseSwaggerGen();
+var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
@@ -94,9 +103,18 @@ using (var scope = app.Services.CreateScope())
     await db.Database.MigrateAsync();
 }
 
-app.UseCors();
+app.UseDefaultExceptionHandler();
 app.UseHttpsRedirection();
+app.Use(async (ctx, next) =>
+{
+    ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    ctx.Response.Headers["X-Frame-Options"] = "DENY";
+    ctx.Response.Headers["Referrer-Policy"] = "no-referrer";
+    await next();
+});
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
+if (app.Environment.IsDevelopment()) app.UseSwaggerGen();
 app.UseFastEndpoints();
 await app.RunAsync();

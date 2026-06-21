@@ -89,7 +89,7 @@ export default function ZkpWebViewBridge() {
         onLoadEnd={handleLoadEnd}
         onMessage={handleMessage}
         javaScriptEnabled
-        originWhitelist={['*']}
+        originWhitelist={['about:blank', 'file://*']}
         style={{ width: 1, height: 1, opacity: 0 }}
       />
     </View>

@@ -10,7 +10,7 @@ public class RevokeAccreditationRequest
     public string RevokedByDID { get; set; } = string.Empty;
 }
 
-public class RevokeAccreditationEndpoint(AccreditationService service)
+public class RevokeAccreditationEndpoint(IAccreditationService service)
     : Endpoint<RevokeAccreditationRequest>
 {
     public override void Configure()

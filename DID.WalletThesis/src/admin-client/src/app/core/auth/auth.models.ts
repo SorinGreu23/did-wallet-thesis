@@ -9,6 +9,7 @@ export interface AuthSession {
 
 export type AuthState =
   | 'idle'
+  | 'connecting'
   | 'challenging'
   | 'signing'
   | 'verifying'
@@ -20,4 +21,5 @@ export const SCOPE_HIERARCHY: Record<string, number> = {
   MemberState: 3,
   Ministry: 2,
   Institution: 1,
+  BusinessRegistry: 1,
 };

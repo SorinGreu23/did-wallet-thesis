@@ -1,8 +1,12 @@
 using DID.Accreditation.Application.DTOs;
 using DID.Accreditation.Domain;
 using DID.Accreditation.Domain.Interfaces;
+using DID.Shared.Application.Constants;
+using DID.Shared.Application.Enums;
 using DID.Shared.Application.Interfaces;
+using DID.Shared.Application.Utils;
 using DID.Shared.Infrastructure.Options;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Nethereum.ABI.FunctionEncoding.Attributes;
 using Nethereum.Web3.Accounts;
@@ -32,12 +36,11 @@ file sealed class AccreditationIssuedEvent : IEventDTO
 
 public class AccreditationService(
     IAccreditationRepository repository,
-    IBlockchainService blockchain,
+    IBlockchainRpcClient blockchain,
     IOptions<BlockchainOptions> blockchainOptions,
-    ILogger<AccreditationService> logger)
+    ILogger<AccreditationService> logger) : IAccreditationService
 {
-    private const string DidPrefix = "did:ethr:sepolia:";
-    private readonly string signerAddress = NormalizeAddress(new Account(blockchainOptions.Value.PrivateKey).Address);
+    private readonly string signerAddress = BlockchainAddressUtils.NormalizeAddress(new Account(blockchainOptions.Value.PrivateKey).Address);
 
     public async Task<AccreditationDto> ResolveAsync(string accreditationId, CancellationToken ct = default)
     {
@@ -79,14 +82,14 @@ public class AccreditationService(
             return new AccreditationVerificationDto(accreditationId, false, "Revoked",
                 "Accreditation has been revoked on-chain");
 
-        if (onChain.ExpiresAtUnix > 0 && DateTimeOffset.UtcNow.ToUnixTimeSeconds() > (long)onChain.ExpiresAtUnix)
+        if (IsExpired(onChain.ExpiresAtUnix))
             return new AccreditationVerificationDto(accreditationId, false, "Expired",
-                $"Expired at {DateTimeOffset.FromUnixTimeSeconds((long)onChain.ExpiresAtUnix):O}");
+                $"Expired at {DateTimeOffset.FromUnixTimeSeconds(SafeToLong(onChain.ExpiresAtUnix)):O}");
 
         var isValid = await blockchain.CallContractAsync<bool>(
-            "AccreditationRegistry",
-            "validateTrustChain",
-            HexToBytes32(accreditationId));
+            SmartContractConstants.Contracts.AccreditationRegistry,
+            SmartContractConstants.AccreditationFunctions.ValidateTrustChain,
+            BlockchainAddressUtils.HexToBytes32(accreditationId));
 
         return isValid
             ? new AccreditationVerificationDto(accreditationId, true, "Active", null)
@@ -105,22 +108,22 @@ public class AccreditationService(
         // EU Root signs with the backend-configured key — private key never leaves the server
         var effectivePrivateKey = blockchainOptions.Value.PrivateKey;
         var effectiveAccount = new Account(effectivePrivateKey);
-        var effectiveSignerAddress = NormalizeAddress(effectiveAccount.Address);
+        var effectiveSignerAddress = BlockchainAddressUtils.NormalizeAddress(effectiveAccount.Address);
 
         EnsureSignerMatchesIssuer(issuerDid, effectiveSignerAddress);
 
-        var subjectAddress = ExtractAddress(subjectDid);
-        var scopeValue = ParseScope(scope);
-        var parentBytes = HexToBytes32(parentAccreditationId);
-        var permissionsBytes = HexToBytes32(permissionsHash);
+        var subjectAddress = BlockchainAddressUtils.ExtractAddress(subjectDid);
+        var scopeValue = (byte)AccreditationScopeExtensions.ParseScope(scope);
+        var parentBytes = BlockchainAddressUtils.HexToBytes32(parentAccreditationId);
+        var permissionsBytes = BlockchainAddressUtils.HexToBytes32(permissionsHash);
         var expiresAtUnix = expiresAt is null
             ? BigInteger.Zero
             : new BigInteger(new DateTimeOffset(DateTime.SpecifyKind(expiresAt.Value, DateTimeKind.Utc)).ToUnixTimeSeconds());
 
         var txHash = await blockchain.SubmitTransactionAsync<object>(
             effectivePrivateKey,
-            "AccreditationRegistry",
-            "issueAccreditation",
+            SmartContractConstants.Contracts.AccreditationRegistry,
+            SmartContractConstants.AccreditationFunctions.IssueAccreditation,
             subjectAddress,
             scopeValue,
             parentBytes,
@@ -132,9 +135,9 @@ public class AccreditationService(
         // Prefer reading the accreditation ID directly from the emitted event log
         // to avoid relying on Nethereum's bytes32[] array decoding (which can return null).
         var issuedEvents = await blockchain.FindEventsInReceiptAsync<AccreditationIssuedEvent>(
-            "AccreditationRegistry", txHash);
+            SmartContractConstants.Contracts.AccreditationRegistry, txHash);
         var accreditationId = issuedEvents.Count > 0
-            ? Bytes32ToHex(issuedEvents[0].Id)
+            ? BlockchainAddressUtils.Bytes32ToHex(issuedEvents[0].Id)
             : await FindIssuedAccreditationIdAsync(
                 effectiveSignerAddress,
                 subjectAddress,
@@ -158,9 +161,9 @@ public class AccreditationService(
             {
                 AccreditationId = accreditationId,
                 IssuerDID = issuerDid,
-                SubjectDID = ToDid(subjectAddress),
+                SubjectDID = BlockchainAddressUtils.ToDid(subjectAddress),
                 ParentAccreditationId = parentAccreditationId,
-                Scope = ScopeToString(scopeValue),
+                Scope = AccreditationScopeExtensions.ToScopeStringOrNull(scopeValue) ?? scopeValue.ToString(),
                 Name = name,
                 Status = AccreditationStatus.Active,
                 BlockNumber = 0,
@@ -187,24 +190,24 @@ public class AccreditationService(
         // 1. Wait for the tx the client already submitted
         await blockchain.WaitForConfirmationAsync(txHash, ct);
 
-        var issuerAddress = ExtractAddress(issuerDid);
-        var subjectAddress = ExtractAddress(subjectDid);
-        var scopeValue = ParseScope(scope);
-        var parentBytes = HexToBytes32(parentAccreditationId);
-        var permissionsBytes = HexToBytes32(null); // clients don't set permissions
+        var issuerAddress = BlockchainAddressUtils.ExtractAddress(issuerDid);
+        var subjectAddress = BlockchainAddressUtils.ExtractAddress(subjectDid);
+        var scopeValue = (byte)AccreditationScopeExtensions.ParseScope(scope);
+        var parentBytes = BlockchainAddressUtils.HexToBytes32(parentAccreditationId);
+        var permissionsBytes = BlockchainAddressUtils.HexToBytes32(null); // clients don't set permissions
 
         // 2. Locate the resulting accreditation on-chain — prefer the event log
         var issuedEvents = await blockchain.FindEventsInReceiptAsync<AccreditationIssuedEvent>(
-            "AccreditationRegistry", txHash);
+            SmartContractConstants.Contracts.AccreditationRegistry, txHash);
         var accreditationId = issuedEvents.Count > 0
-            ? Bytes32ToHex(issuedEvents[0].Id)
+            ? BlockchainAddressUtils.Bytes32ToHex(issuedEvents[0].Id)
             : await FindIssuedAccreditationIdAsync(
                 issuerAddress, subjectAddress, scopeValue, parentBytes, permissionsBytes);
 
         // 3. Read and verify the on-chain record
         var onChain = await GetRequiredOnChainAccreditationAsync(accreditationId);
 
-        if (!string.Equals(NormalizeAddress(onChain.Issuer), issuerAddress, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(BlockchainAddressUtils.NormalizeAddress(onChain.Issuer), issuerAddress, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException(
                 $"On-chain issuer {onChain.Issuer} does not match claimed issuer {issuerDid}");
 
@@ -215,7 +218,7 @@ public class AccreditationService(
         // 4. Persist
         await RecordIssuedAsync(
             accreditationId, issuerAddress, subjectAddress,
-            parentAccreditationId, ScopeToString(scopeValue), name,
+            parentAccreditationId, AccreditationScopeExtensions.ToScopeStringOrNull(scopeValue) ?? scopeValue.ToString(), name,
             0, txHash, DateTime.UtcNow, ct);
 
         return ToDto(onChain, txHash, 0, name);
@@ -229,9 +232,9 @@ public class AccreditationService(
             return false;
 
         var txHash = await blockchain.SubmitTransactionAsync<object>(
-            "AccreditationRegistry",
-            "revokeAccreditation",
-            HexToBytes32(accreditationId));
+            SmartContractConstants.Contracts.AccreditationRegistry,
+            SmartContractConstants.AccreditationFunctions.RevokeAccreditation,
+            BlockchainAddressUtils.HexToBytes32(accreditationId));
 
         await blockchain.WaitForConfirmationAsync(txHash, ct);
 
@@ -280,8 +283,8 @@ public class AccreditationService(
         var entity = new Domain.Accreditation
         {
             AccreditationId = accreditationId,
-            IssuerDID = ToDid(issuerDid),
-            SubjectDID = ToDid(subjectDid),
+            IssuerDID = BlockchainAddressUtils.ToDid(issuerDid),
+            SubjectDID = BlockchainAddressUtils.ToDid(subjectDid),
             ParentAccreditationId = parentAccreditationId,
             Scope = scope,
             Name = name,
@@ -312,7 +315,7 @@ public class AccreditationService(
         }
 
         entity.Status = AccreditationStatus.Revoked;
-        entity.RevokedByDID = ToDid(revokedByDid);
+        entity.RevokedByDID = BlockchainAddressUtils.ToDid(revokedByDid);
         entity.RevokedAt = timestamp;
         entity.UpdatedAt = DateTime.UtcNow;
 
@@ -341,9 +344,9 @@ public class AccreditationService(
     private async Task<OnChainAccreditationDto?> GetOnChainAccreditationAsync(string accreditationId)
     {
         var accreditation = await blockchain.CallContractAsync<OnChainAccreditationDto>(
-            "AccreditationRegistry",
-            "accreditations",
-            HexToBytes32(accreditationId));
+            SmartContractConstants.Contracts.AccreditationRegistry,
+            SmartContractConstants.AccreditationFunctions.Accreditations,
+            BlockchainAddressUtils.HexToBytes32(accreditationId));
 
         return accreditation.Exists ? accreditation : null;
     }
@@ -360,24 +363,24 @@ public class AccreditationService(
         byte[] permissionsBytes)
     {
         var accreditationIds = await blockchain.CallContractAsync<List<byte[]>>(
-            "AccreditationRegistry",
-            "getAccreditationsBySubject",
+            SmartContractConstants.Contracts.AccreditationRegistry,
+            SmartContractConstants.AccreditationFunctions.GetAccreditationsBySubject,
             subjectAddress);
 
         foreach (var accreditationId in ((IEnumerable<byte[]>?)accreditationIds ?? []).Reverse())
         {
             var candidate = await blockchain.CallContractAsync<OnChainAccreditationDto>(
-                "AccreditationRegistry",
-                "accreditations",
+                SmartContractConstants.Contracts.AccreditationRegistry,
+                SmartContractConstants.AccreditationFunctions.Accreditations,
                 accreditationId);
 
             if (!candidate.Exists)
                 continue;
 
-            if (!string.Equals(NormalizeAddress(candidate.Issuer), issuerAddress, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(BlockchainAddressUtils.NormalizeAddress(candidate.Issuer), issuerAddress, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            if (!string.Equals(NormalizeAddress(candidate.Subject), subjectAddress, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(BlockchainAddressUtils.NormalizeAddress(candidate.Subject), subjectAddress, StringComparison.OrdinalIgnoreCase))
                 continue;
 
             if (candidate.Scope != scopeValue)
@@ -389,7 +392,7 @@ public class AccreditationService(
             if (!candidate.PermissionsHash.SequenceEqual(permissionsBytes))
                 continue;
 
-            return Bytes32ToHex(accreditationId);
+            return BlockchainAddressUtils.Bytes32ToHex(accreditationId);
         }
 
         throw new InvalidOperationException("Unable to locate the newly issued accreditation on-chain");
@@ -397,95 +400,45 @@ public class AccreditationService(
 
     private static void EnsureSignerMatchesIssuer(string issuerDid, string effectiveSignerAddress)
     {
-        var issuerAddress = ExtractAddress(issuerDid);
+        var issuerAddress = BlockchainAddressUtils.ExtractAddress(issuerDid);
         if (!string.Equals(issuerAddress, effectiveSignerAddress, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"Issuer {issuerDid} does not match configured blockchain signer {ToDid(effectiveSignerAddress)}");
+                $"Issuer {issuerDid} does not match configured blockchain signer {BlockchainAddressUtils.ToDid(effectiveSignerAddress)}");
         }
     }
 
-    private static byte ParseScope(string scope) => scope.Trim().ToLowerInvariant() switch
-    {
-        "memberstate" => 1,
-        "ministry" => 2,
-        "institution" => 3,
-        "department" => 4,
-        "businessregistry" => 5,
-        "enterprise" => 6,
-        _ => throw new ArgumentOutOfRangeException(nameof(scope), scope,
-            "Unsupported accreditation scope. Valid values are: MemberState, Ministry, Institution, Department, BusinessRegistry, Enterprise")
-    };
 
-    private static string ScopeToString(byte scope) => scope switch
-    {
-        1 => "MemberState",
-        2 => "Ministry",
-        3 => "Institution",
-        4 => "Department",
-        5 => "BusinessRegistry",
-        6 => "Enterprise",
-        _ => "None"
-    };
 
-    private static byte[] HexToBytes32(string? hex)
-    {
-        if (string.IsNullOrWhiteSpace(hex))
-            return new byte[32];
-
-        var normalized = hex.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? hex[2..] : hex;
-        if (normalized.Length != 64)
-            throw new ArgumentException("Expected 32-byte hex value", nameof(hex));
-
-        return Convert.FromHexString(normalized);
-    }
-
-    private static string Bytes32ToHex(byte[] bytes) => "0x" + Convert.ToHexString(bytes).ToLowerInvariant();
-
-    private static string ExtractAddress(string didOrAddress)
-    {
-        if (string.IsNullOrWhiteSpace(didOrAddress))
-            throw new ArgumentException("Value is required", nameof(didOrAddress));
-
-        var candidate = didOrAddress.Trim();
-        if (candidate.StartsWith(DidPrefix, StringComparison.OrdinalIgnoreCase))
-            candidate = candidate[DidPrefix.Length..];
-
-        return NormalizeAddress(candidate);
-    }
-
-    private static string NormalizeAddress(string address)
-    {
-        if (!address.StartsWith("0x", StringComparison.OrdinalIgnoreCase) || address.Length != 42)
-            throw new ArgumentException($"Invalid Ethereum address: {address}", nameof(address));
-
-        return address.ToLowerInvariant();
-    }
-
-    private static string ToDid(string didOrAddress)
-    {
-        var address = ExtractAddress(didOrAddress);
-        return $"{DidPrefix}{address}";
-    }
 
     private static AccreditationDto ToDto(OnChainAccreditationDto accreditation, string transactionHash, long blockNumber, string? name = null)
     {
         var parentAccreditationId = accreditation.ParentAccreditationId.Any(b => b != 0)
-            ? Bytes32ToHex(accreditation.ParentAccreditationId)
+            ? BlockchainAddressUtils.Bytes32ToHex(accreditation.ParentAccreditationId)
             : null;
 
         return new AccreditationDto(
-            AccreditationId: Bytes32ToHex(accreditation.Id),
-            IssuerDID: ToDid(accreditation.Issuer),
-            SubjectDID: ToDid(accreditation.Subject),
+            AccreditationId: BlockchainAddressUtils.Bytes32ToHex(accreditation.Id),
+            IssuerDID: BlockchainAddressUtils.ToDid(accreditation.Issuer),
+            SubjectDID: BlockchainAddressUtils.ToDid(accreditation.Subject),
             ParentAccreditationId: parentAccreditationId,
-            Scope: ScopeToString(accreditation.Scope),
+            Scope: AccreditationScopeExtensions.ToScopeStringOrNull(accreditation.Scope) ?? accreditation.Scope.ToString(),
             Name: name,
             Status: accreditation.Revoked ? AccreditationStatus.Revoked.ToString() : AccreditationStatus.Active.ToString(),
             BlockNumber: blockNumber,
             TransactionHash: transactionHash,
-            IssuedAt: DateTimeOffset.FromUnixTimeSeconds((long)accreditation.IssuedAtUnix).UtcDateTime,
+            IssuedAt: DateTimeOffset.FromUnixTimeSeconds(SafeToLong(accreditation.IssuedAtUnix)).UtcDateTime,
             RevokedAt: null,
             RevokedByDID: null);
     }
+
+    private static bool IsExpired(BigInteger expiresAtUnix)
+    {
+        if (expiresAtUnix == 0) return false;
+        if (expiresAtUnix > long.MaxValue) return false;
+        return DateTimeOffset.UtcNow.ToUnixTimeSeconds() > (long)expiresAtUnix;
+    }
+
+    private static long SafeToLong(BigInteger value) =>
+        value > long.MaxValue ? long.MaxValue : (long)value;
 }

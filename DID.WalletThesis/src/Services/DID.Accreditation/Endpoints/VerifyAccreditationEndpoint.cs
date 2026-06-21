@@ -9,7 +9,7 @@ public class VerifyAccreditationRequest
     public string AccreditationId { get; set; } = string.Empty;
 }
 
-public class VerifyAccreditationEndpoint(AccreditationService service)
+public class VerifyAccreditationEndpoint(IAccreditationService service)
     : Endpoint<VerifyAccreditationRequest, AccreditationVerificationDto>
 {
     public override void Configure()

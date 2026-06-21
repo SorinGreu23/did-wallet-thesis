@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { CreateDIDRequest, DIDDocument, RegisteredIdentity } from '../models/did.model';
 
@@ -16,7 +17,10 @@ export class IdentityService {
     return this.http.get<DIDDocument>(`${this.baseUrl}/${encodeURIComponent(did)}`);
   }
 
-  listRegistered(): Observable<RegisteredIdentity[]> {
-    return this.http.get<RegisteredIdentity[]>('/api/identities');
+  listRegistered(
+    accountType?: RegisteredIdentity['accountType'],
+  ): Observable<RegisteredIdentity[]> {
+    const params = accountType ? new HttpParams().set('accountType', accountType) : undefined;
+    return this.http.get<RegisteredIdentity[]>('/api/identities', { params });
   }
 }

@@ -65,14 +65,9 @@ export class BlockchainClientService {
       throw new Error('SIGNER_LOST');
     }
 
-    const provider = new ethers.JsonRpcProvider(rpcUrl);
-    const wallet = this.signer.getConnectedWallet(provider);
+    const wallet = this.signer.getTransactionSigner();
 
-    const contract = new ethers.Contract(
-      contractAddress,
-      ACCREDITATION_REGISTRY_ABI,
-      wallet,
-    );
+    const contract = new ethers.Contract(contractAddress, ACCREDITATION_REGISTRY_ABI, wallet);
 
     const parentBytes: string = parentAccreditationId
       ? parentAccreditationId.startsWith('0x')
@@ -109,14 +104,9 @@ export class BlockchainClientService {
       throw new Error('SIGNER_LOST');
     }
 
-    const provider = new ethers.JsonRpcProvider(rpcUrl);
-    const wallet = this.signer.getConnectedWallet(provider);
+    const wallet = this.signer.getTransactionSigner();
 
-    const contract = new ethers.Contract(
-      contractAddress,
-      ACCREDITATION_REGISTRY_ABI,
-      wallet,
-    );
+    const contract = new ethers.Contract(contractAddress, ACCREDITATION_REGISTRY_ABI, wallet);
 
     const idBytes: string = accreditationId.startsWith('0x')
       ? accreditationId
@@ -151,14 +141,9 @@ export class BlockchainClientService {
       throw new Error('SIGNER_LOST');
     }
 
-    const provider = new ethers.JsonRpcProvider(rpcUrl);
-    const wallet = this.signer.getConnectedWallet(provider);
+    const wallet = this.signer.getTransactionSigner();
 
-    const contract = new ethers.Contract(
-      contractAddress,
-      CREDENTIAL_REGISTRY_ABI,
-      wallet,
-    );
+    const contract = new ethers.Contract(contractAddress, CREDENTIAL_REGISTRY_ABI, wallet);
 
     const accreditationBytes: string = issuerAccreditationId
       ? issuerAccreditationId.startsWith('0x')

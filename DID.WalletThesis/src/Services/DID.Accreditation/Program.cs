@@ -1,3 +1,4 @@
+using System.Threading.RateLimiting;
 using DID.Accreditation.Application.Auth;
 using DID.Accreditation.Application.Services;
 using DID.Accreditation.Domain.Interfaces;
@@ -10,6 +11,7 @@ using FastEndpoints;
 using FastEndpoints.Swagger;
 using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
@@ -26,9 +28,10 @@ builder.Services.AddDbContext<AccreditationDbContext>(options =>
 builder.Services.Configure<BlockchainOptions>(
     builder.Configuration.GetSection(BlockchainOptions.SectionName));
 builder.Services.AddSingleton<IBlockchainService, BlockchainService>();
+builder.Services.AddSingleton<IBlockchainRpcClient>(sp => sp.GetRequiredService<IBlockchainService>());
 
 builder.Services.AddScoped<IAccreditationRepository, AccreditationRepository>();
-builder.Services.AddScoped<AccreditationService>();
+builder.Services.AddScoped<IAccreditationService, AccreditationService>();
 
 builder.Services.AddScoped<IEnterpriseRegistrationRepository, EnterpriseRegistrationRepository>();
 builder.Services.AddScoped<EnterpriseRegistrationService>();
@@ -49,18 +52,38 @@ builder.Services.AddMassTransit(x =>
     });
 });
 
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy("auth", ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+});
+
+var allowedOriginsAccreditation = builder.Configuration["Cors:AllowedOrigins"]
+    ?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    ?? ["http://localhost:4200"];
+
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
-        policy.AllowAnyOrigin()
+        policy.WithOrigins(allowedOriginsAccreditation)
               .AllowAnyHeader()
               .AllowAnyMethod());
 });
 
+builder.Services.AddMemoryCache();
 builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection(AuthOptions.SectionName));
 builder.Services.AddSingleton<AuthService>();
 
-var jwtSecret = builder.Configuration["Auth:JwtSecret"] ?? "THIS_IS_A_DEV_SECRET_CHANGE_IN_PRODUCTION_MIN_32_CHARS!!";
+var jwtSecret = builder.Configuration["Auth:JwtSecret"] ?? throw new InvalidOperationException(
+    "Auth:JwtSecret must be set via environment variable or secrets manager.");
 var keyBytes = System.Text.Encoding.UTF8.GetBytes(jwtSecret);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -70,8 +93,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
-            ValidateIssuer = false,
-            ValidateAudience = false,
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Auth:Issuer"] ?? "did-accreditation",
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["Auth:Audience"] ?? "did-accreditation",
             ClockSkew = TimeSpan.Zero,
         };
     });
@@ -95,9 +120,10 @@ builder.Services.SwaggerDocument(o =>
     };
 });
 
-var app = builder.Build();
+builder.WebHost.ConfigureKestrel(k =>
+    k.Limits.MaxRequestBodySize = 512 * 1024);
 
-app.UseSwaggerGen();
+var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
@@ -105,9 +131,19 @@ using (var scope = app.Services.CreateScope())
     await db.Database.MigrateAsync();
 }
 
+app.UseDefaultExceptionHandler();
+app.UseHttpsRedirection();
+app.Use(async (ctx, next) =>
+{
+    ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    ctx.Response.Headers["X-Frame-Options"] = "DENY";
+    ctx.Response.Headers["Referrer-Policy"] = "no-referrer";
+    await next();
+});
+app.UseRateLimiter();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseHttpsRedirection();
+if (app.Environment.IsDevelopment()) app.UseSwaggerGen();
 app.UseFastEndpoints();
 await app.RunAsync();
