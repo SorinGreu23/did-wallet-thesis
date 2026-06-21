@@ -30,7 +30,7 @@ public class RegisterIdentityEndpoint(DIDService service) : Endpoint<RegisterIde
         {
             var result = await service.RegisterExternalAsync(
                 req.DID, req.ControllerAddress, req.DisplayName, req.Email, req.AccountType,
-                req.Timestamp, req.Signature, ct);
+                req.Timestamp, req.Signature, req.PublicKeyHex, req.KeyType, ct);
             await Send.OkAsync(result, cancellation: ct);
         }
         catch (ArgumentException)

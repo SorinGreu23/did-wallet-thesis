@@ -36,7 +36,9 @@ public record RegisterIdentityRequest(
   string? Email,
   string? AccountType,
   long Timestamp = 0,
-  string? Signature = null
+  string? Signature = null,
+  string? PublicKeyHex = null,
+  string? KeyType = null
 );
 
 public record RegisteredIdentityDto(

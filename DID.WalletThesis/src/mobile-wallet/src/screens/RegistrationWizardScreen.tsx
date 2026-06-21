@@ -626,6 +626,8 @@ export default function RegistrationWizardScreen({
           accountType,
           timestamp,
           signature,
+          publicKeyHex: identity.keys[0]?.publicKeyHex,
+          keyType: identity.keys[0]?.type,
         }),
       });
     } catch {
@@ -1186,7 +1188,7 @@ export default function RegistrationWizardScreen({
       }
 
       await authService.saveWalletProfile(profile);
-      await authService.setSessionActive();
+      await authService.completeWalletSetup();
       onComplete();
     } catch (e: any) {
       setError(e.message ?? "Failed to create wallet.");

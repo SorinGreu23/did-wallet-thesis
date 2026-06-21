@@ -61,9 +61,19 @@ export class CredentialService {
     return this.http.get<Credential[]>(this.baseUrl, { params });
   }
 
-  revoke(credentialId: string, revokedByDID: string, reason: string, revokedByPrivateKey: string): Observable<void> {
-    return this.http.post<void>(`${this.baseUrl}/${credentialId}/revoke`, {
-      credentialId, revokedByDID, reason, revokedByPrivateKey,
-    });
+  /**
+   * Institution revokers (universities): the wallet signs and submits
+   * the revocation transaction entirely in the browser, then notifies the backend to persist.
+   */
+  revokeViaClientWallet(credentialId: string, revokedByDID: string, reason: string): Observable<void> {
+    return from(this.blockchainClient.revokeCredential(credentialId, reason)).pipe(
+      switchMap((txHash) =>
+        this.http.post<void>(`${this.baseUrl}/${credentialId}/record-revoke`, {
+          txHash,
+          revokedByDID,
+          reason,
+        }),
+      ),
+    );
   }
 }

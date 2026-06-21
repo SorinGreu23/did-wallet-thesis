@@ -64,7 +64,6 @@ export class UniversitiesComponent implements OnInit {
   readonly diplomas = signal<import('../../core/models/credential.model').Credential[]>([]);
   readonly loadingDiplomas = signal(false);
   readonly revokingCredentialId = signal<string | null>(null);
-  readonly revokeKey = signal('');
   readonly revokeReason = signal('Duplicate');
   readonly hasSigner = this.auth.hasSigner;
   readonly connectingSigner = signal(false);
@@ -275,8 +274,11 @@ export class UniversitiesComponent implements OnInit {
   }
 
   startRevoke(credentialId: string): void {
+    if (!this.hasSigner()) {
+      this.error.set('Connect the authenticated University account in MetaMask before revoking.');
+      return;
+    }
     this.revokingCredentialId.set(credentialId);
-    this.revokeKey.set('');
     this.revokeReason.set('Duplicate');
   }
 
@@ -286,16 +288,25 @@ export class UniversitiesComponent implements OnInit {
 
   confirmRevoke(credentialId: string): void {
     const university = this.diplomaUniversity();
-    const key = this.revokeKey();
-    if (!university || !key) return;
+    if (!university) return;
+    if (!this.hasSigner()) {
+      this.error.set('Connect the authenticated University account in MetaMask before revoking.');
+      return;
+    }
     this.credentialService
-      .revoke(credentialId, university.subjectDID, this.revokeReason(), key)
+      .revokeViaClientWallet(credentialId, university.subjectDID, this.revokeReason())
       .subscribe({
         next: () => {
           this.revokingCredentialId.set(null);
           this.loadDiplomas(university);
         },
-        error: (err) => this.error.set(extractApiError(err, 'Failed to revoke credential')),
+        error: (err) => {
+          if (err?.message === 'SIGNER_LOST') {
+            this.auth.logout();
+            return;
+          }
+          this.error.set(extractApiError(err, 'Failed to revoke credential'));
+        },
       });
   }
 
@@ -303,7 +314,6 @@ export class UniversitiesComponent implements OnInit {
     this.diplomaUniversity.set(university);
     this.lastIssuedDiploma.set(null);
     this.revokingCredentialId.set(null);
-    this.revokeKey.set('');
     this.diplomaForm.reset();
     this.loadDiplomas(university);
     this.loadRegisteredHolders();
@@ -314,7 +324,6 @@ export class UniversitiesComponent implements OnInit {
     this.diplomaUniversity.set(null);
     this.diplomas.set([]);
     this.revokingCredentialId.set(null);
-    this.revokeKey.set('');
     this.diplomaForm.reset();
   }
 

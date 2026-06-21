@@ -1,6 +1,13 @@
 import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { randomUUID, getRandomBytesAsync, digestStringAsync, CryptoDigestAlgorithm } from "expo-crypto";
+import { deleteDatabaseAsync } from "expo-sqlite";
+import {
+  randomUUID,
+  getRandomBytesAsync,
+  digestStringAsync,
+  CryptoDigestAlgorithm,
+  CryptoEncoding,
+} from "expo-crypto";
 import { gcm } from "@noble/ciphers/aes";
 import { WalletProfile, AccountType } from "../types/wallet";
 
@@ -11,6 +18,14 @@ const KEYS = {
   walletProfile: "wallet.profile",
 } as const;
 
+const PIN_KEYS = [
+  "pin.algo",
+  "pin.salt",
+  "pin.hash",
+  "pin.failures",
+  "pin.lockedUntil",
+] as const;
+
 // ── Profile encryption (AES-256-GCM) ─────────────────────────────────────────
 // The profile is encrypted with a key derived from the wallet secret key so
 // that reading AsyncStorage on a rooted device reveals only ciphertext.
@@ -19,7 +34,7 @@ async function deriveProfileKey(secretKey: string): Promise<Uint8Array> {
   const hex = await digestStringAsync(
     CryptoDigestAlgorithm.SHA256,
     `profile-encryption-key:${secretKey}`,
-    { encoding: 'hex' },
+    { encoding: CryptoEncoding.HEX },
   );
   return Uint8Array.from(Buffer.from(hex, 'hex'));
 }
@@ -44,6 +59,21 @@ async function decryptProfile(blob: string, secretKey: string): Promise<string> 
 }
 
 class AuthService {
+  async resetDevelopmentData(): Promise<void> {
+    if (!__DEV__) {
+      throw new Error("Wallet reset is only available in development builds.");
+    }
+
+    await Promise.all([
+      ...Object.values(KEYS).map((key) => SecureStore.deleteItemAsync(key)),
+      ...PIN_KEYS.map((key) => SecureStore.deleteItemAsync(key)),
+    ]);
+    await AsyncStorage.clear();
+    await deleteDatabaseAsync("veramo.db").catch(() => {
+      // The database may not exist on a completely fresh install.
+    });
+  }
+
   async getSecretKey(): Promise<string | null> {
     return SecureStore.getItemAsync(KEYS.secretKey);
   }
@@ -57,15 +87,27 @@ class AuthService {
     const secretKey = (uuid1 + uuid2).slice(0, 64);
 
     await SecureStore.setItemAsync(KEYS.secretKey, secretKey);
-    await SecureStore.setItemAsync(KEYS.walletCreated, "true");
-    await SecureStore.setItemAsync(KEYS.sessionActive, "true");
 
     return secretKey;
   }
 
   async hasWallet(): Promise<boolean> {
     const created = await SecureStore.getItemAsync(KEYS.walletCreated);
-    return created === "true";
+    if (created !== "true") return false;
+
+    // A key/DID can exist before registration finishes. Do not route an
+    // interrupted setup into the authenticated app without a readable profile.
+    return (await this.getWalletProfile()) !== null;
+  }
+
+  async completeWalletSetup(): Promise<void> {
+    const profile = await this.getWalletProfile();
+    if (!profile) {
+      throw new Error("Wallet profile verification failed.");
+    }
+
+    await SecureStore.setItemAsync(KEYS.walletCreated, "true");
+    await SecureStore.setItemAsync(KEYS.sessionActive, "true");
   }
 
   async isSessionActive(): Promise<boolean> {

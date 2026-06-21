@@ -79,7 +79,8 @@ services:
             --dump-state /data/anvil-state.json
         fi
     ports:
-      - "127.0.0.1:8545:8545"
+      # Physical wallet development requires Anvil to be reachable from the LAN.
+      - "8545:8545"
     volumes:
       - foundry_data:/data
     networks:

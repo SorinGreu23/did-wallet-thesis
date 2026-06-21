@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { NavigationContainer } from "@react-navigation/native";
+import {
+  LinkingOptions,
+  NavigationContainer,
+  NavigatorScreenParams,
+} from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
@@ -11,10 +15,19 @@ import { WalletProfile } from "../types/wallet";
 // ── Tab screens (lazy imports to keep bundle splits clean) ────────────────────
 import IdentityStackNavigator from "./IdentityStackNavigator";
 import WalletScreen from "./WalletScreen";
-import ActionsStackNavigator from "./ActionsStackNavigator";
+import ActionsStackNavigator, {
+  ActionsStackParamList,
+} from "./ActionsStackNavigator";
 import ProfileStackNavigator from "./ProfileStackNavigator";
 
-const Tab = createBottomTabNavigator();
+type MainTabParamList = {
+  Identity: undefined;
+  Wallet: undefined;
+  Actions: NavigatorScreenParams<ActionsStackParamList>;
+  Profile: undefined;
+};
+
+const Tab = createBottomTabNavigator<MainTabParamList>();
 
 export default function MainTabNavigator() {
   const { colors, isDark } = useTheme();
@@ -39,7 +52,7 @@ export default function MainTabNavigator() {
 
   const isPersonal = !profile || profile.accountType === "personal";
 
-  const linking = {
+  const linking: LinkingOptions<MainTabParamList> = {
     prefixes: ["didwallet://"],
     config: {
       screens: {

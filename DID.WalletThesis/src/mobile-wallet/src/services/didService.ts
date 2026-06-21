@@ -136,6 +136,8 @@ class DIDService {
           accountType: "personal",
           timestamp,
           signature,
+          publicKeyHex: identity.keys[0].publicKeyHex,
+          keyType: identity.keys[0].type,
         }),
       },
     );

@@ -236,6 +236,39 @@ public class CredentialService(
         return true;
     }
 
+    /// <summary>
+    /// Records a revocation whose on-chain transaction was signed and submitted
+    /// entirely by the caller's browser wallet (e.g. a university). The private key never reaches the server.
+    /// </summary>
+    public async Task<bool> RecordRevokedFromClientTxAsync(
+        string txHash, string credentialId, string revokedByDid, string reason, CancellationToken ct = default)
+    {
+        var onChain = await GetOnChainCredentialAsync(credentialId);
+        if (onChain is null || !onChain.Exists)
+            return false;
+
+        await blockchain.WaitForConfirmationAsync(txHash, ct);
+
+        var entity = await repository.GetByCredentialIdAsync(credentialId, ct);
+        if (entity is null)
+        {
+            logger.LogWarning("Credential {Id} not found in DB during client-wallet revocation", credentialId);
+            return false;
+        }
+
+        entity.Status = CredentialStatus.Revoked;
+        entity.RevokedByDID = BlockchainAddressUtils.ToDid(BlockchainAddressUtils.ExtractAddress(revokedByDid));
+        entity.RevocationReason = reason;
+        entity.RevokedAt = DateTime.UtcNow;
+
+        await repository.UpdateAsync(entity, ct);
+        await repository.SaveChangesAsync(ct);
+
+        logger.LogInformation("Recorded client-wallet revocation of credential {Id} by {RevokedBy} in tx {TxHash}",
+            credentialId, revokedByDid, txHash);
+        return true;
+    }
+
     public async Task<bool> SuspendAsync(
         string credentialId, string suspendedByDid, string reason, CancellationToken ct = default)
     {

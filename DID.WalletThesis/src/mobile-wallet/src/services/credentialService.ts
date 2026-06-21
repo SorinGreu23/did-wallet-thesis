@@ -157,9 +157,13 @@ class CredentialService {
 
     const encoded = encodeURIComponent(holderDid);
     const response = await fetch(
-      `http://localhost:5214/api/credentials?holderDid=${encoded}`,
+      `${CONFIG.CREDENTIAL_SERVICE_URL}/api/credentials?holderDid=${encoded}`,
     );
-    if (!response.ok) throw new Error(`Backend returned ${response.status} for ${holderDid}`);
+    if (!response.ok) {
+      throw new Error(
+        `Credential sync returned ${response.status} from ${CONFIG.CREDENTIAL_SERVICE_URL}`,
+      );
+    }
 
     const credentials: any[] = await response.json();
 

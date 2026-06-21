@@ -26,6 +26,8 @@ public class EnterpriseRegistrationApprovedConsumer(
             accountType: "enterprise",
             timestamp: 0,
             signature: null,
+            publicKeyHex: null,
+            keyType: null,
             ct: context.CancellationToken);
     }
 }

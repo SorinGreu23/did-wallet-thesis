@@ -46,6 +46,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     (async () => {
+      if (__DEV__ && process.env.EXPO_PUBLIC_RESET_WALLET === "1") {
+        await authService.resetDevelopmentData();
+        console.log("[WalletReset] Local wallet state cleared.");
+      }
+
       const walletExists = await authService.hasWallet();
       setHasWallet(walletExists);
       setState("unauthenticated");

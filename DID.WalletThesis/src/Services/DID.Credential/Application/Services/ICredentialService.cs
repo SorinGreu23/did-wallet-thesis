@@ -26,6 +26,7 @@ public interface ICredentialService
         string? issuerName,
         CancellationToken ct = default);
     Task<bool> RevokeAsync(string credentialId, string revokedByDid, string reason, CancellationToken ct = default);
+    Task<bool> RecordRevokedFromClientTxAsync(string txHash, string credentialId, string revokedByDid, string reason, CancellationToken ct = default);
     Task<bool> SuspendAsync(string credentialId, string suspendedByDid, string reason, CancellationToken ct = default);
     Task RecordIssuedAsync(
         string credentialId, string issuerDid, string holderDid,
