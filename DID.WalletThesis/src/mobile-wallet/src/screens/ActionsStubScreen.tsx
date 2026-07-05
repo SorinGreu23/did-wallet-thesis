@@ -58,7 +58,7 @@ function buildMasterRequest(verifierDid: string): PresentationRequest {
       { kind: "zkp", circuit: "ageVerification", threshold: 18 } as Requirement,
       {
         kind: "credential-ref",
-        credentialType: "BachelorDiploma",
+        credentialType: "DiplomaCredential",
         mustBeIssuedInEu: true,
       } as Requirement,
     ],
@@ -76,7 +76,7 @@ function buildJobRequest(verifierDid: string): PresentationRequest {
       { kind: "zkp", circuit: "ageVerification", threshold: 18 } as Requirement,
       {
         kind: "credential-ref",
-        credentialType: "BachelorDiploma",
+        credentialType: "DiplomaCredential",
         mustBeIssuedInEu: true,
       } as Requirement,
     ],
