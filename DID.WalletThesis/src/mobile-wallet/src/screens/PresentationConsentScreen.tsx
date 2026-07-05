@@ -188,25 +188,22 @@ export default function PresentationConsentScreen() {
           (c.verifiableCredential.type as string[]).includes(req.credentialType),
         );
 
-        if (match) {
-          const issuerAccreditationId =
-            (match.verifiableCredential.credentialSubject as any)?.issuerAccreditationId ?? '0x0000000000000000000000000000000000000000000000000000000000000000';
-          return {
-            credentialType: req.credentialType,
-            credentialHash: match.hash,
-            issuerAccreditationId,
-          };
+        if (!match) {
+          throw new Error(
+            `No ${req.credentialType} credential found in your wallet. You must have a valid credential before submitting this presentation.`,
+          );
         }
-      } catch (_) {
-        // Fall through to placeholder
-      }
 
-      // Placeholder when no matching credential is found
-      return {
-        credentialType: req.credentialType,
-        credentialHash: keccak256(toUtf8Bytes(`placeholder:${req.credentialType}`)),
-        issuerAccreditationId: '0x0000000000000000000000000000000000000000000000000000000000000000',
-      };
+        const issuerAccreditationId =
+          (match.verifiableCredential.credentialSubject as any)?.issuerAccreditationId ?? '0x0000000000000000000000000000000000000000000000000000000000000000';
+        return {
+          credentialType: req.credentialType,
+          credentialHash: match.hash,
+          issuerAccreditationId,
+        };
+      } catch (e: any) {
+        throw e;
+      }
     },
     [],
   );

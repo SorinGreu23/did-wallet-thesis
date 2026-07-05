@@ -21,7 +21,6 @@ public class VerifyAccreditationEndpoint(IAccreditationService service)
     public override async Task HandleAsync(VerifyAccreditationRequest req, CancellationToken ct)
     {
         var result = await service.VerifyAsync(req.AccreditationId, ct);
-        var statusCode = result.IsValid ? 200 : 500;
         await Send.OkAsync(result, ct);
     }
 }
